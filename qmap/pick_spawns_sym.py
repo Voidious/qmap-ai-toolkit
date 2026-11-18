@@ -1,5 +1,13 @@
-"""Greedy spawn picker: floor spots with no mutual eye-level line of sight, spread out,
-at least one per zone, clear of items, stairs, pads. Prints spawn() lines."""
+"""Spawn solver for SYMMETRIC maps: picks spots on the written half so that no spot - and no
+spot's symmetric copy - can see any other at eye level; spread out, clear of items, stairs, pads.
+Prints spawn() lines for the written half (the generator adds the copies).
+
+  SYM=rotate (default, 180-degree rotation: (x, y) -> (-x, -y))  or  SYM=mirror ((x, y) -> (-x, y))
+  MIND=224   minimum spacing      ITEMR=192   clearance round weapons / armour / Mega
+  HALF_X0=64, HALF_X1=1e9   the written half is HALF_X0 < x < HALF_X1 (x > 0 side)
+  FLAGR=448  keep this far from flags (read from the JSON)
+  EXCLUDE="x0,y0,x1,y1;..."  extra no-spawn rectangles (e.g. a back tunnel)
+Flag rooms (themes containing 'flag') are always excluded."""
 import io, contextlib, json, math, sys, os
 sys.argv = ['check.py', sys.argv[1]]; N = int(sys.argv[0] and 16)
 with contextlib.redirect_stdout(io.StringIO()):
@@ -8,6 +16,12 @@ reach = bfs(snodes[0], step=18)
 items_ = d['items']; theme = d['theme']
 def mat_under(i, j, z):
     return next((m for a, b, m in cols[i][j] if b == z), None)
+SYM = os.environ.get('SYM', 'rotate')
+COPY = (lambda p: (-p[0], -p[1], p[2])) if SYM == 'rotate' else (lambda p: (-p[0], p[1], p[2]))
+HX0, HX1 = float(os.environ.get('HALF_X0', 64)), float(os.environ.get('HALF_X1', 1e9))
+FLAGR = float(os.environ.get('FLAGR', 448))
+FLAGS = [(it[1], it[2]) for it in items_ if it[0].startswith('item_flag')]
+EXCL = [tuple(float(v) for v in r.split(',')) for r in os.environ.get('EXCLUDE', '').split(';') if r.strip()]
 cand = []
 for (i, j, z) in reach:
     if i % 2 or j % 2: continue
@@ -18,8 +32,9 @@ for (i, j, z) in reach:
     if any(math.dist((x, y), it[1:3]) < (int(os.environ.get('ITEMR', 192)) if it[0].startswith(('weapon', 'item_armor')) or it[4] & 2 else 96) and abs(it[3] - z) < 64 for it in items_): continue
     if any(math.dist((x, y), ((t[0][0] + t[0][2]) / 2, (t[0][1] + t[0][3]) / 2)) < 96 or math.dist((x, y), (t[2], t[3])) < 96 for t in d.get('teleports', []) + d.get('pushes', [])): continue
     th = theme[i][j] or 'passage'
-    if 'flag' in th or x <= 64 or x >= 1536 or (x > 1216 and y < -592): continue   # CTF: written half; not in or at the flag room, not the back tunnel
-    if any(math.dist((x, y), f) < 448 for f in ((2048, 0), (-2048, 0))): continue
+    if 'flag' in th or not (HX0 < x < HX1): continue
+    if any(r[0] <= x < r[2] and r[1] <= y < r[3] for r in EXCL): continue
+    if any(math.dist((x, y), f) < FLAGR for f in FLAGS): continue
     cand.append((x, y, z, th))
 def los(a, b):
     xa, ya, za = a[0], a[1], a[2] + 46; xb, yb, zb = b[0], b[1], b[2] + 46
@@ -34,16 +49,16 @@ def openness(p):
     return ang
 import random, itertools, os
 MIND = int(os.environ.get("MIND", 224))
-cand = [c for c in cand if math.dist(c[:3], (-c[0], -c[1], c[2])) >= MIND and not los(c, (-c[0], -c[1], c[2]))]
+cand = [c for c in cand if math.dist(c[:3], COPY(c)) >= MIND and not los(c, COPY(c))]
 n = len(cand)
 conf = [set() for _ in range(n)]
 for a_, b_ in itertools.combinations(range(n), 2):
     A, B = cand[a_], cand[b_]
-    RB = (-B[0], -B[1], B[2])
+    RB = COPY(B)
     if math.dist(A[:3], B[:3]) < MIND or los(A, B) or math.dist(A[:3], RB) < MIND or los(A, RB):
         conf[a_].add(b_); conf[b_].add(a_)
 best = None
-for seed in range(600):
+for seed in range(int(os.environ.get('SEEDS', 600))):
     rnd = random.Random(seed)
     alive = set(range(n)); sel = []
     while alive:

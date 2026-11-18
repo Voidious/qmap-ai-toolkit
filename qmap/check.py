@@ -50,7 +50,9 @@ for i in range(NX):
 
 def neighbours(n, step=STEP):
     i, j, z = n
-    top_here = next(b for a, b in AIR[i][j] if a == z)
+    top_here = next((b for a, b in AIR[i][j] if a == z), None)
+    if top_here is None:          # not a floor cell (e.g. a spawn placed inside solid)
+        return
     for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
         a2, b2 = i + di, j + dj
         if not (0 <= a2 < NX and 0 <= b2 < NY):
@@ -117,6 +119,11 @@ for x, y, z, ang, lab in spawns:
                 ok = False
     if not ok:
         problems.append(f'spawn {lab} at {x},{y},{z} lacks floor/clearance')
+    if (i, j, z) not in nodes:                    # v2: inside solid / off the floor - report, don't crash
+        alt = [(i + di, j + dj, z) for di in (-1, 0) for dj in (-1, 0) if (i + di, j + dj, z) in nodes]
+        problems.append(f'spawn {lab} at {x},{y},{z} is not on a floor cell' + (' (using a neighbour)' if alt else ''))
+        snodes.append(alt[0] if alt else (i, j, z))
+        continue
     snodes.append((i, j, z))
 
 reach = [bfs(s) for s in snodes]
@@ -128,7 +135,9 @@ for (s, lab), r in zip(zip(snodes, [s[4] for s in spawns]), reach):
 # floor reachable from spawn 0 vs all floor
 r0 = reach[0]
 area = len(r0) * C * C
-unreached = [n for n in nodes if n not in r0 and n[2] >= 0]
+_perch = lambda n: any(r[0] <= XMIN + n[0] * C < r[2] and r[1] <= YMIN + n[1] * C < r[3] and n[2] == pz
+                       for r, pz in d.get('perches', []))
+unreached = [n for n in nodes if n not in r0 and n[2] > BOT and not _perch(n)]   # v2: all heights; perches are hook-only by design
 print(f'walkable floor reachable on foot: {area / 1e6:.2f} M sq units ({len(r0)} cells); '
       f'unreached floor cells: {len(unreached)}')
 if unreached:
@@ -256,3 +265,32 @@ else:
         xs = [XMIN + i * C for i, j, z in g]
         ys = [YMIN + j * C for i, j, z in g]
         print(f'  - floor {g[0][2]}: x {min(xs)}..{max(xs) + C}, y {min(ys)}..{max(ys) + C} ({len(g)} cells)')
+
+
+# ---- stair feet and slots (lyceum b2): stairs must not run into a wall or pillar, and
+# no 16-unit slot a player could see but not fit into
+def floor_cells(rect, z):
+    bad = []
+    for x in range(rect[0], rect[2], C):
+        for y in range(rect[1], rect[3], C):
+            i, j = int((x - XMIN) // C), int((y - YMIN) // C)
+            if not (0 <= i < NX and 0 <= j < NY) or not any(a == z and b - a >= HEAD for a, b in AIR[i][j]):
+                bad.append((x, y))
+    return bad
+foot_bad = []
+for rect, z in d.get('feet', []):
+    b = floor_cells(rect, z)
+    if b:
+        foot_bad.append(f'stair foot {rect} @ {z}: {len(b)} of {((rect[2]-rect[0])//C)*((rect[3]-rect[1])//C)} cells blocked, e.g. {b[:3]}')
+def wall_at(i, j, z):
+    if not (0 <= i < NX and 0 <= j < NY):
+        return True
+    return not any(a <= z + STEP and b >= z + HEAD for a, b in AIR[i][j])
+slots = set()
+for (i, j, z) in nodes:
+    if any(wall_at(i + di, j + dj, z) and wall_at(i - di, j - dj, z) for di, dj in ((1, 0), (0, 1))):
+        slots.add((XMIN + i * C, YMIN + j * C, z))
+print('stair feet: ' + (f'{len(foot_bad)} PROBLEMS' if foot_bad else f'all {len(d.get("feet", []))} clear'))
+for t in foot_bad:
+    print('  - ' + t)
+print('16-unit slots: ' + (f'{len(slots)} PROBLEM cells, e.g. {sorted(slots)[:6]}' if slots else 'none'))
