@@ -562,6 +562,21 @@ def ramp(r, axis, z0, z1, rev=False, bands=True, sym=True):
 PRISMS = []         # (points, z0, z1, kind)
 
 
+def _overlaps(pts, x0, y0, x1, y1, eps=0.5):
+    """Does the convex polygon pts (counter-clockwise) overlap the box by more than eps? (separating axes)"""
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    if max(xs) <= x0 + eps or min(xs) >= x1 - eps or max(ys) <= y0 + eps or min(ys) >= y1 - eps:
+        return False
+    for k in range(len(pts)):
+        ax, ay = pts[k]
+        bx, by = pts[(k + 1) % len(pts)]
+        nx, ny = by - ay, -(bx - ax)                      # outward normal of a CCW edge
+        L = math.hypot(nx, ny)
+        if min(nx * (cx - ax) + ny * (cy - ay) for cx in (x0, x1) for cy in (y0, y1)) >= eps * L:
+            return False
+    return True
+
+
 def _inside(pts, x, y, eps=0.01):
     """Point inside (or on) a convex CCW polygon."""
     n = len(pts)
@@ -577,7 +592,7 @@ def prism(points, z0, z1, kind=None, sym=True):
     diagonal wall, a chamfered corner, an octagonal pillar, a wedge. kind None: each face is banded
     like the room it looks into (kickplate, strip, cornice), with its texture running along the angled
     face (Valve 220 axes, so nothing stretches); other kinds ('pillar', ...) take that kind's textures.
-    The grid gets a stand-in for the checks: in every cell whose centre is inside, the air in [z0, z1]
+    The grid gets a stand-in for the checks: in every cell the prism overlaps, the air in [z0, z1]
     becomes mat 'diag' (solid to the checks, never written - the prism brush covers it; no lamp or
     band lands on a face hidden inside the prism). Named kinds keep their mat on cells wholly inside.
     Solid already in the cell stays, so a prism may start below the floor (z0 = BOT) safely.
@@ -597,8 +612,9 @@ def prism(points, z0, z1, kind=None, sym=True):
                 x, y = XMIN + i * C, YMIN + j * C
                 if kind not in (None, 'ledge') and all(_inside(P, x + a, y + b) for a in (0, C) for b in (0, C)):
                     m = kind
-                elif _inside(P, x + C / 2, y + C / 2):
-                    m = 'diag'
+                elif _overlaps(P, x, y, x + C, y + C):
+                    m = 'diag'           # v3.1: any overlap, not just the centre: the checks must never
+                                         # see a gap wider than it is (a 24-unit gap read as 32 in concept C)
                 else:
                     continue
                 # only the AIR in [z0, z1] becomes the stand-in: solid already there (the floor under

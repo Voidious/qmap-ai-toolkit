@@ -301,6 +301,12 @@ Measure our new maps the same way once the group has played them.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-only builds**: `collide_cmp.py old.map new.map` → "collision identical", or explain.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
+* **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
+  traps and unreachable items on the compiled map's **real collision** with a 32×32×56 player
+  (walk, jump, gaps, drops, teleporters, pads; no rocket jumps). It is the authority on whether you
+  can get somewhere and back: `check.py`'s grid treats the player as one 16-unit cell, so it cannot
+  see a gap narrower than 32 next to an angled brush, or a ceiling that catches a player still
+  half on the step above. Hook-only perches are listed as a note, not an error.
 * **Height** (`vprofile.py map.bsp --targets`, run by `build.sh`): each measure against the five
   classics' range — `ok`, `LOW`, `HIGH`, or `ok+` (past the range in the good direction). Works on
   any BSP29, so you can profile a map the group names as a reference. `--json` and `--png-dir`
@@ -438,6 +444,13 @@ Measure our new maps the same way once the group has played them.
     a stand-in must replace only *air* (a prism from `BOT` once replaced the floor under its
     part-covered edge cells and leaked to the void), and prisms go *after* the carves they sit
     in (a later carve hollowed a chamfer's stand-in and lamps went inside it).
+23. **The player is 32 wide and 56 tall; the grid checker thinks in 16-unit cells.** Concept C (the
+    quarry) passed `check.py` and was broken in game twice: a rock column 24 units from a tunnel
+    mouth (the grid saw 32), and a stair dropping into an 80-tall tunnel - standing on the edge of
+    the second step, your body is already under the tunnel's ceiling and too tall for it, so you
+    can't step down. The player-hull check (section 5) catches both; read it every build.
+    Stairs that run down under a ceiling need ceiling ≥ (second step's top + 56) at the edge, or
+    the tunnel's ceiling raised over the bottom steps.
 
 ---
 

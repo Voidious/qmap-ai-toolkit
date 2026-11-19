@@ -1,10 +1,12 @@
 """Verticality profile of a compiled Quake map (BSP29), from its collision hulls alone, so any map can
 be measured the same way - ours and the classics.
 
-    python3 vprofile.py map.bsp [more.bsp ...] [--targets] [--json out.json] [--png-dir figs/]
+    python3 vprofile.py map.bsp [more.bsp ...] [--targets] [--check] [--json out.json] [--png-dir figs/]
 
 --targets prints each measure against the range of five classic QW maps (REFERENCE below);
-build.sh runs it on every build (VPROFILE=0 to skip). The figure (--png-dir) is a height map plus
+--check (v3.1) reports cut-off spawns, traps and unreachable items on the map's REAL player hull: the
+authority on connectivity (check.py's grid can't see angled brushes or a 32-wide body on a step edge).
+build.sh runs both on every build (VPROFILE=0 to skip). The figure (--png-dir) is a height map plus
 floor area by height.
 
 What it measures (all on floor a player can stand on and reach from the spawns):
@@ -234,6 +236,11 @@ def profile(path, name=None):
                 if -STEP <= dz <= STEP:
                     if di and dj and (S1(nx_, y, max(f, g) + 24 + 1) or S1(x, ny_, max(f, g) + 24 + 1)):
                         continue
+                    # v3.1: the whole move happens at the higher of the two heights (step up in place,
+                    # or walk on at our height before dropping): a step down into a low tunnel is
+                    # blocked while the body still rests on the step above (ctf concept C's trench)
+                    if S1(x, y, max(f, g) + 24 + 1) or S1(nx_, ny_, max(f, g) + 24 + 1):
+                        continue
                     m = nid[(i + di, j + dj, k)]
                     adj[n].append((m, h, 'walk'))
                     if 2 <= abs(dz):
@@ -290,8 +297,11 @@ def profile(path, name=None):
             x, y = cxy(i, j)
             if M['mn'][0] - 16 <= x <= M['mx'][0] + 16 and M['mn'][1] - 16 <= y <= M['mx'][1] + 16 and M['mn'][2] - 56 <= f <= M['mx'][2]:
                 adj[n].append((d, 0, 'tele'))
-    # push pads: simulate the launch
+    # push pads: simulate the launch. v3.1: trigger_push sets the velocity on EVERY frame the player
+    # touches it, so a tall push volume keeps pushing to its top, and a second push volume on the way
+    # (aerowalk's redirect at the top of its lift) takes over; start from standing on the pad.
     pads = 0
+    PUSH = []
     for e in B.ents:
         if e.get('classname') != 'trigger_push' or model_index(e) is None:
             continue
@@ -304,17 +314,31 @@ def profile(path, name=None):
             a = float(e.get('angle', 0))
             p, yw = (-90, 0) if a == -1 else (90, 0) if a == -2 else (0, a)
         pr, yr = math.radians(-p), math.radians(yw)
-        v = np.clip(np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), math.sin(pr)]) * sp, -2000, 2000)
+        PUSH.append((M, np.clip(np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), math.sin(pr)]) * sp, -2000, 2000)))
+    def in_push(pos):
+        hit = None
+        for M, v0 in PUSH:
+            if (M['mn'][0] - 16 <= pos[0] <= M['mx'][0] + 16 and M['mn'][1] - 16 <= pos[1] <= M['mx'][1] + 16
+                    and M['mn'][2] - 32 <= pos[2] <= M['mx'][2] + 24):
+                hit = v0
+        return hit
+    for M, v0 in PUSH:
         cx, cy = (M['mn'][0] + M['mx'][0]) / 2, (M['mn'][1] + M['mx'][1]) / 2
         src = [n for n, (i, j, f) in enumerate(nodes) if M['mn'][0] - 8 <= cxy(i, j)[0] <= M['mx'][0] + 8
                and M['mn'][1] - 8 <= cxy(i, j)[1] <= M['mx'][1] + 8 and M['mn'][2] - 56 <= f <= M['mx'][2]]
-        pos = np.array([cx, cy, max(M['mx'][2], min((F[s] for s in src), default=M['mn'][2]) + 24)], float)
+        if not src:
+            continue
+        pos = np.array([cx, cy, min(F[s] for s in src) + 24 + 1], float)
+        v = v0.copy()
         land = None
-        for _ in range(400):
+        for _ in range(600):
+            pv = in_push(pos)
+            if pv is not None:
+                v = pv.copy()
             v[2] -= 800 * 0.01
             nxt = pos + v * 0.01
             if S1(*nxt):
-                if v[2] < 0:
+                if v[2] < 0 and in_push(nxt) is None:
                     land = node_near(nxt[0], nxt[1], pos[2])
                     break
                 if S1(pos[0], pos[1], nxt[2]):
@@ -323,7 +347,7 @@ def profile(path, name=None):
                     v[0] = v[1] = 0
                 continue
             pos = nxt
-        if land is not None:
+        if land is not None and land not in src:
             for s in src:
                 adj[s].append((land, 64, 'pad'))
     # spawns
@@ -366,6 +390,62 @@ def profile(path, name=None):
                         out.append(nid[(i + di, j + dj, k)])
         return out
     RR = bfs(rj)
+
+    # --- v3.1 player-hull check: the compiled map's own collision, a 32x32x56 player, not the grid
+    def bfs1(start, graph):
+        seen = np.zeros(N, bool)
+        seen[start] = True
+        dq = deque([start])
+        while dq:
+            n = dq.popleft()
+            for m in graph[n]:
+                if not seen[m]:
+                    seen[m] = True
+                    dq.append(m)
+        return seen
+    fwd = {n: [m for m, _, _ in adj[n]] for n in range(N)}
+    rev = defaultdict(list)
+    for n in range(N):
+        for m in fwd[n]:
+            rev[m].append(n)
+    spawn_ents = [e for e in B.ents if e.get('classname') in ('info_player_deathmatch', 'info_player_start', 'info_player_team1', 'info_player_team2', 'info_player_coop')]
+    sp_nodes = [(origin(e), node_near(*origin(e)[:3])) for e in spawn_ents]
+    reach_of = {n: bfs1(n, fwd) for _, n in sp_nodes if n is not None}
+    chk = dict(spawns_off_floor=[tuple(int(v) for v in o) for o, n in sp_nodes if n is None], spawn_pairs_cut=[], trapped=[], items_unreached=[])
+    if reach_of:
+        back_of = {n: bfs1(n, rev) for n in reach_of}  # every spot from which that spawn can be reached
+        main = max(reach_of, key=lambda n: (reach_of[n] & back_of[n]).sum())   # spawn in the biggest two-way area
+        back = back_of[main]
+        for o, n in sp_nodes:
+            if n is not None and not (reach_of[main][n] and back[n]):
+                chk['spawn_pairs_cut'].append(tuple(int(v) for v in o))
+        trapped = [n for n in np.nonzero(R & ~back)[0]]
+        seen_t = set()
+        tset = {(nodes[n][0], nodes[n][1], round(F[n])): n for n in trapped}
+        for key in tset:
+            if key in seen_t:
+                continue
+            st, comp = [key], []
+            seen_t.add(key)
+            while st:
+                q = st.pop()
+                comp.append(q)
+                for di, dj in D8:
+                    for dz in range(-STEP, STEP + 1):
+                        r = (q[0] + di, q[1] + dj, q[2] + dz)
+                        if r in tset and r not in seen_t:
+                            seen_t.add(r)
+                            st.append(r)
+            ci = np.mean([c[0] for c in comp]); cj = np.mean([c[1] for c in comp])
+            chk['trapped'].append((len(comp) * C * C, round(x0 + ci * C + 8), round(y0 + cj * C + 8), round(min(c[2] for c in comp)), round(max(c[2] for c in comp))))
+        chk['trapped'].sort(reverse=True)
+        for e in B.ents:
+            cl = e.get('classname', '')
+            if cl.startswith(('item_', 'weapon_')):
+                o = origin(e)
+                n = node_near(o[0] + (16 if cl.startswith(('item_armor', 'item_health')) else 0), o[1] + (16 if cl.startswith(('item_armor', 'item_health')) else 0), o[2] + 24)
+                if n is None or not R[n]:
+                    chk['items_unreached'].append((cl, tuple(int(v) for v in o), n is not None and bool(RR[n])))
 
     # --- metrics on reachable floor
     reach = np.nonzero(R)[0]
@@ -514,6 +594,7 @@ def profile(path, name=None):
         skill_floor_share=round(float((RR & ~R).sum() / max(1, RR.sum())), 3),
         unreached_share=round(float((~RR).sum() / N), 3),
     )
+    res['_check'] = chk
     res['_draw'] = dict(x0=x0, y0=y0, nx=nx, ny=ny, nodes=nodes, F=F.tolist(), R=R.tolist(), RR=RR.tolist(),
                         keys=[(l, n) for l, n in keys], spawns=spn)
     return res
@@ -545,6 +626,35 @@ def targets(res):
         if verdict == 'HIGH' and way == 'up' or verdict == 'LOW' and way == 'down':
             verdict = 'ok+'                    # past the range in the good direction
         print(f'   {k:20s} {str(v):>6s}   ref {lo}-{hi:<6}  {verdict:4s}  {desc}')
+
+
+def check_report(res):
+    """v3.1: connectivity and traps on the compiled map's player hull (32 wide, 56 tall). The grid
+    checker (check.py) treats the player as one 16-unit cell and cannot see angled brushes or a
+    ceiling that catches a player half on a step; this can. Walk 18, jump 44, gaps, drops,
+    teleporters and pads; no rocket jumps."""
+    c = res['_check']
+    bad = False
+    print(f"player-hull check of {res['map']} (real collision, 32x32x56 player, no rocket jumps):")
+    for o in c['spawns_off_floor']:
+        bad = True
+        print(f'   SPAWN {o} is not standing on reachable floor')
+    for o in c['spawn_pairs_cut']:
+        bad = True
+        print(f'   SPAWN {o} is cut off: it cannot reach the main area, or the main area cannot reach it')
+    for area, x, y, zlo, zhi in c['trapped']:
+        bad = True
+        print(f'   TRAP: {area} sq units of floor near ({x}, {y}) at z {zlo}..{zhi}: you can get in but not back out')
+    rj = [(cl, o) for cl, o, r in c['items_unreached'] if r]
+    for cl, o, r in c['items_unreached']:
+        if not r:
+            bad = True
+            print(f'   ITEM {cl} at {o}: unreachable on foot or with a rocket jump (a hook-only perch?)')
+    if rj:
+        print(f'   note: {len(rj)} item(s) need the hook or a rocket jump (fine on perches): '
+              + ', '.join(f"{cl.split('_', 1)[1]} {o}" for cl, o in rj[:6]) + (' ...' if len(rj) > 6 else ''))
+    if not bad:
+        print('   every spawn reaches every other; no traps; every item reachable')
 
 
 # ------------------------------------------------------------------ figure
@@ -611,6 +721,9 @@ if __name__ == '__main__':
             os.makedirs(pd_, exist_ok=True)
             draw(r, os.path.join(pd_, nm + '.png'))
         r.pop('_draw')
+        if '--check' in args:
+            check_report(r)
+        r.pop('_check')
         if '--targets' in args:
             targets(r)
         else:

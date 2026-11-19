@@ -1,3 +1,25 @@
+# v3.2 (first map built on v3)
+
+* **Player-hull check**: `vprofile.py --check` (run by `build.sh`) reports cut-off spawns, traps and
+  unreachable items on the compiled map's real collision with a 32x32x56 player. Concept C passed
+  `check.py` and still trapped players in a tunnel in game: a rock column left a 24-unit gap at
+  one end (the grid read it as 32), and the stair at the other end ran down under an 80-tall
+  ceiling that caught a player still standing on the second step. The hull check finds both.
+* vprofile's walk moves now need headroom at the higher of the two heights (the stair case above);
+  push pads push on every frame they are touched, chained pads included (aerowalk's lift); the main
+  area for the check is the biggest two-way-reachable one. The height measures of all fourteen
+  profiled maps are unchanged.
+* Prism stand-ins now cover every cell the prism overlaps (not only cells whose centre is inside),
+  so the grid checks never see a gap wider than it is.
+
+# v3.1 (bug fix)
+
+Bug fixes for angled walls:
+
+* An angled pillar standing on the floor could leave a hole in the floor at its edges.
+* A corner cut made before the room around it was carved got hollowed out again, and a lamp could
+  end up inside it.
+
 # Changes from v2 to v3
 
 Why: after nine maps the group felt our layouts lacked vertical complexity. v3 measures height,
