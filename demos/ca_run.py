@@ -1,6 +1,7 @@
 import re, math, collections, json, sys, glob
 import numpy as np
 from mvd import parse
+from vert import movement_height      # v3: in-play height change (see vert.py)
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
@@ -76,7 +77,8 @@ def analyze(path):
                high_ground=f"{100*(dz>48).mean():.0f}% killer >48 higher, {100*(dz<-48).mean():.0f}% lower" if len(dz) else None,
                z_range=np.percentile(zs, [5, 50, 95]).round().tolist(),
                endgame=f"{sum(r['endgame']>0 for r in R)}/{len(R)} rounds reach 1vX; median {np.median([r['endgame'] for r in R if r['endgame']>0]):.0f}s of round",
-               endgame_share=round(sum(r['endgame'] for r in R)/sum(r['dur'] for r in R), 2))
+               endgame_share=round(sum(r['endgame'] for r in R)/sum(r['dur'] for r in R), 2),
+               **movement_height(per))
     # figure: time spent (bg), kills: line killer->victim coloured by weapon, spawn points
     lo, hi = live[:, 2:4].min(0) - 60, live[:, 2:4].max(0) + 60
     fig, ax = plt.subplots(figsize=(11, 11 * (hi[1] - lo[1]) / (hi[0] - lo[0]) + 0.8)); fig.patch.set_facecolor('#1d1f21'); ax.set_facecolor('#111')

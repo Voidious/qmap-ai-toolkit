@@ -1,4 +1,4 @@
-"""MAP GENERATOR CORE (template, qmap-toolkit v2).
+"""MAP GENERATOR CORE (template, qmap-toolkit v3).
 
 The generator is plain Python concatenated from parts (build.sh does it):
     _core.py   settings, grid, building primitives, texture mapping      <- edit the SETTINGS block
@@ -38,26 +38,34 @@ INTERMISSION = ('0 0 400', '30 45 0')       # origin, mangle
 # set from texgen_blockout.py (bk_*): flat colours per zone, height marks, so rooms are easy to
 # tell apart in a layout build. A visual pass replaces this mapping and the texture generator.
 # =========================================================================
-ZONE_OF = {}                      # theme -> blockout colour zone 'z0'..'z7' (assigned in carve order)
+ZONE_OF = {}                      # theme -> blockout zone 'z0'..'z7' (blue z0, red z7; others in carve order)
 BK_ZONES = ('z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7')
 GLASS_Z = {}                      # theme -> z of a 96-tall window band (optional)
 
 
 def zone(th):
-    """Blockout colour zone of a theme: themes take z0, z1, ... in the order they are first carved."""
+    """Blockout colour zone of a theme. Themes named in ZONE_OF keep their zone; 'blue' and 'red'
+    get the blue and red zones; the rest take the remaining zones in the order they are carved."""
     if th not in ZONE_OF:
-        ZONE_OF[th] = BK_ZONES[len(ZONE_OF) % len(BK_ZONES)]
+        fixed = {'blue': 'z0', 'red': 'z7'}
+        if th in fixed and fixed[th] not in ZONE_OF.values():
+            ZONE_OF[th] = fixed[th]
+        else:
+            used = set(ZONE_OF.values()) | {'z0', 'z7'}
+            free = [z for z in BK_ZONES if z not in used] or list(BK_ZONES)
+            ZONE_OF[th] = free[0]
     return ZONE_OF[th]
 
 
 def textures(kind, th, role):
     """(top, bottom, side) texture names for a brush piece of `kind` in theme `th`;
-    for kind 'wall', `role` is the band: wall / base (kickplate) / strp (light strip) / trim / glass."""
+    for kind 'wall', `role` is the band: wall / wall_lo (below SPLIT_Z) / base (kickplate) /
+    strp (light strip) / trim (cornice, sill) / band (the TRIM_Z course, TRIM_H tall) / glass."""
     z = zone(th)
     flr, ceil = f'bk_{z}_flr', f'bk_{z}_ceil'
     if kind == 'wall':
-        side = {'wall': f'bk_{z}_wall', 'base': 'bk_base', 'strp': f'bk_{z}_strp',
-                'trim': 'bk_trim', 'frame': f'bk_{z}_wall', 'glass': f'bk_{z}_wall'}[role]
+        side = {'wall': f'bk_{z}_wall', 'wall_lo': f'bk_{z}_wall', 'base': 'bk_base', 'strp': f'bk_{z}_strp',
+                'trim': 'bk_trim', 'band': 'bk_trim', 'frame': f'bk_{z}_wall', 'glass': f'bk_{z}_wall'}[role]
         return flr, ceil, side
     return {
         'ledge': (flr, ceil, f'bk_{z}_wall'),
@@ -152,7 +160,10 @@ def _both(r, sym):
 doors = []         # (rect, z0, z1) openings that get a framed jamb and lintel
 rooms = {}         # (i, j) -> [(z0, z1)] carve extents, to find a room's real floor under stairs
 # Wall textures are aligned to each zone's main floor, so panels line up across the whole zone.
-TRIM_Z = {}         # theme -> z of an extra string-course trim carried through tall air
+TRIM_Z = {}         # theme -> z of an extra string-course trim carried through tall air ('band' role)
+TRIM_H = 16         # its height (ctf_strata: 32, a coal seam where the slab between floors is)
+SPLIT_Z = {}        # theme -> z below which walls take the 'wall_lo' stone (stratified tall rooms)
+SUN = {'_sunlight': '160', '_sun_mangle': '35 -62 0', '_sunlight2': '40'}   # worldspawn sky light
 STEP_KICK = set()   # themes whose kickplate steps up and down beside stairs (usually: none - it looks bad)
 ZONE_FLOOR = {}     # theme -> its main floor z (wall textures are anchored to it); set by carve()
 STRIPE_Z = {}       # theme -> z of its light strip; default floor + 128; 10**6 = no strip
@@ -260,7 +271,31 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
         for b in range(ny):
             x = x0 + (x1 - x0) * (2 * a + 1) // (2 * nx)
             y = y0 + (y1 - y0) * (2 * b + 1) // (2 * ny)
-            lamp(x // 16 * 16, y // 16 * 16, ceil, value, sym)
+            p = _lamp_spot(r, x // 16 * 16, y // 16 * 16, ceil)
+            if p:
+                lamp(p[0], p[1], ceil, value, sym)
+
+
+def _lamp_spot(r, x, y, ceil, reach=160):
+    """Nearest spot to (x, y) inside r where a ceiling lamp's box and its light are both in air
+    (call room_lamps after the room's pillars and baffles). None if nothing within reach."""
+    def clear(px, py):
+        if not (r[0] + 16 <= px <= r[2] - 16 and r[1] + 16 <= py <= r[3] - 16):
+            return False
+        for qx in (px - 16, px):
+            for qy in (py - 16, py):
+                i, j = (qx - XMIN) // C, (qy - YMIN) // C
+                if any(a < ceil and b > ceil - 48 for a, b, m in cols[i][j]):
+                    return False
+        return True
+    for d in range(0, reach + 1, 16):
+        ring = sorted({(x + dx, y + dy) for dx in range(-d, d + 1, 16) for dy in (-d, d)} |
+                      {(x + dx, y + dy) for dy in range(-d, d + 1, 16) for dx in (-d, d)},
+                      key=lambda p: ((p[0] - x) ** 2 + (p[1] - y) ** 2, p))
+        for p in ring:
+            if clear(*p):
+                return p
+    return None
 
 
 def spawn(x, y, z, angle, label='', sym=True):
@@ -452,3 +487,140 @@ def strip_z(th, f, p=None, q=None):
             if x0 <= x < x1 and y0 <= y < y1:
                 return min(max(f + off, lo), hi)
     return STRIPE_Z.get(th, 10 ** 6)
+
+
+# =========================================================================
+# v3: TEAM HALVES - lights and lamps by half (ctf_strata)
+# =========================================================================
+def side_of(th):
+    """'b' or 'r': which team's half a theme is in (split_halves() gives copy-half rooms a '_r')."""
+    return 'r' if th == 'red' or th.endswith('_r') else 'b'
+
+
+def split_halves(themes):
+    """Every shared theme gets a twin for the copy half ('lower' -> 'lower_r', cells with x < 0), so
+    textures() / fixture_tex() / light_color() can colour strips and lamps by team half: wherever you
+    stand, the lights say whose half it is. Call once, at the end of the layout. In textures(), strip
+    the suffix to find the material (th[:-2]) and use side_of(th) for the team colour."""
+    for i in range(NX):
+        if XMIN + i * C + C / 2 >= 0:
+            continue
+        for j in range(NY):
+            if theme[i][j] in themes:
+                theme[i][j] += '_r'
+            if (i, j) in rooms:
+                rooms[(i, j)] = [(z0, z1, th + '_r' if th in themes else th, d) for z0, z1, th, d in rooms[(i, j)]]
+    for d in (ZONE_FLOOR, STRIPE_Z, TRIM_Z, SPLIT_Z, GLASS_Z, ZONE_OF):
+        for th in themes:
+            if th in d:
+                d[th + '_r'] = d[th]
+
+
+# =========================================================================
+# v3: RAMPS - true slopes, not steps
+# =========================================================================
+RAMPS = []          # (rect, axis, sign, z0, z1, bands): floor rises z0 -> z1 along sign*axis
+
+
+def ramp(r, axis, z0, z1, rev=False, bands=True, sym=True):
+    """A real slope: the floor over rect r rises from z0 at its low end to z1 at its high end, along
+    +axis ('x' or 'y'; rev=True: along -axis). Ramps keep a player's speed where stairs bump it, and
+    let them ramp-jump; QW maps are full of them. Walkable up to 45 degrees (rise <= run); 15-35
+    plays best. The floor under r should already be at z0 (the ramp sits on it).
+    The grid gets a stepped stand-in for the checks (mat 'ramp', never written as brushes); the .map
+    gets one wedge brush. bands=True: where a wall runs along a side of the ramp, its kickplate and
+    light strip are drawn on a slope (illusionary overlays) from the low room's bands to the high
+    room's, and that wall's own flat bands are left off over the ramp's length."""
+    run = (r[2] - r[0]) if axis == 'x' else (r[3] - r[1])
+    assert 0 < z1 - z0 <= run, f'ramp {r}: rise {z1 - z0} over run {run} is steeper than 45 degrees'
+    copies = [(r, -1 if rev else 1)]
+    if symmetric(sym):
+        flip = SYM == 'rotate' or axis == 'x'
+        copies.append((rot(r), (1 if rev else -1) if flip else (-1 if rev else 1)))
+    for rr, sg in copies:
+        RAMPS.append((rr, axis, sg, z0, z1, bands))
+        lo_edge = (rr[0] if sg > 0 else rr[2]) if axis == 'x' else (rr[1] if sg > 0 else rr[3])
+        ft = ((lo_edge - 32, rr[1], lo_edge, rr[3]) if sg > 0 else (lo_edge, rr[1], lo_edge + 32, rr[3])) if axis == 'x' \
+            else ((rr[0], lo_edge - 32, rr[2], lo_edge) if sg > 0 else (rr[0], lo_edge, rr[2], lo_edge + 32))
+        stair_feet.append((ft, z0))
+        for i, j in cells(rr):
+            c0 = (XMIN + i * C) if axis == 'x' else (YMIN + j * C)           # cell's low corner on the axis
+            d = (c0 - rr[0]) if (axis == 'x' and sg > 0) else (rr[2] - c0 - C) if axis == 'x' else \
+                (c0 - rr[1]) if sg > 0 else (rr[3] - c0 - C)
+            h = z0 + (z1 - z0) * d / run                                       # slope height at the cell's low edge
+            h = int(h)
+            if h > z0:
+                col = _subtract(cols[i][j], z0, h)
+                col.append([z0, h, 'ramp'])
+                col.sort()
+                cols[i][j] = col
+
+
+# =========================================================================
+# v3: PRISMS - angled walls, chamfered corners, many-sided pillars
+# =========================================================================
+PRISMS = []         # (points, z0, z1, kind)
+
+
+def _inside(pts, x, y, eps=0.01):
+    """Point inside (or on) a convex CCW polygon."""
+    n = len(pts)
+    for k in range(n):
+        (ax, ay), (bx, by) = pts[k], pts[(k + 1) % n]
+        if (bx - ax) * (y - ay) - (by - ay) * (x - ax) < -eps:
+            return False
+    return True
+
+
+def prism(points, z0, z1, kind=None, sym=True):
+    """Solid vertical prism on a convex footprint (points counter-clockwise, seen from above): a
+    diagonal wall, a chamfered corner, an octagonal pillar, a wedge. kind None: each face is banded
+    like the room it looks into (kickplate, strip, cornice), with its texture running along the angled
+    face (Valve 220 axes, so nothing stretches); other kinds ('pillar', ...) take that kind's textures.
+    The grid gets a stand-in for the checks: every cell whose centre is inside becomes mat 'diag'
+    (solid to the checks, never written - the prism brush covers it; no lamp or band lands on a face
+    hidden inside the prism). Named kinds keep their mat on cells wholly inside."""
+    pts = [tuple(p) for p in points]
+    area = sum(pts[k][0] * pts[(k + 1) % len(pts)][1] - pts[(k + 1) % len(pts)][0] * pts[k][1] for k in range(len(pts)))
+    assert area > 0, f'prism {pts}: points must be counter-clockwise'
+    copies = [pts]
+    if symmetric(sym):
+        q = [sym_pt(x, y) for x, y in pts]
+        copies.append(q if SYM == 'rotate' else q[::-1])
+    for P in copies:
+        PRISMS.append((P, z0, z1, kind))
+        xs, ys = [p[0] for p in P], [p[1] for p in P]
+        for i in range(max(0, int((min(xs) - XMIN) // C)), min(NX, int((max(xs) - XMIN) // C) + 1)):
+            for j in range(max(0, int((min(ys) - YMIN) // C)), min(NY, int((max(ys) - YMIN) // C) + 1)):
+                x, y = XMIN + i * C, YMIN + j * C
+                if kind not in (None, 'ledge') and all(_inside(P, x + a, y + b) for a in (0, C) for b in (0, C)):
+                    m = kind
+                elif _inside(P, x + C / 2, y + C / 2):
+                    m = 'diag'
+                else:
+                    continue
+                col = _subtract(cols[i][j], z0, z1)
+                col.append([z0, z1, m])
+                col.sort()
+                cols[i][j] = col
+
+
+def chamfer(r, corner, size, z0, z1, sym=True):
+    """Cut a room's corner at 45 degrees: a triangular prism with legs `size` along the two walls
+    meeting at `corner` ('ne', 'nw', 'se', 'sw') of the carved rect r. Four of them make an octagon."""
+    x = r[2] if 'e' in corner else r[0]
+    y = r[3] if 'n' in corner else r[1]
+    sx = -1 if 'e' in corner else 1
+    sy = -1 if 'n' in corner else 1
+    tri = [(x, y), (x + sx * size, y), (x, y + sy * size)]
+    if sx * sy < 0:
+        tri = tri[::-1]
+    prism(tri, z0, z1, None, sym)
+
+
+def diag_wall(x0, y0, x1, y1, thick, z0, z1, sym=True):
+    """A straight wall from (x0, y0) to (x1, y1) at any angle, `thick` units thick (centred)."""
+    L = math.hypot(x1 - x0, y1 - y0)
+    nx, ny = -(y1 - y0) / L * thick / 2, (x1 - x0) / L * thick / 2
+    quad = [(x0 - nx, y0 - ny), (x1 - nx, y1 - ny), (x1 + nx, y1 + ny), (x0 + nx, y0 + ny)]
+    prism([(round(a, 2), round(b, 2)) for a, b in quad], z0, z1, None, sym)

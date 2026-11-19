@@ -79,7 +79,7 @@ for r in opt('--run'):
     runs.append((name, (lambda R: lambda m: any(a <= X(m) < c and b <= Y(m) < e for a, b, c, e in R))(R)))
 for name, avoid in runs:
     dist, _ = dij(start, avoid)
-    L = min(dist.get(n, 1e18) for n in dist if abs(X(n) - B[0]) < 24 and abs(Y(n) - B[1]) < 24) if dist else 1e18
+    L = min((dist[n] for n in dist if abs(X(n) - B[0]) < 24 and abs(Y(n) - B[1]) < 24), default=1e18)
     if L >= 1e17:
         print(f'{name:40s} unreachable with these rectangles forbidden')
     else:

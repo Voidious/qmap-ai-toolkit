@@ -1,6 +1,7 @@
 import sys, math, collections, json
 import numpy as np
 from mvd import parse
+from vert import movement_height      # v3: in-play height change (see vert.py)
 import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
@@ -63,7 +64,8 @@ def analyze(path, label):
              deaths_per_min=round(len(deaths) / mins, 1), deaths_zone=dict(dz),
              home_time={tm: round(100 * occ[tm]['home'] / sum(occ[tm].values())) for tm in occ},
              hook_time=f"{100*np.median(fast):.1f}% median, {100*max(fast):.1f}% max",
-             score=[s for t, s in pr if 'captured' in s or 'Team scores' in s][-1:])
+             score=[s for t, s in pr if 'captured' in s or 'Team scores' in s][-1:],
+             **movement_height(per))
     # figure
     allp = np.concatenate([a[a[:, 5] == 0][:, 2:4] for a in per.values()])
     lo, hi = allp.min(0) - 60, allp.max(0) + 60

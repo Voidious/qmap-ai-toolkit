@@ -14,3 +14,5 @@ $T/vis/vis -nopercent $N.bsp > vis.log 2>&1
 $T/light/light -nopercent -extra4 -minlight 5 -minlight_dirt 0 $N.bsp > light.log 2>&1
 grep -hiE "warn|error" qbsp.log vis.log light.log | grep -v "texture skip" | grep -v "invalid size data for $" || true
 python3 $QMAP/check.py $N.json
+# v3: how vertical is it? Each measure against the range of five classic QW maps (VPROFILE=0 skips)
+[ "${VPROFILE:-1}" = "0" ] || python3 $QMAP/vprofile.py $N.bsp --targets

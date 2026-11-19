@@ -14,11 +14,15 @@
 #   spawn(x, y, floor, angle, label) / team_spawn(x, y, floor, angle, team)
 #   perch(rect, z) / teleporter(...) / jumppad(...) / liquid(...) / panel(...) / inlay(...) / oculus(...)
 #   strip_ramp(...) / strip_ramp_pos(...)  light strips that follow stairs (see GUIDE section 6)
+#   ramp(rect, axis, z0, z1, rev=False)    v3: a true slope; walls beside it get sloped bands
+#   prism(points, z0, z1) / chamfer(rect, corner, size, z0, z1) / diag_wall(x0, y0, x1, y1, thick, z0, z1)
+#                                          v3: angled walls, cut corners, many-sided pillars
 #   label(x, y, text, z)                   names on the plan image
 # =========================================================================
 
-# --- DEMO (delete): a central hall with a plinth, an east wing with a raised gallery, and a
-#     sunken room to the north down a broad stair. Builds in all three SYM modes.
+# --- DEMO (delete): an octagonal central hall with a plinth, an east wing with a raised gallery,
+#     and a sunken room to the north down a broad stair, with a ramp up to a ledge and an octagonal
+#     pillar. Builds in all three SYM modes.
 
 # central hall, straddling x = 0: written once
 carve((-384, -384, 384, 384), 0, 384, 'hall', sym=False)
@@ -28,6 +32,8 @@ inlay((-64, -64, 64, 64), 48, 'bk_stand', sym=False)                    # a plat
 fill((128, 128, 192, 192), 0, 384, 'pillar')                            # columns (+ copy)
 fill((128, -192, 192, -128), 0, 384, 'pillar')
 room_lamps((-384, -384, 384, 384), 384, step=256, value=520, sym=False)
+for _c in ('ne', 'nw', 'se', 'sw'):
+    chamfer((-384, -384, 384, 384), _c, 128, 0, 384, sym=False)           # v3: octagonal hall
 label(0, -150, 'HALL 0')
 
 # east wing (+ copy): a doorway, a room, a raised gallery with broad steps, a hook perch
@@ -47,12 +53,17 @@ carve((-384, 704, 384, 1088), -96, 224, 'low', sym=False)
 strip_ramp((-128, 512, 128, 704), 32, 128, 128, sym=False)             # strip follows the stairs
 room_lamps((-384, 704, 384, 1088), 224, step=256, value=420, sym=False)
 panel((-64, 1080, 64, 1088), 64, 192, 'bk_panel', tex_px=256, sym=False)  # placeholder picture, 128 wide, thin in y
-label(0, 900, 'LOW -96', -96)
+fill((-384, 960, 384, 1088), BOT, 0, None, sym=False)                  # v3: a ledge along the north wall (0)
+strip_ramp((-384, 960, 384, 1088), 128, 128, 128, sym=False)          # the ledge's strip 128 above it
+ramp((-384, 736, -256, 960), 'y', -96, 0, sym=False)                   # v3: ramp up to it along the west wall (foot clear)
+_oct = [(192 + 40 * math.cos(math.radians(22.5 + 45 * k)), 832 + 40 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+prism([(round(x), round(y)) for x, y in _oct], -96, 224, 'pillar', sym=False)   # v3: octagonal pillar
+label(0, 900, 'LOW -96', -96), label(0, 1024, 'ledge 0', 0)
 
 # spawns (+ copies)
 spawn(-256, -256, 0, 45, 'hall')
 spawn(640, 64, 0, 180, 'wing')
 spawn(960, -192, 128, 180, 'gallery')
-spawn(-256, 960, -96, 0, 'low', sym=False)
-spawn(256, 800, -96, 180, 'low', sym=False)
+spawn(-128, 800, -96, 0, 'low', sym=False)
+spawn(320, 760, -96, 180, 'low', sym=False)
 

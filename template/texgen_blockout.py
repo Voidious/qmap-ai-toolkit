@@ -1,4 +1,4 @@
-"""Blockout textures for layout builds (qmap-toolkit v2): plain, readable, deliberately ugly-neutral,
+"""Blockout textures for layout builds (qmap-toolkit v3): plain, readable, deliberately ugly-neutral,
 so a layout is judged as a layout and no earlier map's look leaks into a new one.
 
   bk_z0..z7_{wall,flr,ceil,strp}  eight zone colours. Walls carry height marks (thin line every 32,

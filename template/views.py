@@ -1,5 +1,5 @@
-"""Preview renders of a compiled .bsp (qmap-toolkit v2, generic).
-Edit CAMS for your map: (label, (x, y, z eye), yaw degrees (0 = +x, 90 = +y), pitch degrees (+ = up)).
+"""Preview renders of a compiled .bsp (qmap-toolkit v3, generic).
+Edit CAMS for your map: (label, (x, y, z eye), yaw degrees (0 = +x, 90 = +y), pitch degrees (+ = DOWN, as in Quake; - looks up)).
 The tone curve 255*(raw/255)^0.55 was fitted to ezQuake screenshots at default gamma/contrast, so the
 'mean' brightness printed per view is comparable between maps (our maps sit around 45-60).
 Usage: python3 views.py map.bsp out.png"""
@@ -14,7 +14,7 @@ from render import BSP, render  # noqa: E402
 CAMS = [('hall from the south-west corner', (-340, -340, 60), 45, 0),
         ('hall: plinth and the doorway north', (0, -330, 60), 90, -4),
         ('east wing: gallery steps and the perch', (560, -280, 60), 40, 6),
-        ('low room from the foot of the stairs', (0, 720, -40), 90, 2)]
+        ('low room: ramp to the ledge, octagonal pillar', (330, 920, -36), 184, 4)]
 
 
 def main(bsp, out):

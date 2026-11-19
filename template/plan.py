@@ -1,4 +1,4 @@
-"""Top-down plan image from the generator's JSON (qmap-toolkit v2, generic).
+"""Top-down plan image from the generator's JSON (qmap-toolkit v3, generic).
 Two panels when the map has an upper level: LOWER (floors below SPLIT) and UPPER (floors at or above
 SPLIT, with the lower level ghosted underneath). Floors are coloured by height (legend), spawns are
 white dots with facing arrows (team starts: coloured squares), items are marked and named,

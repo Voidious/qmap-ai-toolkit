@@ -1,5 +1,5 @@
 # =========================================================================
-# OUTPUT - .map and .json writer (template, qmap-toolkit v2)
+# OUTPUT - .map and .json writer (template, qmap-toolkit v3)
 #   Per-face texturing: every wall face is textured from the AIR it faces, cut into bands
 #   (kickplate / wall / light strip / wall / cornice) at that room's heights. Detail (lamps,
 #   panels) is func_detail_illusionary: never collision. Walkable tops get a minlight skin.
@@ -64,8 +64,53 @@ def room_floor(p, q, f):
 
 
 DIRS = ((1, 0), (-1, 0), (0, 1), (0, -1))          # +x, -x, +y, -y
-PERIOD = {'wall': 128, 'base': 32, 'strp': 16, 'trim': 16, 'glass': 96, None: 128}
+PERIOD = {'wall': 128, 'base': 32, 'strp': 16, 'trim': 16, 'glass': 96, None: 128, 'band': TRIM_H}
 WALL_PERIOD = {}    # zone -> vertical period of its wall texture when not 128 (e.g. 80-tall panels)
+
+
+EXTRA = {'world': [], 'skin': [], 'detail': []}    # v3: whole brushes written outside the grid
+
+
+def band_role(n, mid):
+    """Band of a wall face at height mid looking into air n (the main chain in detail_pieces, minus
+    its glass / sill / step-edge special cases): (role, anchor z)."""
+    th, f, c, sz = n['th'], n['f'], n['c'], n['sz']
+    if mid >= c - 16 and not n['nocap']:
+        return 'trim', c
+    if n['foot'] is not None and mid < n['foot']:
+        return 'base', n['foot']
+    if sz <= mid < sz + 16:
+        return 'strp', sz + 16
+    tz = n['tz']
+    if tz is not None and tz <= mid < tz + TRIM_H and tz + TRIM_H < c - 16:
+        return 'band', tz + TRIM_H
+    anc = STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32
+    return ('wall_lo' if mid < SPLIT_Z.get(th, -10 ** 6) else 'wall'), anc
+
+
+def _plane_pts(n, p):
+    """Three points on the plane (normal n, through p), in the winding the .map format wants."""
+    L = math.sqrt(sum(v * v for v in n))
+    n = [v / L for v in n]
+    a = (n[1], -n[0], 0) if abs(n[2]) < 0.9 else (0, n[2], -n[1])
+    la = math.sqrt(sum(v * v for v in a))
+    a = [v / la * 64 for v in a]
+    b = (a[1] * n[2] - a[2] * n[1], a[2] * n[0] - a[0] * n[2], a[0] * n[1] - a[1] * n[0])
+    return [p, tuple(p[k] + a[k] for k in range(3)), tuple(p[k] + b[k] for k in range(3))]
+
+
+def sface(n, p, tex, xo, yo):
+    """A face in the standard format (texture projected on the nearest axis plane)."""
+    P = _plane_pts(n, p)
+    return ' '.join('( %.3f %.3f %.3f )' % q for q in P) + f' {tex} {xo:g} {yo:g} 0 1 1'
+
+
+def vface(n, p, tex, U, uoff, V, voff, su=1, sv=1):
+    """A face in Valve 220 format: texture axes U (across) and V (down) set explicitly, so a texture
+    runs along an angled wall or a slope without stretching. qbsp reads the format per face."""
+    P = _plane_pts(n, p)
+    return (' '.join('( %.3f %.3f %.3f )' % q for q in P) +
+            f' {tex} [ {U[0]:.6f} {U[1]:.6f} {U[2]:.6f} {uoff:.3f} ] [ {V[0]:.6f} {V[1]:.6f} {V[2]:.6f} {voff:.3f} ] 0 {su:.6f} {sv:.6f}')
 
 
 def detail_pieces():
@@ -86,6 +131,9 @@ def detail_pieces():
         th = room_theme(p, q, f, zmap)
         cm = next((m2 for (a2, b2), m2 in mats.items() if a2 == c), None)
         fm = next((m2 for (a2, b2), m2 in mats.items() if b2 == f), None)
+        if fm == 'ramp':
+            return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
+                        door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
         if fm == 'bridge':
             foot = None
         elif fm == 'stair' and th not in STEP_KICK:
@@ -127,16 +175,19 @@ def detail_pieces():
             cs.add(n['c'] - 16)
         if n['f'] <= n['sz'] and n['sz'] + 16 < n['c']:
             cs |= {n['sz'], n['sz'] + 16}
-        if n['tz'] is not None and n['f'] <= n['tz'] and n['tz'] + 16 < n['c'] - 16:
-            cs |= {n['tz'], n['tz'] + 16}
+        if n['tz'] is not None and n['f'] <= n['tz'] and n['tz'] + TRIM_H < n['c'] - 16:
+            cs |= {n['tz'], n['tz'] + TRIM_H}
         gz = GLASS_Z.get(n['th'])
         if gz is not None and n['f'] + 32 <= gz and gz + 96 <= n['c'] - 16:
             cs |= {gz, gz + 96}
         return cs
 
+    EXTRA['world'], EXTRA['skin'], EXTRA['detail'] = [], [], []
     for i in range(NX):
         for j in range(NY):
             for a, b, m in cols[i][j]:
+                if m in ('ramp', 'diag'):
+                    continue                              # v3 stand-ins: the ramp / prism brush is written instead
                 own = {(f, c): room_theme(i, j, f, zmap) for f, c in air[i][j]}
                 ztop = next((t for (f, c), t in own.items() if f == b), None)
                 zbot = next((t for (f, c), t in own.items() if c == a), None)
@@ -206,23 +257,138 @@ def detail_pieces():
                             role, anc = 'trim', b          # sill under a raised opening
                         elif n['foot'] is not None and mid < n['foot']:
                             role, anc = 'base', n['foot']
-                        elif n['tz'] is not None and n['tz'] <= mid < n['tz'] + 16 and n['tz'] + 16 < c - 16:
-                            role, anc = 'trim', n['tz'] + 16
                         elif sz <= mid < sz + 16:
-                            role, anc = 'strp', sz + 16
+                            role, anc = 'strp', sz + 16      # (before the band: a strip climbing a stair crosses the seam)
+                        elif n['tz'] is not None and n['tz'] <= mid < n['tz'] + TRIM_H and n['tz'] + TRIM_H < c - 16:
+                            role, anc = 'band', n['tz'] + TRIM_H     # string course / seam (TRIM_H tall)
                         elif (gz is not None and f + 32 <= gz and gz + 96 <= c - 16 and gz <= mid < gz + 96
                               and all(solid_at(i + k * dj, j + k * di, mid) and not solid_at(i + k * dj + di, j + k * di + dj, mid)
                                       for k in (-2, -1, 1, 2))):
                             role, anc = 'glass', gz + 96   # only on straight runs wide enough for a window
                         else:
                             # stone sits on the band below it: the kickplate top, or the strip top above the strip
-                            role, anc = 'wall', (sz + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32)
-                        per = WALL_PERIOD.get(zone(th), 128) if role == 'wall' else PERIOD[role]
+                            # stone is anchored to the room's NOMINAL strip, not a strip that climbs a stair:
+                            # anchoring to the climbing strip shifted the courses 16 per step (b3 base stairs)
+                            role, anc = 'wall', (STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32)
+                            if mid < SPLIT_Z.get(th, -10 ** 6):
+                                role = 'wall_lo'           # stratified rooms: a different stone below the split
+                        per = WALL_PERIOD.get(zone(th), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
                         faces.append((textures('wall', th, role)[2], anc % per))
                     zt = ztop if q == b and ztop else None
                     zb = zbot if p == a and zbot else None
                     yield (i, j, p, q, 'wall', textures('wall', zt or zside, 'wall')[0],
                            textures('wall', zb or zside, 'wall')[1], faces)
+
+    # ---- v3: ramps, their sloped bands, prisms (written as whole brushes, outside the grid) ----
+    def air_info(x, y, zlo, zhi):
+        p, q = int((x - XMIN) // C), int((y - YMIN) // C)
+        if not (0 <= p < NX and 0 <= q < NY):
+            return None
+        best = None
+        for f, c in air[p][q]:
+            ov = min(c, zhi) - max(f, zlo)
+            if ov > 0 and (best is None or ov > best[0]):
+                best = (ov, f, c)
+        return info(p, q, best[1], best[2]) if best else None
+
+    for rr, axis, sg, z0, z1, bands in RAMPS:
+        x0, y0, x1, y1 = rr
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        nt = air_info(mx, my, z0, z1 + 64) or {'th': zmap[int((mx - XMIN) // C)][int((my - YMIN) // C)] or 'room'}
+        th = nt['th']
+        flr = textures('wall', th, 'wall')[0]
+        side = textures('ledge', th, None)[2]
+        rise = z1 - z0
+        run = (x1 - x0) if axis == 'x' else (y1 - y0)
+        h = (1, 0, 0) if axis == 'x' else (0, 1, 0)
+        lo = ((x0, y0, z0) if sg > 0 else (x1, y0, z0)) if axis == 'x' else ((x0, y0, z0) if sg > 0 else (x0, y1, z0))
+        top_n = (-sg * rise * h[0], -sg * rise * h[1], run)
+        hi_n = (sg * h[0], sg * h[1], 0)
+        hi_p = ((x1 if sg > 0 else x0), y0, z0) if axis == 'x' else (x0, (y1 if sg > 0 else y0), z0)
+        lat = [((0, -1, 0), (x0, y0, z0)), ((0, 1, 0), (x0, y1, z0))] if axis == 'x' else \
+              [((-1, 0, 0), (x0, y0, z0)), ((1, 0, 0), (x1, y0, z0))]
+        fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
+              sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
+        EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+        if not bands:
+            continue
+        # the rooms at the foot and at the head: the sloped strip runs from one's strip to the other's
+        if axis == 'x':
+            hd = (hi_p[0] + sg * 8, (y0 + y1) / 2)
+            lo_c = (lo[0] - sg * 8, (y0 + y1) / 2)
+        else:
+            hd = ((x0 + x1) / 2, hi_p[1] + sg * 8)
+            lo_c = ((x0 + x1) / 2, lo[1] - sg * 8)
+        n0 = air_info(lo_c[0], lo_c[1], z0, z0 + 64)
+        n1 = air_info(hd[0], hd[1], z1, z1 + 64)
+        if not n0:
+            continue
+        bands_ = [(z0, z1, 32, 'base')]                      # kickplate: 32 above the slope, all the way
+        if n0['sz'] < 10 ** 6:
+            s0 = n0['sz']
+            s1 = n1['sz'] if n1 and n1['sz'] < 10 ** 6 else z1 + (s0 - z0)
+            bands_.append((s0, s1, 16, 'strp'))
+        top_band = max(b_[1] + b_[2] for b_ in bands_)
+        for (wn, wp) in lat:                                 # a wall along this side?
+            ox, oy = wn[0] * 8, wn[1] * 8
+            samples = [(x0 + C / 2 + k * C, (y0 if wn[1] < 0 else y1)) for k in range(int((x1 - x0) // C))] if axis == 'x' else \
+                      [((x0 if wn[0] < 0 else x1), y0 + C / 2 + k * C) for k in range(int((y1 - y0) // C))]
+            if not all(solid_at(int((sx + ox - XMIN) // C), int((sy + oy - YMIN) // C), zz)
+                       for sx, sy in samples for zz in (z0 + 8, top_band - 8)):
+                continue
+            inward = (-wn[0], -wn[1], 0)
+            fr = (wp[0] + inward[0] * 2, wp[1] + inward[1] * 2, 0)
+            ends = [((-h[0], -h[1], 0), (x0, y0, 0)), ((h[0], h[1], 0), (x1, y1, 0))]
+            for alo, ahi, hgt, role in bands_:
+                R = ahi - alo
+                Lb = math.hypot(run, R)
+                ct, st = run / Lb, R / Lb
+                U = (sg * h[0] * ct, sg * h[1] * ct, st)
+                V = (sg * h[0] * st, sg * h[1] * st, -ct)
+                tn = (-sg * R * h[0], -sg * R * h[1], run)
+                tex = textures('wall', n0['th'], role)[2]
+                pt = (lo[0], lo[1], alo + hgt)                # top edge at the foot: texture row 0
+                voff = -(pt[0] * V[0] + pt[1] * V[1] + pt[2] * V[2]) / ct
+                fs = [sface(wn, wp, EDGE_TEX, 0, 0),
+                      vface(inward, fr, tex, U, 0, V, voff % PERIOD[role], 1, ct),
+                      sface((-tn[0], -tn[1], -tn[2]), (lo[0], lo[1], alo), EDGE_TEX, 0, 0),
+                      sface(tn, (lo[0], lo[1], alo + hgt), EDGE_TEX, 0, 0)] + \
+                     [sface(n_, (p_[0], p_[1], 0), EDGE_TEX, 0, 0) for n_, p_ in ends]
+                EXTRA['detail'].append('{\n' + '\n'.join(fs) + '\n}')
+
+    for P, z0, z1, kind in PRISMS:
+        k_ = len(P)
+        faces_ = []
+        for k in range(k_):
+            (ax, ay), (bx, by) = P[k], P[(k + 1) % k_]
+            L = math.hypot(bx - ax, by - ay)
+            n_ = ((by - ay) / L, -(bx - ax) / L, 0)
+            ni = air_info((ax + bx) / 2 + n_[0] * 10, (ay + by) / 2 + n_[1] * 10, z0, z1)
+            faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni))
+        cuts = {z0, z1}
+        for _, _, _, ni in faces_:
+            if ni and kind is None:
+                cuts |= {z for z in band_cuts(ni) if z0 < z < z1}
+        cuts = sorted(cuts)
+        cx, cy = sum(p_[0] for p_ in P) / k_, sum(p_[1] for p_ in P) / k_
+        tht = (air_info(cx, cy, z1, z1 + 64) or {'th': zmap[int((cx - XMIN) // C)][int((cy - YMIN) // C)] or 'room'})['th']
+        thb = (air_info(cx, cy, z0 - 64, z0) or {'th': tht})['th']
+        for za, zb in zip(cuts, cuts[1:]):
+            mid = (za + zb) / 2
+            fs = [sface((0, 0, -1), (P[0][0], P[0][1], za), textures('wall', thb, 'wall')[1], 0, 0),
+                  sface((0, 0, 1), (P[0][0], P[0][1], zb), textures('wall', tht, 'wall')[0], 0, 0)]
+            for (ax, ay), n_, U, ni in faces_:
+                if kind is not None:
+                    tex, voff = textures(kind, (ni or {'th': tht})['th'], None)[2], z1 % 128
+                elif ni is None or not (ni['f'] <= mid < ni['c']):
+                    th2 = (ni or {'th': tht})['th']
+                    tex, voff = textures('wall', th2, 'wall')[2], (ZONE_FLOOR.get(th2, 0) + 32) % 128
+                else:
+                    role, anc = band_role(ni, mid)
+                    per = WALL_PERIOD.get(zone(ni['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
+                    tex, voff = textures('wall', ni['th'], role)[2], anc % per
+                fs.append(vface(n_, (ax, ay, za), tex, U, -(ax * U[0] + ay * U[1]) % 64, (0, 0, -1), voff, 1, 1))
+            EXTRA['world'].append('{\n' + '\n'.join(fs) + '\n}')
 
 
 def _merge(cs, facemap):
@@ -372,7 +538,7 @@ def torches():
         if any(lo < sz + 16 + 8 and hi > sz - 8 for sz in szs):
             return True
         tz = TRIM_Z.get(th)
-        if tz is not None and lo < tz + 24 and hi > tz - 8:
+        if tz is not None and lo < tz + TRIM_H + 8 and hi > tz - 8:
             return True
         x0, y0, x1, y1 = box
         return any(px0 - 8 < x1 and px1 + 8 > x0 and py0 - 8 < y1 and py1 + 8 > y0 and pz0 - 8 < hi and pz1 + 8 > lo
@@ -446,14 +612,14 @@ def write_map(path):
         '_bounce': '0',
         '_dirt': '1',
         '_dirtscale': '2.0',
-        '_sunlight': '160',
-        '_sun_mangle': '35 -62 0',
-        '_sunlight2': '40',
+        **SUN,
     }
-    parts = [ent(world, '\n'.join(brush_text(*b[:7]) for b in bs if not b[7]))]
-    # walkable floor skins: merged into the world by qbsp, lit with a floor-only minimum
+    parts = [ent(world, '\n'.join([brush_text(*b[:7]) for b in bs if not b[7]] + EXTRA['world']))]
+    # walkable floor skins: merged into the world by qbsp, lit with a floor-only minimum (ramps too)
     parts.append(ent({'classname': 'func_group', '_minlight': FLOOR_MINLIGHT},
-                     '\n'.join(brush_text(*b[:7]) for b in bs if b[7])))
+                     '\n'.join([brush_text(*b[:7]) for b in bs if b[7]] + EXTRA['skin'])))
+    if EXTRA['detail']:
+        parts.append(ent({'classname': 'func_detail_illusionary'}, '\n'.join(EXTRA['detail'])))
     # liquids (lava): plain world brushes; qbsp gives '*lava' textures lava contents
     def box(x1, y1, z1, x2, y2, z2, t):
         f = lambda p, q, r: '( %d %d %d ) ( %d %d %d ) ( %d %d %d ) %s 0 0 0 1 1' % (*p, *q, *r, t)
@@ -549,7 +715,7 @@ def dump(path):
     json.dump({'C': C, 'XMIN': XMIN, 'YMIN': YMIN, 'NX': NX, 'NY': NY, 'BOT': BOT, 'TOP': TOP,
                'cols': [[[[a, b, m] for a, b, m in cols[i][j]] for j in range(NY)] for i in range(NX)],
                'theme': theme, 'feet': stair_feet, 'spawns': spawns, 'team_spawns': team_spawns, 'perches': perches, 'items': items, 'lights': lights, 'labels': labels,
-               'teleports': teleports, 'liquids': liquids, 'decals': decals,
+               'teleports': teleports, 'liquids': liquids, 'decals': decals, 'ramps': RAMPS, 'prisms': PRISMS,
                'pushes': [(r, z, dx, dy, dz, 90) for r, z, dx, dy, dz, s, a in pushes]}, open(path, 'w'))
 
 

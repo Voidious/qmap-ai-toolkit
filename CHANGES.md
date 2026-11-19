@@ -1,3 +1,47 @@
+# Changes from v2 to v3
+
+Why: after nine maps the group felt our layouts lacked vertical complexity. v3 measures height,
+adds the geometry the core was missing for it, and puts height into the process.
+
+## Design and process (GUIDE sections 2-3)
+* New **Design for height** section: a survey of our nine maps against five classic QW maps
+  (aerowalk, ztndm3, dapak12, naked3, naked4). The classics change height two to five times as
+  much item to item, spread floor over more levels, overlook more, use angled walls and
+  teleporters. Targets, techniques, and the Strata lesson: stacked is not vertical.
+* Concepts are drawn **in section as well as plan**; blockouts are delivered with sections and an
+  iso cutaway; the height profile is read every build; the layout is settled before the visual pass.
+* Gallery: ctf_strata added; `gallery/profiles/` holds the survey (figures, numbers as JSON; the
+  reference BSPs themselves are not included).
+
+## Generator (`template/`)
+* **Ramps**: `ramp(rect, axis, z0, z1, rev)` writes a true wedge brush (rise <= run). Walls beside
+  it get a sloped kickplate and light strip from the foot room's strip to the head room's. The
+  grid holds a stepped stand-in for the checks; the foot is registered for the stair-feet check.
+* **Angled walls**: `prism(points, z0, z1, kind)` (convex), `chamfer(rect, corner, size, z0, z1)`,
+  `diag_wall(x0, y0, x1, y1, thick, z0, z1)`. Faces use Valve 220 texture axes so textures run
+  along the face; bands continue round chamfered corners. Covered cells are grid stand-ins
+  (`'diag'`) that are never written and never get a lamp.
+* From Strata: `split_halves` / `side_of` (team colours by half), `TRIM_Z` + `TRIM_H` (string
+  course), `SPLIT_Z` (a second wall stone below a height), `SUN` (worldspawn sunlight), wall stone
+  anchored to the room's nominal strip (fixes stone sliding beside stairs).
+* The demo map now has an octagonal hall (four chamfers), a ramp up to a ledge with sloped bands,
+  and an octagonal pillar; `views.py` has a camera on them.
+* `build.sh` ends with `vprofile.py --targets` (`VPROFILE=0` skips it).
+
+## Tools
+* `qmap/vprofile.py`: height profile of any compiled BSP29 from its collision hulls: stacking,
+  effective levels, biggest level, overlooks, cross-level sight, route height change and level
+  changes between items, angled walls, teleporters, pads, rocket-jump-only floor. `--targets`
+  rates each against the classics. Needs numba.
+* `qmap/section.py`: vertical slices of a generated map; `qmap/iso.py`: isometric cutaways.
+* `demos/vert.py`: height change in real play (floor change per 1000 units travelled, airborne
+  share); `ca_run.py` and `ctf_run.py` report it.
+
+## Examples
+* New `examples/ctf_strata` (b6): two stacked levels, side lanes, light wells, "The dig" textures,
+  team lights by half, direction signs and `signcheck.py`. Rebuilds byte-identical.
+* ctf_bastion, ctf_circuit, ca_lyceum unchanged.
+
 # Changes from v1 to v2
 
 ## Process and design
@@ -43,3 +87,14 @@
 ## Guide
 * Rewritten around the above; new gotchas 12-17; demo findings updated (29 demos, CA on a
   CTF-sized map, theta-route arithmetic); lighting notes on pale and dark materials.
+
+## v2.1 (fixes found while building ctf_strata)
+* `routes.py`: no longer crashes when nothing is reachable near the target point; it reports
+  "unreachable with these rectangles forbidden" instead.
+* Template `zone()`: blockout themes named `blue` and `red` always get the blue and red zone
+  colours, whatever order the rooms are carved in (before, two bases could come out the same colour).
+* Template `room_lamps()`: a ceiling lamp that would land inside a pillar, baffle or pier now moves to
+  the nearest clear spot in the room (before, the light compiler warned "couldn't nudge light out of
+  solid" and the lamp was lost). Call `room_lamps` after the room's pillars, as the demo does.
+* Template `views.py`: the docstring had the pitch sign backwards. In the renderer, as in Quake,
+  a positive pitch looks DOWN and a negative one looks up.

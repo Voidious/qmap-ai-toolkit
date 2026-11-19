@@ -1,11 +1,13 @@
-# Building Quake 1 / QuakeWorld maps with an AI model — field guide (v2)
+# Building Quake 1 / QuakeWorld maps with an AI model — field guide (v3)
 
-This guide and toolkit come out of building eight multiplayer maps for one QuakeWorld group:
-Clan Arena (Agora, Vigil, Crucible, Cistern, Lyceum), FFA (Relay) and CTF (Bastion, Circuit).
-They went through about 80 delivered builds of feedback from real play and in-client screenshots,
-plus an analysis of 29 demos of the group's games. Everything here was learned the hard way.
+This guide and toolkit come out of building nine multiplayer maps for one QuakeWorld group:
+Clan Arena (Agora, Vigil, Crucible, Cistern, Lyceum), FFA (Relay) and CTF (Bastion, Circuit,
+Strata). They went through about 85 delivered builds of feedback from real play and in-client
+screenshots, an analysis of 29 demos of the group's games, and a height survey of our maps
+against five classic QuakeWorld maps. Everything here was learned the hard way.
 
-Read section 3 before you design anything and section 9 before you texture anything.
+Read section 3 before you design anything (especially *Design for height*) and section 9 before
+you texture anything.
 
 The code is a starting point, not a framework, and not a cage. Each map's layout and look are
 written fresh on top of a shared core, and every map so far extended that core when the design
@@ -18,12 +20,14 @@ needed something it couldn't do. **The toolkit's limits are not the map's limits
 ```
 template/               START HERE for a new map
   _core.py              settings (name, symmetry, bounds, light scale), the grid, every building
-                        primitive, texture mapping - edit the SETTINGS block
+                        primitive, texture mapping - edit the SETTINGS block. v3: ramps, prisms
+                        (chamfers, diagonal walls, octagonal pillars), team halves
   _layout.py            the map itself - a small demo you replace
   _itemh.py, _items.py  item helper / your items
-  _out.py               .map + .json writer: per-face texturing, wall bands, lamp placer, skins
+  _out.py               .map + .json writer: per-face texturing, wall bands, lamp placer, skins;
+                        v3: ramp wedges with sloped bands, prisms with Valve 220 texture axes
   texgen_blockout.py    plain zone-coloured textures for layout builds (height marks on walls)
-  build.sh              generator -> qbsp -> vis -> light -> check.py
+  build.sh              generator -> qbsp -> vis -> light -> check.py -> vprofile.py --targets
   plan.py, views.py     top-down plan image; preview renders with a brightness readout
 qmap/                   shared tools - reuse as is
   check.py              reachability (walk / jump / teleport / push), traps, spawn sightlines,
@@ -38,18 +42,25 @@ qmap/                   shared tools - reuse as is
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
   fsq.py                error-diffusion quantising for colours the palette lacks (cream, ivory)
   makewad.py            palette PNGs -> WAD2;  quake_palette.lmp (LibreQuake, BSD-3)
+  vprofile.py           v3: how vertical is a compiled map? levels, overlooks, route height
+                        change, angled walls... against five classic QW maps (section 3)
+  section.py, iso.py    v3: side-on slices and isometric cutaways of a map from its JSON
   flagtime.py, strip_ill.py   older CTF timing / visual-build helpers
-examples/               three finished maps that rebuild byte-identical from this folder
+examples/               four finished maps that rebuild byte-identical from this folder
   ctf_bastion/          CTF, 180-degree rotation; rival forts; emblems, perches, side routes
   ctf_circuit/          CTF, mirror symmetry; "theta" racetrack; glazed-tile team colours,
                         strips that follow stairs, banners, inlays, a cupola, route timing
   ca_lyceum/            Clan Arena 8-12, asymmetric; hub + satellites; marble with error
                         diffusion, a sky oculus, columns with bases and capitals
-gallery/                plan + preview sheet of all eight maps, and GALLERY.md
-demos/                  MVD demo reader + CTF and Clan Arena analysis
+  ctf_strata/           CTF, rotation; two stacked levels, covered side lanes, light wells;
+                        stratified walls, team lights by half, direction signs, a sun
+gallery/                plan + preview sheet of all nine maps, GALLERY.md; profiles/: the height
+                        survey (our maps against five classics), Strata in section and iso
+demos/                  MVD demo reader + CTF and Clan Arena analysis; vert.py: height change
+                        in real play
 ```
 
-Requirements: Python 3 with numpy, pillow, scipy, matplotlib; **ericw-tools** (qbsp, vis, light)
+Requirements: Python 3 with numpy, pillow, scipy, matplotlib, numba; **ericw-tools** (qbsp, vis, light)
 built from source; a QuakeWorld client (ezQuake) for the human to test in.
 
 Prove your setup by rebuilding an example (each prints check results; the .map must match the
@@ -64,7 +75,7 @@ bash build.sh
 python3 views_lyceum.py ca_lyceum_b5.bsp views.png
 ```
 (ctf_circuit: `texgen_citadel.py ctex`, `ctex_names.txt`, `ctf_circuit_b5.wad`;
-ctf_bastion: see its build notes in section 13.)
+ctf_bastion and ctf_strata: see their build notes in section 13.)
 
 ---
 
@@ -75,10 +86,16 @@ ctf_bastion: see its build notes in section 13.)
 2. **Concept.** Before any blockout, draw two or three *structurally different* overall shapes
    as a one-page sketch (see section 3), with a recommendation and rough route lengths. Compare
    them with the gallery. The human picks. This step is cheap and it is the one that decides
-   whether a map is a fresh take or a repeat.
+   whether a map is a fresh take or a repeat. **Draw each one in section (side-on) as well as in
+   plan**: where the levels are, what looks down on what, which routes climb. A plan alone hides
+   exactly the thing our maps were short of (section 3, *Design for height*).
 3. **Layout blockout** with the blockout textures. Deliver `.bsp`, `.map`, `.wad`, a top-down
-   **plan image**, **preview renders**, a README. The human runs around in game and reports.
-4. **Layout fix rounds** — structural changes only. Re-run every check each build.
+   **plan image**, **sections** and an **iso cutaway** (`section.py`, `iso.py`), **preview
+   renders**, a README. The human runs around in game and reports.
+4. **Layout fix rounds** — structural changes only. Re-run every check and read the height
+   profile (`build.sh` prints it) each build. **Settle the layout before the visual pass**: signs,
+   inlays, bands and lamps are anchored to the geometry, so a structural change after the visual
+   pass costs a texture round as well.
 5. **Visual pass** — ask the human to pick a style: 3–4 concrete options with a recommendation,
    each *different from the group's existing maps* (name them). Collision must stay identical;
    prove it with `collide_cmp.py`.
@@ -114,7 +131,8 @@ freely. Chasing novelty at the level of every room leads straight to wacky, unpl
 Aim for *a fresh take on a classic form*, not for something no one has seen.
 
 **The concept step (do it every time):**
-1. Read the gallery (`gallery/GALLERY.md`): eight skeletons already built for this group.
+1. Read the gallery (`gallery/GALLERY.md`): nine skeletons already built for this group, and
+   their height profiles.
 2. Sketch two or three candidates that differ *in skeleton* from each other and from the
    gallery's — not just in room shapes. Ask: where is the high ground, where is the low ground,
    how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do players
@@ -123,20 +141,84 @@ Aim for *a fresh take on a classic form*, not for something no one has seen.
    distance on the sketch), likely longest sightlines.
 4. Recommend one, say in a line what is new about it and what classic it riffs on.
 
-**Skeletons not tried yet** (starting points, not prescriptions): rooms stacked over rooms (two
-full levels linked by shafts); a figure-8 (two loops sharing a courtyard); two hubs joined by
-parallel routes; a ring of rooms round an open court; one huge room broken by structure; a
-vertical map (tower, multiple storeys); diagonal halls or octagonal rooms.
+**Skeletons not tried yet** (starting points, not prescriptions): a figure-8 (two loops sharing a
+courtyard); two hubs joined by parallel routes; a ring of rooms round an open court; one huge room
+broken by structure; a vertical map (a tower, a shaft with rooms opening off it at many heights);
+diagonal halls or octagonal rooms (buildable since v3). Strata did two full levels stacked.
 
 **Starting from a copy anchors you.** Start from `template/` (an empty demo) — not from the
 last map's files. Use the examples for *techniques*: look up how Circuit makes strips follow
 stairs, not where its rooms are.
 
-**Extend the core when the design needs it.** Things added during these eight maps, each because
+**Extend the core when the design needs it.** Things added during these nine maps, each because
 a design wanted it: mirror symmetry, light strips that follow stairs, floor and ceiling inlays,
 picture panels, a sky oculus, columns with bases and capitals, hook-only perches, teleporters,
-jump pads, liquids. Known gaps today: diagonal and curved walls (the grid is 16-unit axis-aligned
-columns), sloped floors, doors and lifts, moving brushes. If a design needs one, write it.
+jump pads, liquids, team colours by half, stratified walls, signs. v3 added true ramps and angled
+walls (chamfers, diagonal walls, octagonal pillars). Known gaps today: curved walls (approximate
+them with prisms), ramps that run diagonally, sloped ceilings, doors and lifts, moving brushes.
+If a design needs one, write it.
+
+### Design for height (v3)
+
+**What the survey found.** After nine maps the group felt the layouts lacked vertical complexity.
+`vprofile.py` measured all nine against five classic QW maps the group rates (aerowalk, ztndm3,
+dapak12, naked3, naked4) from their collision hulls. The full table is in `gallery/GALLERY.md`.
+
+| measure | five classics | our nine maps |
+|---|---|---|
+| route height change per 1000 units, item to item | **251–551** | 61–229 |
+| effective levels (64-unit bands) | 3.9–5.2 | 2.0–4.1 |
+| share of floor on the biggest level | 0.28–0.41 | 0.43–0.78 |
+| floor that can see floor ≥ 64 below it | 0.46–0.62 | 0.23–0.55 |
+| of what you see, share ≥ 64 above or below | 0.31–0.42 | 0.17–0.42 |
+| wall area that is not axis-aligned | 0.03–0.22 | 0 |
+| teleporters | 2–5 | 0–2 |
+
+The biggest gap is the first line: in the classics, **going from one item to the next changes
+height two to five times as much**. Our maps put most of their floor on one level and route
+along it; the high and low ground is a side trip.
+
+**Stacked is not vertical.** Strata stacks more floor than any classic (0.32 of the footprint has
+a floor over or under it) and is still the flattest map to *play* (route height 61): two big
+slabs, each crossed on its own level, a few links between them. What counts is how often a route
+climbs or drops and what you see above and below you, not how many storeys there are. Its light
+wells (holes in the slab you can look through, drop down and hook back up) were the feature the
+group singled out.
+
+**Targets.** `build.sh` prints every measure against the classics' range on every build
+(`vprofile.py --targets`; `VPROFILE=0` skips it). Aim for:
+* route height change ≥ 250 per 1000 units, and ≥ 0.9 of item pairs whose route changes level;
+* ≥ 3.9 effective levels, no level over ~0.4 of the floor;
+* ≥ 0.46 of floor overlooking floor below; ≥ 0.31 cross-level sight;
+* some angled wall (≥ 0.03); teleporters where the mode suits them.
+
+These are targets, not rules. A map can be good outside them, but nine maps below the range on
+nearly every measure says the habit was flat, not that each map needed to be. The five classics
+are deathmatch maps (duel / FFA); for a long CTF map read the targets as a direction, or profile
+a CTF map the group rates and use its numbers.
+
+**Techniques the classics use:**
+1. **Put the items at different heights** so every item-to-item run climbs or drops. Key items
+   on their own levels, with two ways up to each (one fast and exposed, one slow and covered).
+2. **Many medium levels, not two slabs.** Steps of 48–128 between floors: terraces, ledges,
+   sunken pits, raised walkways inside a room. Break the biggest level up.
+3. **Overlooks everywhere.** Balconies, windows, holes in floors, low walls and railings: from
+   most of the floor you should see floor below you, and be seen from above.
+4. **Links inside rooms, not only between them.** Ramps and broad stairs within a room; drops
+   (one-way down, cheap and fun); jump-ups to ledges (≤ 44 standing, more with a run); pads.
+5. **Teleporters** as vertical links where the mode suits (2–5 in the classics).
+6. **Angled walls** break the boxy read: chamfered corners, diagonal walls, octagonal pillars.
+
+**Section first.** Sketch a concept in section before the plan, and check every blockout with
+`section.py` (side-on slices) and `iso.py` (an isometric cutaway per level); `gallery/profiles/`
+shows Strata's two slabs at a glance. If every section looks like a layer cake, the routes will run
+along the layers.
+
+**In real play** (`demos/vert.py` on the group's demos): floor height changed per 1000 units
+travelled was ~100–125 on dm6, 148 dm2, 91 dm4, ~150–165 ctf1, 159 ctf3, 138 ctf6, and ~100–118 on
+ca_agora; players were airborne 17–26% of the time. These are lower than the route measure
+(players linger and fight on a level), so compare in-play numbers only with in-play numbers.
+Measure our new maps the same way once the group has played them.
 
 ---
 
@@ -164,9 +246,31 @@ columns), sloped floors, doors and lifts, moving brushes. If a design needs one,
   carry two rooms' looks.
 * **Wall bands** (bottom to top): kickplate (`base`), wall, light strip (`strp`, fullbright),
   wall, cornice (`trim`); a sill trim under raised openings; risers on edges only a step tall.
-  Wall texture is anchored to the band below it (kickplate top, or strip top), so panels line up.
+  Wall texture is anchored to the band below it (kickplate top, or the room's own strip top), so
+  panels line up — anchored to the room's nominal strip, not to a strip climbing beside stairs.
 * **Detail is non-solid** (`func_detail_illusionary`): wall lamps, panels, banners. It never
   changes collision.
+* **Ramps** (v3): `ramp(rect, axis, z0, z1, rev=False)` — the floor over rect rises from z0 to z1
+  along +axis (`rev`: along −axis), as one wedge brush. Rise ≤ run (45°, QW's walkable limit);
+  15–35° plays best. The grid holds a stepped stand-in (mat `'ramp'`, never written) so the checks
+  see something walkable, and the ramp's foot is registered for the stair-feet check. Walls beside
+  a ramp get a **sloped kickplate and strip** (illusionary overlays) from the foot room's strip to
+  the head room's strip; give the head room its own `strip_ramp` / strip height so they meet.
+* **Prisms** (v3): `prism(points, z0, z1, kind=None)` — solid on a convex footprint, points
+  counter-clockwise from above; `chamfer(rect, corner, size, z0, z1)` cuts a room corner at 45°
+  (four make an octagon); `diag_wall(x0, y0, x1, y1, thick, z0, z1)`. Faces are written with
+  **Valve 220 texture axes** (qbsp reads the format per face, so they mix with standard faces),
+  so stone runs along an angled face without stretching. `kind=None`: each face is banded like
+  the room it faces (kickplate, strip, cornice continue round the chamfer); other kinds
+  (`'pillar'`...) take that kind's textures. Cells whose centre is inside become mat `'diag'`:
+  solid to the checks, never written, never given a lamp.
+* **Team halves** (v3, Strata): `split_halves(themes)` at the end of the layout renames each
+  listed theme to `<theme>_r` on the copy half (x < 0) and copies its heights, so `textures()`,
+  `fixture_tex()` and `light_color()` can colour strips and lamps by team: `side_of(th)` gives
+  `'b'` or `'r'`; `th[:-2]` is the material.
+* **More wall bands** (v3): `TRIM_Z[theme]` adds a string course `TRIM_H` tall (role `'band'`);
+  `SPLIT_Z[theme]` gives walls below that height a second stone (role `'wall_lo'`), for tall
+  rooms in layers. `SUN` holds the worldspawn sunlight keys for maps with sky.
 * **Floor minlight**: walkable tops get a 16-unit skin brush in a `func_group` with `_minlight`
   so floors never go black while walls stay moody. Free-standing blocks (crates, columns) get it
   too, so their sides aren't black.
@@ -197,6 +301,14 @@ columns), sloped floors, doors and lifts, moving brushes. If a design needs one,
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-only builds**: `collide_cmp.py old.map new.map` → "collision identical", or explain.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
+* **Height** (`vprofile.py map.bsp --targets`, run by `build.sh`): each measure against the five
+  classics' range — `ok`, `LOW`, `HIGH`, or `ok+` (past the range in the good direction). Works on
+  any BSP29, so you can profile a map the group names as a reference. `--json` and `--png-dir`
+  write the numbers and a height map.
+* **Look at it side-on** every layout round: `section.py map.json out.png y=0 x=1200` (slices;
+  floor you can stand on in white, air coloured by height, items and spawns near the cut) and
+  `iso.py map.json out.png cut=200 cut=470 view=sw` (an isometric cutaway, one panel per cut
+  height).
 
 ---
 
@@ -310,6 +422,19 @@ columns), sloped floors, doors and lifts, moving brushes. If a design needs one,
 16. Pale materials and dark materials change perceived brightness by a lot — re-light after a
     visual pass.
 17. Three maps in a row with the same skeleton — see section 3.
+18. **Wall stone misaligned beside stairs** (Strata): walls were anchored to the strip, and the
+    strip climbs with the stairs, so the stone slid up the wall step by step. Anchor wall stone to
+    the room's nominal strip (`STRIPE_Z + 16`); only the strip itself climbs.
+19. A ramp whose foot runs into a wall (the template's own demo): the stair-feet check catches
+    ramps too. Leave 32 of clear floor in front of the low end.
+20. **Camera pitch in `render.py`: positive looks DOWN**, as in Quake. A preview that "looks too
+    dark" may simply be pointing at the ceiling — check the sign before blaming the lighting.
+21. Stacked is not vertical (section 3): a map can have two full storeys and play flat. Read the
+    route height change, not the stacking.
+22. Grid cells under a prism must all be stand-ins (`'diag'`), not structure: the lamp placer saw
+    a structure cell's face beside a part-covered air cell as a wall and could hang a lamp inside
+    the prism. Anything that only exists as a brush (ramp, prism) needs a grid stand-in the
+    writer skips.
 
 ---
 
@@ -321,6 +446,11 @@ short/8 unless FTE float-coords is negotiated; unknown messages skip the rest of
 `ctf_run.py` and `ca_run.py` produce the stats and heatmaps quoted above. A top-down heatmap of
 time spent reconstructs any map's layout without the BSP. Analyse demos of *your own* maps once
 the group plays them — that is the best feedback there is.
+
+`vert.py` (v3, used by both scripts) measures height in real play: `floor_change_per_1000` (the
+floor under each player — a rolling minimum of height over 0.6 s, so jumps don't count — changed
+per 1000 units travelled), `z_range`, and `airborne` (share of time off the floor). Numbers for
+the group's games are in section 3.
 
 ---
 
@@ -335,7 +465,8 @@ maps with their `.map` source.
 ## 12. Starting a new map
 
 1. Copy `template/` to a new folder. Set `NAME`, `TITLE`, `SYM`, bounds in `_core.py`.
-2. Do the **concept step** (section 3) and get the human's pick.
+2. Do the **concept step** (section 3) — plan *and* section for each candidate, with where the
+   items sit in height — and get the human's pick.
 3. Delete the demo in `_layout.py` and `_items.py`; write the layout.
 4. Blockout textures and build:
    ```
@@ -343,10 +474,13 @@ maps with their `.map` source.
    python3 ../qmap/makewad.py mymap_b1.wad $(cat wad_args.txt)
    bash build.sh
    python3 plan.py mymap_b1.json plan.png "My Map beta 1"
+   python3 ../qmap/section.py mymap_b1.json section.png y=0 x=0
+   python3 ../qmap/iso.py mymap_b1.json iso.png cut=100 cut=300
    python3 views.py mymap_b1.bsp views.png        # edit CAMS in views.py first
    ```
+   `build.sh` ends with the height profile; read it every build.
 5. Solve spawns (`pick_spawns.py` or `pick_spawns_sym.py`), measure routes and sightlines, fix,
-   rebuild, deliver with the plan, views, README.
+   rebuild, deliver with the plan, sections, views, README.
 6. Visual pass: write `texgen_<style>.py` (borrow techniques from the examples' generators),
    replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, verify with
    `collide_cmp.py`.
@@ -364,4 +498,11 @@ from the human for every visual round.
 * `ctf_circuit`: `routes.py` (named runs) and `routes_fig.py` draw the three runs;
   `pick_spawns_sym.py` with `SYM=mirror HALF_X0=128 HALF_X1=3104 FLAGR=512`.
 * `ca_lyceum`: `details_lyceum.py` renders the close-ups used in texture rounds.
+* `ctf_strata` (b6, written on the v3 core before ramps and prisms existed):
+  `python3 texgen_dig.py dtex`, `python3 ../../qmap/makewad.py ctf_strata_b6.wad $(cat wad_args.txt)`,
+  `bash build.sh` (the .map's md5 is `52657ae18a754e83ecc00f0f3a928723`). Techniques: `split_halves`
+  for team lights by half, `SPLIT_Z`/`TRIM_Z` for stratified walls, two-ended direction signs
+  (`signcheck.py` lists what you can see from each spawn), `SUN` for moonlight through the oculus,
+  `views_lanes.py` / `views_first.py` / `views_detail.py` for lane, first-person and close-up renders,
+  `texsheet.py` for a texture contact sheet.
 * Each example's `README.txt` is the one shipped to the group, with its change history.
