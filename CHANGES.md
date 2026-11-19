@@ -19,8 +19,9 @@ adds the geometry the core was missing for it, and puts height into the process.
   grid holds a stepped stand-in for the checks; the foot is registered for the stair-feet check.
 * **Angled walls**: `prism(points, z0, z1, kind)` (convex), `chamfer(rect, corner, size, z0, z1)`,
   `diag_wall(x0, y0, x1, y1, thick, z0, z1)`. Faces use Valve 220 texture axes so textures run
-  along the face; bands continue round chamfered corners. Covered cells are grid stand-ins
-  (`'diag'`) that are never written and never get a lamp.
+  along the face; bands continue round chamfered corners. The air in covered cells becomes a grid
+  stand-in (`'diag'`) that is never written and never gets a lamp; solid already there stays, so a
+  prism can start below the floor. Call prisms after the carves they stand in.
 * From Strata: `split_halves` / `side_of` (team colours by half), `TRIM_Z` + `TRIM_H` (string
   course), `SPLIT_Z` (a second wall stone below a height), `SUN` (worldspawn sunlight), wall stone
   anchored to the room's nominal strip (fixes stone sliding beside stairs).

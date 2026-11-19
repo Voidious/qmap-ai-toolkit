@@ -434,7 +434,10 @@ Measure our new maps the same way once the group has played them.
 22. Grid cells under a prism must all be stand-ins (`'diag'`), not structure: the lamp placer saw
     a structure cell's face beside a part-covered air cell as a wall and could hang a lamp inside
     the prism. Anything that only exists as a brush (ramp, prism) needs a grid stand-in the
-    writer skips.
+    writer skips. Two more ways to get it wrong, both found on the first map built with v3:
+    a stand-in must replace only *air* (a prism from `BOT` once replaced the floor under its
+    part-covered edge cells and leaked to the void), and prisms go *after* the carves they sit
+    in (a later carve hollowed a chamfer's stand-in and lamps went inside it).
 
 ---
 

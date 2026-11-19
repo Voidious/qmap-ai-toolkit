@@ -577,9 +577,11 @@ def prism(points, z0, z1, kind=None, sym=True):
     diagonal wall, a chamfered corner, an octagonal pillar, a wedge. kind None: each face is banded
     like the room it looks into (kickplate, strip, cornice), with its texture running along the angled
     face (Valve 220 axes, so nothing stretches); other kinds ('pillar', ...) take that kind's textures.
-    The grid gets a stand-in for the checks: every cell whose centre is inside becomes mat 'diag'
-    (solid to the checks, never written - the prism brush covers it; no lamp or band lands on a face
-    hidden inside the prism). Named kinds keep their mat on cells wholly inside."""
+    The grid gets a stand-in for the checks: in every cell whose centre is inside, the air in [z0, z1]
+    becomes mat 'diag' (solid to the checks, never written - the prism brush covers it; no lamp or
+    band lands on a face hidden inside the prism). Named kinds keep their mat on cells wholly inside.
+    Solid already in the cell stays, so a prism may start below the floor (z0 = BOT) safely.
+    Call it AFTER the carves of the space it stands in: a later carve hollows its stand-in again."""
     pts = [tuple(p) for p in points]
     area = sum(pts[k][0] * pts[(k + 1) % len(pts)][1] - pts[(k + 1) % len(pts)][0] * pts[k][1] for k in range(len(pts)))
     assert area > 0, f'prism {pts}: points must be counter-clockwise'
@@ -599,10 +601,19 @@ def prism(points, z0, z1, kind=None, sym=True):
                     m = 'diag'
                 else:
                     continue
-                col = _subtract(cols[i][j], z0, z1)
-                col.append([z0, z1, m])
+                # only the AIR in [z0, z1] becomes the stand-in: solid already there (the floor under
+                # a prism that starts below it) stays and is written, or a cell only partly under the
+                # prism would leave a hole down to the void
+                col, z = cols[i][j], z0
+                for a, b, _m in sorted(col):
+                    if b <= z or a >= z1:
+                        continue
+                    if a > z:
+                        col.append([z, a, m])
+                    z = max(z, b)
+                if z < z1:
+                    col.append([z, z1, m])
                 col.sort()
-                cols[i][j] = col
 
 
 def chamfer(r, corner, size, z0, z1, sym=True):
