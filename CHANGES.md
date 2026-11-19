@@ -1,3 +1,11 @@
+# v3.3 (map sizing, bug fix)
+
+* **Size by travel**: vprofile measures the median and 90th-percentile walking distance between
+  random spots (`travel_median`, `travel_p90`), and `build.sh` prints a size line with a suggested
+  player range. Floor area overrated Helix (more floor than any classic duel map, the shortest
+  travel of all fifteen maps); GUIDE section 3 has the bands.
+* Preview renders no longer draw trigger brushes (teleporters, pads).
+
 # v3.2 (first map built on v3)
 
 * **Player-hull check**: `vprofile.py --check` (run by `build.sh`) reports cut-off spawns, traps and

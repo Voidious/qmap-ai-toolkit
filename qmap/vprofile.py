@@ -575,6 +575,16 @@ def profile(path, name=None):
             pairs += 1
             if hs.max() - hs.min() >= 64:
                 lvl_pairs += 1
+    # v3.3: SIZE as players feel it - walking distance between random spots on reachable floor
+    # (floor area alone overrates vertical maps: stacked floor adds area, not distance)
+    rs = np.random.default_rng(7)
+    smp_t = rs.choice(reach, min(60, len(reach)), replace=False) if len(reach) else []
+    dd = []
+    for a_ in smp_t:
+        dist_, _ = dijk(int(a_))
+        dd += [dist_[int(b_)] for b_ in smp_t if int(b_) != int(a_) and int(b_) in dist_]
+    travel_med = float(np.median(dd)) if dd else 0.0
+    travel_p90 = float(np.percentile(dd, 90)) if dd else 0.0
     item_h = np.array([F[n] for _, n in keys]) if keys else np.zeros(1)
     span = float(np.percentile(FR, 95) - np.percentile(FR, 5))
     srt = np.sort(FR)                          # dominant level: most floor within any 48-unit height window
@@ -593,6 +603,7 @@ def profile(path, name=None):
         item_height_spread=round(float(np.std(item_h)) / span, 2) if span else 0, key_items=len(keys),
         skill_floor_share=round(float((RR & ~R).sum() / max(1, RR.sum())), 3),
         unreached_share=round(float((~RR).sum() / N), 3),
+        travel_median=round(travel_med), travel_p90=round(travel_p90),
     )
     res['_check'] = chk
     res['_draw'] = dict(x0=x0, y0=y0, nx=nx, ny=ny, nodes=nodes, F=F.tolist(), R=R.tolist(), RR=RR.tolist(),
@@ -617,9 +628,27 @@ REFERENCE = {
 }
 
 
+# v3.3: SIZE BY TRAVEL - median and 90th-percentile walking distance between random spots (teleporters,
+# pads and drops included). Floor area overrates vertical maps; travel is what players feel. Measured
+# Nov 2026 on maps with a known player count (see GUIDE, 'Sizing a map'):
+SIZE_BANDS = [   # (travel median up to, label)
+    (950,  'duel / FFA 2-6; Clan Arena 4-10 (like helix, relay, naked3, aerowalk)'),
+    (1160, 'duel / FFA 2-8; Clan Arena 6-12 (like crucible, lyceum, cistern, naked4, dapak12, ztndm3)'),
+    (1400, 'Clan Arena / TDM 8-12+ (like agora, vigil)'),
+    (10 ** 9, 'big: CTF or large TDM (like bastion, strata, circuit)'),
+]
+
+
+def size_line(res):
+    label = next(l for t, l in SIZE_BANDS if res['travel_median'] <= t)
+    return (f"   size: travel median {res['travel_median']}, 90% {res['travel_p90']} units "
+            f"(floor {res['floor_area_k']}k sq units) -> {label}")
+
+
 def targets(res):
     """Print each measure against the reference range: ok / LOW / HIGH."""
     print(f"verticality profile of {res['map']} (reference range from five classic QW maps):")
+    print(size_line(res))
     for k, (lo, hi, way, desc) in REFERENCE.items():
         v = res[k]
         verdict = 'ok' if lo <= v <= hi else ('LOW' if v < lo else 'HIGH')

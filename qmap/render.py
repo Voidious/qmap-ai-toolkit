@@ -47,6 +47,17 @@ class BSP:
                 continue
             data = np.frombuffer(mt[o + o0:o + o0 + w * h], np.uint8).reshape(h, w)
             self.tex.append((name, data))
+        # v3.3: trigger brushes (teleports, pushes) are invisible in game - don't draw them
+        import re as _re
+        ents = lump(0).decode('latin1')
+        md = lump(14)
+        self.hidden = set()
+        for blk in _re.findall(r'\{([^}]*)\}', ents):
+            kv = dict(_re.findall(r'"([^"]*)"\s*"([^"]*)"', blk))
+            m = kv.get('model', '')
+            if kv.get('classname', '').startswith('trigger') and m.startswith('*'):
+                ff, nf = struct.unpack_from('<ii', md, int(m[1:]) * 64 + 56)
+                self.hidden.update(range(ff, ff + nf))
 
 
 def render(bsp, cam, yaw, pitch, fov=95, W=960, H=540):
@@ -66,6 +77,8 @@ def render(bsp, cam, yaw, pitch, fov=95, W=960, H=540):
     rays = fwd[None, None, :] + dx[..., None] * right[None, None, :] + dy[..., None] * up[None, None, :]
 
     for fi, (pn, side, fe, ne, tinf, s0, s1, s2, s3, lofs) in enumerate(bsp.faces):
+        if fi in getattr(bsp, 'hidden', ()):
+            continue
         idx = []
         for k in range(ne):
             e = bsp.surfedges[fe + k]

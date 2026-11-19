@@ -25,7 +25,9 @@
   "item_height_spread": 0.27,
   "key_items": 9,
   "skill_floor_share": 0.001,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 918,
+  "travel_p90": 1699
  },
  {
   "map": "dapak12",
@@ -53,7 +55,9 @@
   "item_height_spread": 0.36,
   "key_items": 8,
   "skill_floor_share": 0.07,
-  "unreached_share": 0.041
+  "unreached_share": 0.041,
+  "travel_median": 1035,
+  "travel_p90": 2004
  },
  {
   "map": "naked3",
@@ -81,7 +85,9 @@
   "item_height_spread": 0.41,
   "key_items": 6,
   "skill_floor_share": 0.037,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 823,
+  "travel_p90": 1660
  },
  {
   "map": "naked4",
@@ -109,7 +115,9 @@
   "item_height_spread": 0.4,
   "key_items": 8,
   "skill_floor_share": 0.014,
-  "unreached_share": 0.003
+  "unreached_share": 0.003,
+  "travel_median": 968,
+  "travel_p90": 1775
  },
  {
   "map": "ztndm3",
@@ -137,7 +145,9 @@
   "item_height_spread": 0.39,
   "key_items": 9,
   "skill_floor_share": 0.063,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1148,
+  "travel_p90": 1859
  },
  {
   "map": "agora",
@@ -165,7 +175,9 @@
   "item_height_spread": 0.42,
   "key_items": 14,
   "skill_floor_share": 0.003,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1273,
+  "travel_p90": 2095
  },
  {
   "map": "bastion",
@@ -193,7 +205,9 @@
   "item_height_spread": 0.35,
   "key_items": 15,
   "skill_floor_share": 0.029,
-  "unreached_share": 0.008
+  "unreached_share": 0.008,
+  "travel_median": 1831,
+  "travel_p90": 3506
  },
  {
   "map": "circuit",
@@ -221,7 +235,9 @@
   "item_height_spread": 0.41,
   "key_items": 15,
   "skill_floor_share": 0.007,
-  "unreached_share": 0.003
+  "unreached_share": 0.003,
+  "travel_median": 3045,
+  "travel_p90": 5373
  },
  {
   "map": "cistern",
@@ -249,7 +265,9 @@
   "item_height_spread": 0.39,
   "key_items": 9,
   "skill_floor_share": 0.028,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1114,
+  "travel_p90": 2052
  },
  {
   "map": "crucible",
@@ -277,7 +295,39 @@
   "item_height_spread": 0.42,
   "key_items": 12,
   "skill_floor_share": 0.019,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1081,
+  "travel_p90": 1921
+ },
+ {
+  "map": "helix",
+  "spawns": 16,
+  "floor_area_k": 2070,
+  "footprint_k": 1745,
+  "stacking": 1.19,
+  "stacked_share": 0.19,
+  "height_span": 352,
+  "height_full": 392,
+  "eff_levels": 5.88,
+  "dominant_level": 0.22,
+  "graded_share": 0.19,
+  "sloped_floor_faces": 0.05,
+  "angled_walls": 0.07,
+  "overlook_share": 0.59,
+  "cross_level_sight": 0.34,
+  "stair_runs": 8,
+  "drop_sites": 7,
+  "jump_sites": 8,
+  "teleporters": 2,
+  "pads": 2,
+  "route_vert_per_1000": 394,
+  "route_level_pairs": 0.93,
+  "item_height_spread": 0.4,
+  "key_items": 6,
+  "skill_floor_share": 0.0,
+  "unreached_share": 0.0,
+  "travel_median": 797,
+  "travel_p90": 1234
  },
  {
   "map": "lyceum",
@@ -305,7 +355,9 @@
   "item_height_spread": 0.36,
   "key_items": 9,
   "skill_floor_share": 0.004,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1094,
+  "travel_p90": 1956
  },
  {
   "map": "relay",
@@ -333,7 +385,9 @@
   "item_height_spread": 0.34,
   "key_items": 8,
   "skill_floor_share": 0.058,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 849,
+  "travel_p90": 1335
  },
  {
   "map": "strata",
@@ -361,7 +415,9 @@
   "item_height_spread": 0.46,
   "key_items": 17,
   "skill_floor_share": 0.027,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 2128,
+  "travel_p90": 3957
  },
  {
   "map": "vigil",
@@ -389,6 +445,8 @@
   "item_height_spread": 0.26,
   "key_items": 14,
   "skill_floor_share": 0.009,
-  "unreached_share": 0.0
+  "unreached_share": 0.0,
+  "travel_median": 1312,
+  "travel_p90": 2260
  }
 ]

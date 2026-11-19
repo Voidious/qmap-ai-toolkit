@@ -82,7 +82,8 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
 ## 2. Working with the human (the process that worked)
 
 1. **Spec.** Mode (CA / FFA / TDM / CTF), player count (target and soft max), favourite and
-   disliked maps, symmetric or not. Ask nothing else up front.
+   disliked maps, symmetric or not. Ask nothing else up front. Size the map for its player count by
+   **travel distance**, not floor area (section 3, *Sizing a map*).
 2. **Concept.** Before any blockout, draw two or three *structurally different* overall shapes
    as a one-page sketch (see section 3), with a recommendation and rough route lengths. Compare
    them with the gallery. The human picks. This step is cheap and it is the one that decides
@@ -213,6 +214,24 @@ a CTF map the group rates and use its numbers.
 `section.py` (side-on slices) and `iso.py` (an isometric cutaway per level); `gallery/profiles/`
 shows Strata's two slabs at a glance. If every section looks like a layer cake, the routes will run
 along the layers.
+
+**Sizing a map: by travel, not by floor area** (v3.3). Helix has more floor than any of the five
+classics (2.07 M sq units against 1.08–1.60 M) yet is the quickest of all fifteen profiled maps to
+get around: stacked floor adds area, not distance, and pads, drops and teleporters shorten trips.
+The group rated it a duel/FFA map. So `vprofile.py` now measures **travel**: the median and 90th
+percentile walking distance between random spots on reachable floor (teleporters, pads and drops
+included), and `build.sh` prints a size line with a suggested player range.
+
+| travel median (90%) | maps | suggested |
+|---|---|---|
+| 797–918 (1234–1699) | helix, naked3, relay, aerowalk | duel / FFA 2–6; Clan Arena 4–10 |
+| 968–1148 (1775–2052) | naked4, dapak12, crucible, lyceum, cistern, ztndm3 | duel / FFA 2–8; Clan Arena 6–12 |
+| 1273–1312 (2095–2260) | agora, vigil | Clan Arena / TDM 8–12+ |
+| 1831–3045 (3506–5373) | bastion, strata, circuit | CTF, large TDM |
+
+The bands are a first calibration from these fifteen maps and what the group thought of them; adjust
+them as the group plays more. For a vertical map, aim the *travel* at the band you want - an 8–12
+Clan Arena map built for height needs more floor than a flat one did.
 
 **In real play** (`demos/vert.py` on the group's demos): floor height changed per 1000 units
 travelled was ~100–125 on dm6, 148 dm2, 91 dm4, ~150–165 ctf1, 159 ctf3, 138 ctf6, and ~100–118 on
