@@ -163,7 +163,7 @@ def origin(e):
     return np.array([float(v) for v in e.get('origin', '0 0 0').split()])
 
 
-def profile(path, name=None):
+def profile(path, name=None, with_navigation=False):
     B = BSP(path)
     name = name or os.path.splitext(os.path.basename(path))[0]
     m0 = B.models[0]
@@ -608,6 +608,8 @@ def profile(path, name=None):
     res['_check'] = chk
     res['_draw'] = dict(x0=x0, y0=y0, nx=nx, ny=ny, nodes=nodes, F=F.tolist(), R=R.tolist(), RR=RR.tolist(),
                         keys=[(l, n) for l, n in keys], spawns=spn)
+    if with_navigation:
+        res['_navigation'] = dict(bsp=B, adjacency=adj, shortest_paths=dijk)
     return res
 
 
