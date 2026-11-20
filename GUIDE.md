@@ -215,7 +215,7 @@ a CTF map the group rates and use its numbers.
 shows Strata's two slabs at a glance. If every section looks like a layer cake, the routes will run
 along the layers.
 
-### Item economy and relative placement (v3.4 candidate)
+### Item economy and relative placement (v3.4)
 
 For TDM/FFA, design a resource circuit, not a scatter of pickups. Mark RL, LG,
 each armor, MH and powerups in plan **and section** before small supplies. Give

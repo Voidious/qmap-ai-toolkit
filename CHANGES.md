@@ -1,4 +1,4 @@
-# v3.4 candidate (item economy and relative placement)
+# v3.4 (item economy and relative placement)
 
 * `qmap/itemprofile.py`: BSP29 inventories, standard loose quantities, distinct
   duplicate pickup IDs, directed RL/LG/armor/MH/powerup matrices, ascent/descent,

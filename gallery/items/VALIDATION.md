@@ -1,4 +1,4 @@
-# Candidate validation
+# v3.4 validation
 
 This repository had no existing test suite. Validation used its real CLI/build
 workflow and separate manual boundary-case checks, not an added test framework.

@@ -1,4 +1,4 @@
-# Item diagnostics (v3.4 candidate)
+# Item diagnostics (v3.4)
 
 These tools inform design review. They do not rate balance, establish pickup
 availability under every mod, or replace a live match.
