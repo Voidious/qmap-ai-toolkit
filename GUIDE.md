@@ -215,6 +215,54 @@ a CTF map the group rates and use its numbers.
 shows Strata's two slabs at a glance. If every section looks like a layer cake, the routes will run
 along the layers.
 
+### Item economy and relative placement (v3.4)
+
+For TDM/FFA, design a resource circuit, not a scatter of pickups. Mark RL, LG,
+each armor, MH and powerups in plan **and section** before small supplies. Give
+each a role: premium control, an alternate strong weapon, lower-tier recovery,
+an exposed commitment, or an interceptable timing route. CA's mod may suppress
+items, so resource incentives cannot repair its physical circulation.
+
+**Read clusters, not just pairs.** RL near RA can be intentional; adding the
+only LG to the same easily controlled fight can remove the other team's strong
+weapon option. Check the routes from each armor and MH to **both** strong guns,
+the cost of visiting RL/LG/resource trios, drop-versus-climb asymmetry, and what
+one position can actually see. Straight-line separation alone is not control.
+Two RLs mean moving LG away from one can create a new cluster around the other.
+Nearby GA can intentionally support a recovery weapon without duplicating a
+premium RA/YA bundle; that tradeoff still needs actual games.
+
+**Counts and quantities are different from frequency.** The five reference
+BSPs contain 3–4 armors, two RLs and one LG, but those are embedded inventories,
+not rules for an 8–12-player map. Count small/big ammo separately. MH, ordinary
+health, armor absorption, weapon pickup ammo, backpacks and configured respawn
+rules are not interchangeable. Do not derive supply per minute from a BSP alone
+or multiply a duel map's inventory by floor area/player count. Server mods can
+change pickups or remove extra armors/powerups.
+
+**Give small supplies a reason.** Some ammo belongs near its gun; some belongs
+on a different route to sustain a carrier's rotation. Paired modest health can
+make a sheltered recovery stop. A weak dead-end reward should justify the
+commitment, but do not answer every quiet corner with another premium item or
+put every useful resource in one safe bundle. Check what an out-of-control
+player can reach without first taking the position already holding the guns.
+
+Use `qmap/itemprofile.py map.bsp --json items.json --png-dir figures` for
+inventories, directed matrices and diagnostic trios. `--inventory-only` is fast;
+`--move LG1=x,y,floor` compares a hypothetical placement without editing a BSP.
+See [`qmap/ITEMS.md`](qmap/ITEMS.md) and the evidence in
+[`gallery/items/README.md`](gallery/items/README.md). Unknown routes stay unknown;
+a sampled eye ray is not a promise about splash, all vantages, or real movement.
+No single distance or diagnostic score establishes good balance.
+
+After an item pass, re-run the full generator/compiled collision checks and
+spawn margins, inspect the updated plan/sections, and verify live item settling
+where practical (`qmap/itemcheck.py` can check a captured MVDSV edict dump).
+Then test actual TDM/FFA pickup pressure and control transitions. Item-route
+verticality changes when the key-item set changes: adding GA can lower that
+metric without flattening any geometry. Keep the item-set change explicit and
+do not move good resources simply to maximize a height statistic.
+
 **Sizing a map: by travel, not by floor area** (v3.3). Helix has more floor than any of the five
 classics (2.07 M sq units against 1.08–1.60 M) yet is the quickest of all fifteen profiled maps to
 get around: stacked floor adds area, not distance, and pads, drops and teleporters shorten trips.

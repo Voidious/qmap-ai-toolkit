@@ -1,3 +1,21 @@
+# v3.4 (item economy and relative placement)
+
+* `qmap/itemprofile.py`: BSP29 inventories, standard loose quantities, distinct
+  duplicate pickup IDs, directed RL/LG/armor/MH/powerup matrices, ascent/descent,
+  world eye rays and neutral three-location visit/cycle diagnostics. Optional
+  hypothetical moves do not edit BSPs. Unsupported endpoints remain explicit.
+* `qmap/itemcheck.py`: offline comparison of generated item JSON with a captured
+  authorized MVDSV `edicts` dump: exact counts, positions/floors and touch setup.
+* A small explicit `vprofile.profile(..., with_navigation=True)` export replaces
+  research-only AST instrumentation. Existing default metrics and CLI behavior
+  are preserved.
+* GUIDE adds mode-aware item economy: separate premium control from recovery,
+  check strong-weapon/resource clusters, give supply caches route roles, and
+  distinguish item count/quantity from mod-dependent respawn frequency.
+* `gallery/items/` and `qmap/ITEMS.md` document the five-map evidence, reproducible
+  commands, schema and model limits. These are diagnostics, not balance grades;
+  no universal minimum RL/LG distance or per-player armor formula is prescribed.
+
 # v3.3 (map sizing, bug fix)
 
 * **Size by travel**: vprofile measures the median and 90th-percentile walking distance between
