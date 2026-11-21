@@ -287,6 +287,8 @@ def _lamp_spot(r, x, y, ceil, reach=160):
                 i, j = (qx - XMIN) // C, (qy - YMIN) // C
                 if any(a < ceil and b > ceil - 48 for a, b, m in cols[i][j]):
                     return False
+                if any(a == ceil and m == 'sky' for a, b, m in cols[i][j]):
+                    return False
         return True
     for d in range(0, reach + 1, 16):
         ring = sorted({(x + dx, y + dy) for dx in range(-d, d + 1, 16) for dy in (-d, d)} |
