@@ -485,8 +485,8 @@ def brush_text(x1, y1, z1, x2, y2, z2, m):
         sx_y, sx_x = -y1, -x1
     elif kind not in ('pillar', 'pbase', 'pcap'):
         sx_y = sx_x = 0
-    for d in FLOOR_DECALS + CEIL_DECALS:       # inlays textured from their own corner
-        if d[5] in (top, bot):
+    for d in FLOOR_DECALS + CEIL_DECALS:       # inlays textured from their own rect's corner
+        if d[5] in (top, bot) and d[0] <= x1 < d[2] and d[1] <= y1 < d[3] and d[4] in (z1, z2):
             fx, fy = -d[0], d[3]
 
 
