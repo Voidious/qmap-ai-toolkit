@@ -363,7 +363,14 @@ def detail_pieces():
             (ax, ay), (bx, by) = P[k], P[(k + 1) % k_]
             L = math.hypot(bx - ax, by - ay)
             n_ = ((by - ay) / L, -(bx - ax) / L, 0)
-            ni = air_info((ax + bx) / 2 + n_[0] * 10, (ay + by) / 2 + n_[1] * 10, z0, z1)
+            mx_, my_ = (ax + bx) / 2, (ay + by) / 2
+            # Step past the prism's 16-unit 'diag' stand-in cells (diagonal = 22.6u) so chamfered
+            # corners pick up the room's air, kickplate, light strip, cornice, and SPLIT_Z/TRIM_Z.
+            ni = None
+            for _d in (24, 32, 40, 12):
+                ni = air_info(mx_ + n_[0] * _d, my_ + n_[1] * _d, z0, z1)
+                if ni is not None:
+                    break
             faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni))
         cuts = {z0, z1}
         for _, _, _, ni in faces_:
