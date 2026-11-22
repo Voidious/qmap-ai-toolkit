@@ -95,7 +95,12 @@
   clipnodes) but read as `func_detail` and counted as world geometry. Pairing matches
   `map_entity_t::parse()` (`common/mapfile.cc`), which takes any non-`{` token as a key and the
   next token on the same line as its value; a face line contains no quotes, so brushes contribute
-  no tokens and the alternation survives them. It keeps the tab and multi-space tolerance of the
+  no tokens and the alternation survives them. Comments are skipped the way `parse_token()` skips
+  them, which pairing makes load-bearing: it tests for `//` or `;` before it tests for a quote, so
+  a double quote inside a comment is not a token — but it would shift the pairing by one for the
+  rest of the entity. `// a "comment"` above a classname compiles at 180 clipnodes and now reads
+  as `func_detail`, and `"wad" "a//b.wad"` still reads as an ordinary epair, because whichever
+  marker comes first on the line wins. The reading keeps the tab and multi-space tolerance of the
   previous pattern, accepts several epairs on one line and an entity header sharing the line with
   its opening brace (measured at 180 clipnodes, so a line-anchored pattern would have missed a
   solid entity), and holds the value to the key's line, which is `PARSE_SAMELINE` — a newline
