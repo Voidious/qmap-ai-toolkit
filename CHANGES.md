@@ -13,11 +13,13 @@
   `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
   a sealed room, compared by clipnode count against an empty control), so a solid brush added in
   any of them used to land on the identical-geometry fast path and report "collision identical"
-  at every `--step`. `func_detail_illusionary` stays excluded, and `func_illusionary_visblocker`
-  is excluded explicitly — it passes qbsp's `IsWorldBrushEntity()` but its contents are replaced
-  with `ILLUSIONARY_VISBLOCKER`, so deriving the set from that predicate would wrongly add it.
-  Classnames are now matched case-insensitively, as qbsp does. Every ignored brush is accounted
-  for in a stderr `note:` line, split by reason, which is what stops the blind spot returning:
+  at every `--step`. The two illusionary entities are excluded from the *solid* space —
+  `func_illusionary_visblocker` explicitly, because it passes qbsp's `IsWorldBrushEntity()` but
+  has its contents replaced with `ILLUSIONARY_VISBLOCKER`, so deriving the set from that
+  predicate would wrongly add it. (`func_detail_illusionary` still contributes its *liquids*; see
+  below.) Classname values are matched case-insensitively, as qbsp does. Every ignored brush is
+  accounted for in a stderr `note:` line, split by reason, which is what stops the blind spot
+  returning:
 
       note: ca_saddle_b7.map: ignored 123 brush(es) in entities with no player collision:
             func_detail_illusionary x123
