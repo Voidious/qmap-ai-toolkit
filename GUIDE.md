@@ -562,20 +562,26 @@ Measure our new maps the same way once the group has played them.
     writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
     copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
 31. **What is solid to a player is not what you would guess.** `collide_cmp.py` follows the rules
-    below; they were measured by compiling a 128-unit cube per flavour and comparing clipnode
-    counts against an empty control, because reading the qbsp source alone gets two of them wrong.
+    below. They were measured by compiling a 128-unit cube per flavour and reading the BSP, never
+    inferred from the qbsp source — which on its own is not enough twice over: it states one rule
+    in a way that reads backwards (`hint`, below), and the liquid rules live in a different hull
+    from the solid ones, so the two need different instruments. **Player collision** is the
+    clipnode count (hulls 1/2) against an empty control; **liquid contents** are leaf contents
+    (hull 0, what the engine reads to decide whether you are swimming or burning). Hulls 1/2 drop
+    every non-solid brush, so clipnodes cannot see a liquid at all.
     * **Solid**: `worldspawn`, `func_group`, and the whole detail family — `func_detail`,
       `func_detail_wall`, `func_detail_fence`. Detail is *not* automatically non-solid; only
       `func_detail_illusionary` is. If you reach for `func_detail` to cut vis cost, it still
       blocks players.
-    * **Not solid**: `func_detail_illusionary`, and `func_illusionary_visblocker` — a trap,
-      because it passes qbsp's own `IsWorldBrushEntity()` test yet has no collision (it blocks
-      vis only, so its face count rises while its clipnode count does not).
-    * **"Not solid" is not "no contents": `func_detail_illusionary` still makes real lava.**
-      qbsp converts a brush there to illusionary mist only when it is already solid, so a `*lava`
-      face keeps `CONTENTS_LAVA` in hull 0 and will still burn you, while adding zero clipnodes.
-      Do not put a `*` texture on a decal or fixture brush. `func_illusionary_visblocker` is the
-      opposite: it discards every visible content, liquids included, whatever the texture says.
+    * **No player collision**: `func_detail_illusionary`, and `func_illusionary_visblocker` — a
+      trap, because it passes qbsp's own `IsWorldBrushEntity()` test yet has no collision (it
+      blocks vis only, so its face count rises while its clipnode count does not).
+    * **But "no player collision" is not "no contents": `func_detail_illusionary` still makes
+      real lava.** qbsp converts a brush there to illusionary mist only when it is already solid,
+      so a `*lava` face is never converted — it keeps `CONTENTS_LAVA` in hull 0 and will still
+      burn you, while adding zero clipnodes. Do not put a `*` texture on a decal or fixture brush.
+      `func_illusionary_visblocker` is the opposite: it discards every visible content, liquids
+      included, whatever the texture says.
     * **`*`-prefixed faces make a liquid, not a solid.** `template/_out.py` writes `liquid()`
       pools as plain `worldspawn` brushes, so a pool sits in the same brush list as the walls and
       is only distinguishable by its texture. `!water` is a Half-Life name: here it is solid.
@@ -583,11 +589,13 @@ Measure our new maps the same way once the group has played them.
       nothing but still block you); `hint`, `hintskip` and `origin` are not.
     * **A mixed-texture brush is decided by its first face in file order.** One `*lava` face in
       slot 1 turns a whole wall into a pool; the same face in slot 6 leaves it solid. qbsp warns
-      `brush has multiple face contents`, which almost always means a `*` texture landed in a
-      wall or floor theme slot by mistake. The exception is `hint` / `hintskip`: **one such face
-      anywhere** removes the brush from the collision hull entirely, whatever the other five
-      faces say. qbsp's `IsHintName()` treats the two names identically, so `hintskip` on its own
-      drops a brush exactly as `hint` does.
+      `brush has multiple face contents`, and so does `collide_cmp.py` — including when the odd
+      face is `clip` or `sky*`, which are as solid as a wall but still a different content type.
+      It almost always means a texture landed in a wall or floor theme slot by mistake.
+      The exception is `hint` / `hintskip`: **one such face anywhere** removes the brush from the
+      collision hull entirely *and* empties its contents in hull 0, whatever the other five faces
+      say — so it beats a liquid too. qbsp's `IsHintName()` treats the two names identically, so
+      `hintskip` on its own drops a brush exactly as `hint` does.
     * `func_wall`, `func_illusionary` and `trigger_*` become separate BSP models with their own
       hulls, and their real solidity is set at runtime by the progs, not the BSP. `collide_cmp.py`
       lists them in its `note:` line instead of comparing them; a map that depends on one of them
