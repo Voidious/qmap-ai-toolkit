@@ -316,58 +316,90 @@ def detail_pieces():
         hi_p = ((x1 if sg > 0 else x0), y0, z0) if axis == 'x' else (x0, (y1 if sg > 0 else y0), z0)
         lat = [((0, -1, 0), (x0, y0, z0)), ((0, 1, 0), (x0, y1, z0))] if axis == 'x' else \
               [((-1, 0, 0), (x0, y0, z0)), ((1, 0, 0), (x1, y0, z0))]
-        # Probe adjacent air outside each lateral face: if a ramp's side is exposed to another room,
-        # texture that face with the adjacent room's wall, carry its light strip across backed cells,
-        # and emit the ramp in worldspawn so the wall lightmap matches the surrounding room.
-        lat_faces = []
-        exposed_to_other_room = False
+        # Probe adjacent air outside each lateral face: if a side is exposed to a differently-themed
+        # room, slice off a 1-unit worldspawn veneer partitioned by contiguous adjacent rooms and their
+        # wall bands (base/wall_lo/strp/wall/trim). The main ramp stays in EXTRA['skin'] so the walking
+        # surface preserves FLOOR_MINLIGHT while exposed lateral walls match the neighbouring room's
+        # bands and worldspawn lightmap with zero collision change.
+        n_cells = int(run // C)
+        side_runs = []
+        any_exposed = False
         for n_, p_ in lat:
             ox_, oy_ = n_[0] * 8, n_[1] * 8
-            n_cells = int(((x1 - x0) if axis == 'x' else (y1 - y0)) // C)
-            adj_samples = []
+            cell_adj = []
             for k_ in range(n_cells):
                 sx = (x0 + C / 2 + k_ * C) if axis == 'x' else (x0 if n_[0] < 0 else x1)
                 sy = (y0 if n_[1] < 0 else y1) if axis == 'x' else (y0 + C / 2 + k_ * C)
                 ai_ = air_info(sx + ox_, sy + oy_, z0, z1)
                 if ai_ and ai_['th'] != th and not ai_['door']:
-                    adj_samples.append((k_, sx, sy, ai_))
-            if adj_samples:
-                exposed_to_other_room = True
-                adj_th = adj_samples[0][3]['th']
-                l_tex = textures('wall', adj_th, 'wall')[2]
-                l_yo = (ZONE_FLOOR.get(adj_th, 0) + 32) % WALL_PERIOD.get(zone(adj_th), 128)
-                lat_faces.append(sface(n_, p_, l_tex, 0, l_yo))
-                sz_adj = adj_samples[0][3]['sz']
-                if sz_adj < 10 ** 6 and z0 <= sz_adj and sz_adj + 16 <= z1:
-                    st_tex = textures('wall', adj_th, 'strp')[2]
-                    backed = []
-                    for k_, sx, sy, ai_ in adj_samples:
-                        frac = ((sx - x0) / run if sg > 0 else (x1 - sx) / run) if axis == 'x' else \
-                               ((sy - y0) / run if sg > 0 else (y1 - sy) / run)
-                        if z0 + rise * frac >= sz_adj + 16 - 0.5:
-                            backed.append(k_)
-                    if backed:
-                        k_lo, k_hi = min(backed), max(backed) + 1
-                        if axis == 'x':
-                            bx0, bx1 = x0 + k_lo * C, x0 + k_hi * C
-                            by0, by1 = (y0 - 2, y0) if n_[1] < 0 else (y1, y1 + 2)
+                    key_ = (ai_['th'], ai_['f'], ai_['c'], ai_['sz'], ai_['foot'], ai_['tz'], ai_['nocap'])
+                    cell_adj.append((key_, ai_))
+                else:
+                    cell_adj.append((None, None))
+            runs_ = []
+            for k_, (key_, ai_) in enumerate(cell_adj):
+                if runs_ and runs_[-1][2] == key_:
+                    runs_[-1][1] = k_ + 1
+                else:
+                    runs_.append([k_, k_ + 1, key_, ai_])
+            exp = any(r_[2] is not None for r_ in runs_)
+            any_exposed |= exp
+            side_runs.append((n_, p_, exp, runs_))
+        if not any_exposed:
+            fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
+                  sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
+            EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+        else:
+            # Main walking wedge shrunk 1u inward on exposed lateral side(s); stays in EXTRA['skin']!
+            lat_main = []
+            for n_, p_, exp, _ in side_runs:
+                mp = (p_[0] - n_[0] * (1 if exp else 0), p_[1] - n_[1] * (1 if exp else 0), p_[2])
+                lat_main.append(sface(n_, mp, side, 0, z1 % 128))
+            fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
+                  sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_main
+            EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+            # 1-unit outer veneer(s) on each exposed lateral side (exact union == original wedge!)
+            for n_, p_, exp, runs_ in side_runs:
+                if not exp:
+                    continue
+                in_p = (p_[0] - n_[0], p_[1] - n_[1], p_[2])
+                in_n = (-n_[0], -n_[1], 0)
+                for k_lo, k_hi, key_, adj in runs_:
+                    r0 = (x0 if axis == 'x' else y0) + k_lo * C
+                    r1 = (x0 if axis == 'x' else y0) + k_hi * C
+                    zs0 = z0 + rise * ((r0 - (x0 if axis == 'x' else y0)) / run if sg > 0 else ((x1 if axis == 'x' else y1) - r0) / run)
+                    zs1 = z0 + rise * ((r1 - (x0 if axis == 'x' else y0)) / run if sg > 0 else ((x1 if axis == 'x' else y1) - r1) / run)
+                    z_lo_r, z_hi_r = min(zs0, zs1), max(zs0, zs1)
+                    if z_hi_r <= z0 + 0.01:
+                        continue
+                    vcuts = [z0, z_hi_r] if adj is None else sorted({z0, z_hi_r} | {z for z in band_cuts(adj) if z0 < z < z_hi_r})
+                    for za, zb in zip(vcuts, vcuts[1:]):
+                        if zb <= za + 0.01:
+                            continue
+                        mid = (za + zb) / 2
+                        if adj is None:
+                            l_tex, l_yo = side, z1 % 128
+                        elif adj['f'] <= mid < adj['c']:
+                            role, anc = band_role(adj, mid)
+                            per = WALL_PERIOD.get(zone(adj['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
+                            l_tex, l_yo = textures('wall', adj['th'], role)[2], anc % per
                         else:
-                            bx0, bx1 = (x0 - 2, x0) if n_[0] < 0 else (x1, x1 + 2)
-                            by0, by1 = y0 + k_lo * C, y0 + k_hi * C
-                        sfs = [
-                            sface((-1, 0, 0), (bx0, by0, sz_adj), st_tex if n_[0] < 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
-                            sface((1, 0, 0), (bx1, by0, sz_adj), st_tex if n_[0] > 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
-                            sface((0, -1, 0), (bx0, by0, sz_adj), st_tex if n_[1] < 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
-                            sface((0, 1, 0), (bx0, by1, sz_adj), st_tex if n_[1] > 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
-                            sface((0, 0, -1), (bx0, by0, sz_adj), EDGE_TEX, 0, 0),
-                            sface((0, 0, 1), (bx0, by0, sz_adj + 16), EDGE_TEX, 0, 0),
-                        ]
-                        EXTRA['detail'].append('{\n' + '\n'.join(sfs) + '\n}')
-            else:
-                lat_faces.append(sface(n_, p_, side, 0, z1 % 128))
-        fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
-              sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_faces
-        EXTRA['world' if exposed_to_other_room else 'skin'].append('{\n' + '\n'.join(fs) + '\n}')
+                            l_tex = textures('wall', adj['th'], 'wall')[2]
+                            l_yo = (ZONE_FLOOR.get(adj['th'], 0) + 32) % WALL_PERIOD.get(zone(adj['th']), 128)
+                        vfs = [sface((0, 0, -1), (p_[0], p_[1], za), flr, 0, 0),
+                               sface(n_, p_, l_tex, 0, l_yo),
+                               sface(in_n, in_p, side, 0, z1 % 128)]
+                        if zb > z_lo_r - 0.01:
+                            vfs.append(sface(top_n, lo, flr, 0, 0))
+                        if zb < z_hi_r - 0.01:
+                            vfs.append(sface((0, 0, 1), (p_[0], p_[1], zb), flr, 0, 0))
+                        p_r0 = (r0, p_[1], za) if axis == 'x' else (p_[0], r0, za)
+                        p_r1 = (r1, p_[1], za) if axis == 'x' else (p_[0], r1, za)
+                        if zs0 > za + 0.01:
+                            vfs.append(sface((-h[0], -h[1], 0), p_r0, side, 0, z1 % 128))
+                        if zs1 > za + 0.01:
+                            vfs.append(sface((h[0], h[1], 0), p_r1, side, 0, z1 % 128))
+                        EXTRA['skin' if adj is None else 'world'].append('{\n' + '\n'.join(vfs) + '\n}')
         if not bands:
             continue
         # the rooms at the foot and at the head: the sloped strip runs from one's strip to the other's
