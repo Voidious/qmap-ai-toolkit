@@ -367,13 +367,14 @@ Measure our new maps the same way once the group has played them.
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-only builds**: `collide_cmp.py old.map new.map` → "collision identical", or explain.
-  **Know what it does not see**: it counts solid brushes in `worldspawn` and `func_group` only and
-  ignores face textures, so a clean run proves only that *that* set is unchanged. It misses a solid
-  brush added in `func_detail` / `func_detail_wall` / `func_detail_fence` (all three are solid to
-  players), and a wall retextured to a `*`-prefixed liquid (`*water`, `*slime`, `*lava`), which
-  stops being solid. It also counts `liquid()` pools as solid, so a change inside a pool is masked
-  and a pool added in open air reports `COLLISION DIFFERS` with nothing solid changed. If a visual
-  pass touched a detail entity or a `*` texture, check that part by hand (gotcha 31).
+  It counts every brush entity qbsp puts in the player collision hull — `worldspawn`, `func_group`
+  and the whole `func_detail` / `func_detail_wall` / `func_detail_fence` family — and prints a
+  `note:` line naming every brush it ignored, so a flavour it does not know about is reported
+  instead of dropped. **It still ignores face textures**: a wall retextured to a `*`-prefixed
+  liquid (`*water`, `*slime`, `*lava`) stops being solid but reads as "collision identical", and
+  `liquid()` pools are counted as solid, masking changes inside a pool and reporting
+  `COLLISION DIFFERS` for a pool added to open air. If a visual pass touched a `*` texture, check
+  that part by hand (gotcha 31).
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   traps and unreachable items on the compiled map's **real collision** with a 32×32×56 player
@@ -558,16 +559,16 @@ Measure our new maps the same way once the group has played them.
 30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` automatically
     writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
     copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
-31. **`collide_cmp.py` does not see every solid brush**: it filters on the classnames
-    `worldspawn` and `func_group`, and its brush-identity key ignores face textures. Three real
-    collision changes therefore read as "collision identical": a solid brush added in
-    `func_detail`, `func_detail_wall` or `func_detail_fence` (measured: all three are in the
-    player collision hull, only `func_detail_illusionary` is not); a solid brush retextured to a
-    `*`-prefixed liquid, which stops being solid; and any solid change inside a `liquid()` volume,
-    which the pool masks because `template/_out.py` appends pool brushes to `worldspawn` and the
-    tool counts them as solid. The first two land on the identical-geometry fast path, so no
-    `--step` setting finds them. Treat a clean run on a pass that touched detail entities or `*`
-    textures as unproven.
+31. **`collide_cmp.py` ignores face textures**: its brush-identity key is geometry only, so a
+    solid brush retextured to a `*`-prefixed liquid (`*water`, `*slime`, `*lava`) stops being
+    solid to players yet reads as "collision identical" — on the identical-geometry fast path, so
+    no `--step` setting finds it. The same blindness runs the other way: `template/_out.py`
+    appends `liquid()` volumes to `worldspawn`, so pools are counted as solid, which masks any
+    solid change inside a pool and reports `COLLISION DIFFERS` for a pool added to open air.
+    Treat a clean run on a pass that touched a `*` texture as unproven. (Entity flavours are
+    handled: `func_detail`, `func_detail_wall` and `func_detail_fence` are all solid to players
+    and all counted; `func_detail_illusionary` and `func_illusionary_visblocker` are measurably
+    not in any collision hull and are reported in the tool's `note:` line instead.)
 
 ---
 

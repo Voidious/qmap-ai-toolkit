@@ -1,9 +1,8 @@
 """Prove a visual-only build did not change collision: compare the SOLID space of two generated
-.map files on a voxel grid (default 8-unit, supports sub-unit floats e.g. --step 0.5). Counts all
-solid brushes in worldspawn and func_group -- both axis-aligned boxes and general convex brushes
-(ramps, prisms, chamfers, veneers) via half-space planes (func_detail_illusionary fixtures, triggers
-and lights are not solid). Prefilters to differing brush geometry clustered into overlapping ROI
-components and streams one Z-slice at a time, so sub-unit resolution uses only a few MB of RAM.
+.map files on a voxel grid (default 8-unit, supports sub-unit floats e.g. --step 0.5). Counts every
+brush qbsp puts in the player collision hull -- both axis-aligned boxes and general convex brushes
+(ramps, prisms, chamfers, veneers) via half-space planes -- and reports on stderr what it ignored,
+so a brush flavour the rules below do not know about is named rather than silently dropped.
 Usage: python3 collide_cmp.py old.map new.map [--step 8]"""
 from collections import Counter
 import itertools
@@ -16,6 +15,19 @@ import numpy as np
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
+
+# Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc),
+# less the two it then drops from the collision hulls. Measured by compiling a 128-unit cube in a
+# sealed room per flavour and comparing clipnode counts against an empty control, not read off the
+# source: func_detail / func_detail_wall / func_detail_fence all raise the count, so all three are
+# solid to players. func_illusionary_visblocker is the trap -- it passes IsWorldBrushEntity(), so
+# "count everything IsWorldBrushEntity accepts" would wrongly include it, but qbsp replaces its
+# contents with ILLUSIONARY_VISBLOCKER (qbsp/map.cc, string_iequals branch) and it measures at the
+# control's clipnode count. qbsp compares classnames with Q_strcasecmp, so match case-insensitively.
+SOLID_CLASSNAMES = frozenset(('worldspawn', 'func_group', 'func_detail',
+                              'func_detail_wall', 'func_detail_fence'))
+# Merged into the world and then explicitly absent from every collision hull.
+NO_COLLISION_CLASSNAMES = frozenset(('func_detail_illusionary', 'func_illusionary_visblocker'))
 
 
 def entities(txt):
@@ -90,12 +102,22 @@ def parse_brush(br):
 
 
 def brushes(path):
+    """Brushes in the player collision hull, with a stderr note accounting for every one ignored.
+
+    The note is what keeps this blind spot from coming back: a classname these rules do not know
+    about is reported by name instead of vanishing from the comparison."""
     out, skipped = [], 0
+    no_collision, submodel = Counter(), Counter()
     for e in entities(open(path).read()):
         m = re.search(r'"classname" "([^"]+)"', e)
-        if not m or m.group(1) not in ('worldspawn', 'func_group'):
+        cls = m.group(1) if m else '(no classname)'
+        brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
+        if cls.lower() not in SOLID_CLASSNAMES:
+            if brs:                    # lights, spawns and items have no brushes: nothing ignored
+                tally = no_collision if cls.lower() in NO_COLLISION_CLASSNAMES else submodel
+                tally[cls] += len(brs)
             continue
-        for br in re.findall(r'\{\n(\(.*?)\n\}', e, re.S):
+        for br in brs:
             pb = parse_brush(br)
             if pb is None:
                 skipped += 1
@@ -103,6 +125,12 @@ def brushes(path):
                 out.append(pb)
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
+    for tally, why in ((no_collision, 'entities with no player collision'),
+                       (submodel, 'submodel entities (own collision hull, solidity set at runtime)')):
+        if tally:
+            named = ', '.join(f'{c} x{n}' for c, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0])))
+            print(f'note: {path}: ignored {sum(tally.values())} brush(es) in {why}: {named}',
+                  file=sys.stderr)
     return out
 
 

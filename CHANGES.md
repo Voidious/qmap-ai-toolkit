@@ -4,6 +4,25 @@
   brushes in `worldspawn`/`func_group` only and ignores face textures, so solid brushes in the
   `func_detail` family, walls retextured to `*`-prefixed liquids, and changes inside `liquid()`
   pools all read as "collision identical". Documents the window before the code fix below.
+* `qmap/collide_cmp.py`: count solid brushes in every entity qbsp merges into the world collision
+  hull, not just `worldspawn`/`func_group`. `func_detail`, `func_detail_wall` and
+  `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
+  a sealed room, compared by clipnode count against an empty control), so a solid brush added in
+  any of them used to land on the identical-geometry fast path and report "collision identical"
+  at every `--step`. `func_detail_illusionary` stays excluded, and `func_illusionary_visblocker`
+  is excluded explicitly — it passes qbsp's `IsWorldBrushEntity()` but its contents are replaced
+  with `ILLUSIONARY_VISBLOCKER`, so deriving the set from that predicate would wrongly add it.
+  Classnames are now matched case-insensitively, as qbsp does. Every ignored brush is accounted
+  for in a stderr `note:` line, split by reason, which is what stops the blind spot returning:
+
+      note: ca_saddle_b7.map: ignored 123 brush(es) in entities with no player collision:
+            func_detail_illusionary x123
+      note: ca_saddle_b7.map: ignored 8 brush(es) in submodel entities (own collision hull,
+            solidity set at runtime): func_illusionary x3, trigger_teleport x3, trigger_push x2
+
+  Submodel brush entities (`func_wall`, `func_illusionary`, `trigger_*`) remain out of scope:
+  each becomes its own BSP model with its own hull, so comparing them means per-model comparison
+  rather than an allowlist entry.
 
 # v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
 
