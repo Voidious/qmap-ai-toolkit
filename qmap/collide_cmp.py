@@ -7,6 +7,7 @@ components and streams one Z-slice at a time, so sub-unit resolution uses only a
 Usage: python3 collide_cmp.py old.map new.map [--step 8]"""
 from collections import Counter
 import itertools
+import math
 import re
 import sys
 
@@ -105,16 +106,42 @@ def brushes(path):
     return out
 
 
+def merge_boxes(boxes, tol=1e-6):
+    comps = []
+    for blo, bhi in boxes:
+        mlo, mhi = list(blo), list(bhi)
+        while True:
+            keep, grew = [], False
+            for clo, chi in comps:
+                if (chi[0] >= mlo[0] - tol and chi[1] >= mlo[1] - tol and chi[2] >= mlo[2] - tol and
+                        clo[0] <= mhi[0] + tol and clo[1] <= mhi[1] + tol and clo[2] <= mhi[2] + tol):
+                    mlo = [min(mlo[0], clo[0]), min(mlo[1], clo[1]), min(mlo[2], clo[2])]
+                    mhi = [max(mhi[0], chi[0]), max(mhi[1], chi[1]), max(mhi[2], chi[2])]
+                    grew = True
+                else:
+                    keep.append((clo, chi))
+            comps = keep
+            if not grew:
+                break
+        comps.append((mlo, mhi))
+    return comps
+
+
 def roi_grid(comps, s):
-    specs, total, max_sl = [], 0, 0
+    snapped = []
     for roi_lo, roi_hi in comps:
-        lo = np.floor(roi_lo / s) * s
-        hi = np.ceil(roi_hi / s) * s
-        nx, ny, nz = (max(1, int(round(float(v)))) for v in (hi - lo) / s)
+        ilo = [math.floor(float(v) / s) for v in roi_lo]
+        ihi = [max(lo_i + 1, math.ceil(float(v) / s)) for lo_i, v in zip(ilo, roi_hi)]
+        snapped.append((ilo, ihi))
+    specs, total, max_sl = [], 0, 0
+    for ilo, ihi in merge_boxes(snapped, tol=-1):
+        nx, ny, nz = ihi[0] - ilo[0], ihi[1] - ilo[1], ihi[2] - ilo[2]
         sl = nx * ny
         max_sl = max(max_sl, sl)
         total += sl * nz
-        specs.append((lo, hi, nx, ny, nz))
+        specs.append((np.array([ilo[0] * s, ilo[1] * s, ilo[2] * s]),
+                      np.array([ihi[0] * s, ihi[1] * s, ihi[2] * s]),
+                      nx, ny, nz))
     return specs, total, max_sl
 
 
@@ -131,7 +158,7 @@ def main():
         except ValueError:
             print(f'invalid --step value: {args[idx + 1]}', file=sys.stderr)
             sys.exit(2)
-        if step <= 0:
+        if not math.isfinite(step) or step <= 0:
             print(f'--step must be positive, got {step}', file=sys.stderr)
             sys.exit(2)
         args = args[:idx] + args[idx + 2:]
@@ -156,18 +183,7 @@ def main():
         return
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
-
-    comps = []
-    for b in diff_brushes:
-        blo, bhi = b[0].copy(), b[1].copy()
-        merged, keep = (blo, bhi), []
-        for clo, chi in comps:
-            if np.all(chi >= merged[0] - 1e-6) and np.all(clo <= merged[1] + 1e-6):
-                merged = (np.minimum(merged[0], clo), np.maximum(merged[1], chi))
-            else:
-                keep.append((clo, chi))
-        keep.append(merged)
-        comps = keep
+    comps = merge_boxes([(b[0], b[1]) for b in diff_brushes])
 
     # Finest parallel-plane gap among differing brushes: warns when --step is too coarse to resolve
     # thin cracks/slivers (e.g. a 1-unit gap between two shifted wedge planes).
@@ -276,14 +292,14 @@ def main():
 
     if total_diff:
         caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
-        print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s){caveat}), e.g.', sample_pts)
+        print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g.', sample_pts)
         sys.exit(1)
     if under_resolved:
         out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
-        print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
+        print(f'no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
               f'(features down to {gap_s} {unit} unresolved; {out_tail})')
     else:
-        print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(comps)} ROI(s) {shapes})')
+        print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(roi_specs)} ROI(s) {shapes})')
 
 
 if __name__ == '__main__':
