@@ -1,3 +1,30 @@
+# v3.5 (template texture & alignment fixes, GUIDE gotchas)
+
+Fixes and lessons found while building `ca_saddle`:
+
+* `template/_core.py`: `_lamp_spot()` rejects `'sky'` ceiling cells so `room_lamps()` never mounts
+  ceiling lamp boxes on sky oculi.
+* `template/_out.py`: `brush_text()` checks rect bounds and surface height when matching
+  `FLOOR_DECALS` / `CEIL_DECALS` so multiple inlays sharing a texture each anchor to their own
+  rect instead of the last decal's corner.
+* `template/_out.py`: prism outward air probes step past 16-unit `'diag'` stand-in cells
+  (`d = 24, 32, 40, 12`), restoring kickplates, light strips, cornices, `SPLIT_Z`, and `TRIM_Z`
+  on chamfered corners.
+* `template/_out.py`: ramp texturing and alignment fixes (zero collision change) — `info()`
+  detects the first 16-unit ramp cell (`d = 0`) via `RAMPS` bounds so horizontal strips no longer
+  bleed at ramp feet; wall courses above/beside ramps compare `mid` against nominal `STRIPE_Z` so
+  stone stays aligned with the main room; exposed lateral ramp faces bordering another room take
+  that room's wall texture, carry its light strip across backed cells, and emit in `worldspawn`
+  for a seamless lightmap match; sloped ramp band overlays thinned to 1 unit proud.
+* `template/_out.py`: structural walls over open air (`zbot is not None`) get a bottom 16-unit
+  architrave `'trim'` band (preserving intersecting light strips), eliminating half-sliced courses
+  on hanging overhangs and framing doorway lintels class-wide.
+* `GUIDE.md`: added Gotchas 24–30 (visible slipgate teleporter framing and torch clearance,
+  ezQuake's world-UV liquid rendering requiring 64-unit alignment on `*` teleporter portals,
+  per-level sub-themes and bend junction collars on ramped wings, exact-height multiple-of-16
+  crate/object textures, excluding olive-green indices 80–95 from wood palettes, redundant
+  overlapping `carve()` theme pollution, and shipping `.lit` alongside `.bsp`).
+
 # v3.4 (item economy and relative placement)
 
 * `qmap/itemprofile.py`: BSP29 inventories, standard loose quantities, distinct
