@@ -13,7 +13,8 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-MAX_SLICE = 50_000_000   # ~50 MB per 2D bool slice (plenty for any realistic ROI even at step=0.25)
+MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
+MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~20s max); refuse legibly instead of hanging
 
 
 def entities(txt):
@@ -142,6 +143,32 @@ def main():
         return
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
+
+    # Finest parallel-plane gap among differing brushes: warns when --step is too coarse to resolve
+    # thin cracks/slivers (e.g. a 1-unit gap between two shifted wedge planes).
+    plane_groups = {}
+    for _, _, (N, D), _, _ in diff_brushes:
+        for n, d in zip(N, D):
+            for c in n:
+                if abs(c) > 1e-6:
+                    sgn = 1.0 if c > 0 else -1.0
+                    break
+            else:
+                continue
+            cn = (round(float(n[0] * sgn) + 0.0, 5), round(float(n[1] * sgn) + 0.0, 5), round(float(n[2] * sgn) + 0.0, 5))
+            plane_groups.setdefault(cn, []).append(float(d * sgn))
+    min_gap = None
+    for ds in plane_groups.values():
+        ds = sorted(ds)
+        for a_, b_ in zip(ds, ds[1:]):
+            g_ = b_ - a_
+            if g_ > 1e-4 and (min_gap is None or g_ < min_gap):
+                min_gap = g_
+    if min_gap is not None and step >= min_gap - 1e-6:
+        rec = min_gap / 2.0
+        print(f'WARNING: differing geometry has parallel planes as close as {min_gap:g} units; '
+              f'--step {step:g} may not resolve them (try --step {rec:g})', file=sys.stderr)
+
     comps = []
     for b in diff_brushes:
         blo, bhi = b[0].copy(), b[1].copy()
@@ -153,6 +180,28 @@ def main():
                 keep.append((clo, chi))
         keep.append(merged)
         comps = keep
+
+    roi_specs = []
+    total_voxels = 0
+    for roi_lo, roi_hi in comps:
+        lo = np.floor(roi_lo / step) * step
+        hi = np.ceil(roi_hi / step) * step
+        nx, ny, nz = (int(v) for v in np.maximum(1, np.round((hi - lo) / step).astype(int)))
+        if nx * ny > MAX_SLICE:
+            mb = (nx * ny) / (1024 ** 2)
+            print(f'ERROR: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) exceeds limit; use a larger --step',
+                  file=sys.stderr)
+            sys.exit(2)
+        total_voxels += nx * ny * nz
+        roi_specs.append((lo, hi, nx, ny, nz))
+    if total_voxels > MAX_TOTAL_VOXELS:
+        gv = total_voxels / 1e9
+        hint = f' (finest differing plane gap is {min_gap:g}; --step {min_gap / 2.0:g} suffices)' if min_gap is not None else ''
+        print(f'ERROR: total ROI work {gv:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g} exceeds '
+              f'{MAX_TOTAL_VOXELS / 1e9:g}G limit; use a larger --step{hint}', file=sys.stderr)
+        sys.exit(2)
+    if total_voxels > 500_000_000:
+        print(f'checking {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g}...', file=sys.stderr)
 
     def vox_slice(bs, lo, nx, ny, zc):
         g = np.zeros((nx, ny), bool)
@@ -185,15 +234,7 @@ def main():
         return g
 
     total_diff, sample_pts, shapes = 0, [], []
-    for roi_lo, roi_hi in comps:
-        lo = np.floor(roi_lo / step) * step
-        hi = np.ceil(roi_hi / step) * step
-        nx, ny, nz = (int(v) for v in np.maximum(1, np.round((hi - lo) / step).astype(int)))
-        if nx * ny > MAX_SLICE:
-            mb = (nx * ny) / (1024 ** 2)
-            print(f'ERROR: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) exceeds limit; use a larger --step',
-                  file=sys.stderr)
-            sys.exit(2)
+    for lo, hi, nx, ny, nz in roi_specs:
         shapes.append((nx, ny, nz))
         subA = [b for b in A if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
         subB = [b for b in B if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
