@@ -270,7 +270,8 @@ def main():
                     sample_pts.append((float(lo[0] + (ix + 0.5) * step), float(lo[1] + (iy + 0.5) * step), float(zc)))
 
     if total_diff:
-        print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s)), e.g.', sample_pts)
+        caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
+        print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s){caveat}), e.g.', sample_pts)
         sys.exit(1)
     if under_resolved:
         if rec_fits:
