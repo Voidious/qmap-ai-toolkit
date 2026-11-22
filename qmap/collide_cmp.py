@@ -19,8 +19,8 @@ PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
-# Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc),
-# less the two it then drops from the collision hulls. Measured by compiling a 128-unit cube in a
+# Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc)
+# and keeps in the collision hulls. Measured by compiling a 128-unit cube in a
 # sealed room per flavour and comparing clipnode counts against an empty control, not read off the
 # source: func_detail / func_detail_wall / func_detail_fence all raise the count, so all three are
 # solid to players. func_illusionary_visblocker is the trap -- it passes IsWorldBrushEntity(), so
@@ -29,8 +29,19 @@ MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse le
 # control's clipnode count. qbsp compares classnames with Q_strcasecmp, so match case-insensitively.
 SOLID_CLASSNAMES = frozenset(('worldspawn', 'func_group', 'func_detail',
                               'func_detail_wall', 'func_detail_fence'))
-# Merged into the world and then explicitly absent from every collision hull.
-NO_COLLISION_CLASSNAMES = frozenset(('func_detail_illusionary', 'func_illusionary_visblocker'))
+# Merged into the world, solid brushes dropped from every collision hull -- but *only* solid ones.
+# qbsp converts a brush here to illusionary mist in hull 0 behind `if (contents.is_any_solid())`
+# (qbsp/brush.cc), so a '*water'/'*slime'/'*lava' brush is untouched and keeps real liquid
+# contents in hull 0, which is the hull SV_PointContents reads. It adds no clipnodes, so the
+# clipnode probe that produced the table above cannot see it: measured by counting hull-0 leaf
+# contents instead, a '*lava' cube in func_detail_illusionary yields a CONTENTS_LAVA leaf exactly
+# as it does in worldspawn. Its liquids are therefore compared; its solids are ignored.
+LIQUID_ONLY_CLASSNAMES = frozenset(('func_detail_illusionary',))
+# Merged into the world with every visible content stripped and replaced by
+# ILLUSIONARY_VISBLOCKER (Brush_GetContents, qbsp/map.cc), whatever the face textures say -- so
+# unlike the above, a liquid brush here really does vanish. Measured: '*lava' in
+# func_illusionary_visblocker produces no liquid leaf in hull 0 and no clipnodes.
+NO_CONTENTS_CLASSNAMES = frozenset(('func_illusionary_visblocker',))
 
 HINT_TEX = frozenset(('hint', 'hintskip'))
 # Content classes, each compared independently: (class, label, DIFFERS banner, space noun).
@@ -161,6 +172,10 @@ def parse_brush(br):
 def brushes(path):
     """Brushes per content class, with a stderr note accounting for every one ignored.
 
+    A brush entity's classname decides how much of its contents counts: SOLID_CLASSNAMES get the
+    full texture-driven classification, LIQUID_ONLY_CLASSNAMES contribute their liquids but not
+    their solids, and everything else contributes nothing.
+
     The note is what keeps this blind spot from coming back: a classname or texture flavour these
     rules do not know about is reported by name instead of vanishing from the comparison."""
     out = {k: [] for k, _, _, _ in CLASSES}
@@ -169,12 +184,14 @@ def brushes(path):
     for e in entities(open(path).read()):
         m = re.search(r'"classname" "([^"]+)"', e)
         cls = m.group(1) if m else '(no classname)'
+        lc = cls.lower()
         brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
-        if cls.lower() not in SOLID_CLASSNAMES:
+        if lc not in SOLID_CLASSNAMES and lc not in LIQUID_ONLY_CLASSNAMES:
             if brs:                    # lights, spawns and items have no brushes: nothing ignored
-                tally = no_collision if cls.lower() in NO_COLLISION_CLASSNAMES else submodel
+                tally = no_collision if lc in NO_CONTENTS_CLASSNAMES else submodel
                 tally[cls] += len(brs)
             continue
+        liquid_only = lc in LIQUID_ONLY_CLASSNAMES
         for br in brs:
             pb = parse_brush(br)
             if pb is None:
@@ -187,6 +204,9 @@ def brushes(path):
                 # name the face that decided it, not texes[0]: a hint face in slot 3 drops the
                 # brush, and reporting the slot-1 wall texture there would be actively misleading
                 no_contents[next((t.lower() for t in texes if face_class(t) == kind), kind)] += 1
+                continue
+            if liquid_only and kind not in LIQUIDS:
+                no_collision[cls] += 1   # solid here is mist: in no hull. Its liquids are not.
                 continue
             out[kind].append(tuple(geom))
     if skipped:

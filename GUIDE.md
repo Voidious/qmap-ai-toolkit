@@ -571,6 +571,11 @@ Measure our new maps the same way once the group has played them.
     * **Not solid**: `func_detail_illusionary`, and `func_illusionary_visblocker` — a trap,
       because it passes qbsp's own `IsWorldBrushEntity()` test yet has no collision (it blocks
       vis only, so its face count rises while its clipnode count does not).
+    * **"Not solid" is not "no contents": `func_detail_illusionary` still makes real lava.**
+      qbsp converts a brush there to illusionary mist only when it is already solid, so a `*lava`
+      face keeps `CONTENTS_LAVA` in hull 0 and will still burn you, while adding zero clipnodes.
+      Do not put a `*` texture on a decal or fixture brush. `func_illusionary_visblocker` is the
+      opposite: it discards every visible content, liquids included, whatever the texture says.
     * **`*`-prefixed faces make a liquid, not a solid.** `template/_out.py` writes `liquid()`
       pools as plain `worldspawn` brushes, so a pool sits in the same brush list as the walls and
       is only distinguishable by its texture. `!water` is a Half-Life name: here it is solid.

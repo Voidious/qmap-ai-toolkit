@@ -27,6 +27,20 @@
   Submodel brush entities (`func_wall`, `func_illusionary`, `trigger_*`) remain out of scope:
   each becomes its own BSP model with its own hull, so comparing them means per-model comparison
   rather than an allowlist entry.
+* `qmap/collide_cmp.py`: **`func_detail_illusionary` is only non-solid, not contentless** — its
+  liquids are now compared. qbsp converts a brush there to illusionary mist behind
+  `if (contents.is_any_solid())` (`qbsp/brush.cc`), so a `*water`/`*slime`/`*lava` brush is never
+  converted and keeps real `CONTENTS_LAVA`/`WATER`/`SLIME` in hull 0 — the hull `SV_PointContents`
+  reads. Skipping the whole entity before looking at face textures therefore reported a lava pool
+  dropped into a decal entity as `ignored ... in entities with no player collision` and exited 0.
+  It adds no clipnodes, so the clipnode probe behind the rest of these rules could not see it;
+  measured instead by counting hull-0 leaf contents, where a `*lava` cube in
+  `func_detail_illusionary` yields a `CONTENTS_LAVA` leaf exactly as it does in `worldspawn`.
+  `func_illusionary_visblocker` stays a full exclusion, and the distinction is now the point:
+  `Brush_GetContents()` strips every visible content there and substitutes
+  `ILLUSIONARY_VISBLOCKER` whatever the textures say, so its liquid really does vanish (measured:
+  no liquid leaf, no clipnodes). A `hint` face still wins over a liquid in either entity — hull 0
+  forces hint brushes to empty contents too, not just the clip hulls.
 * `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
   counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
   `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
