@@ -133,8 +133,10 @@ def detail_pieces():
         cm = next((m2 for (a2, b2), m2 in mats.items() if a2 == c), None)
         fm = next((m2 for (a2, b2), m2 in mats.items() if b2 == f), None)
         cx_, cy_ = XMIN + p * C + C / 2, YMIN + q * C + C / 2
-        in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and rz0 <= f <= rz1
-                      for r, _, _, rz0, rz1, rbands in RAMPS if rbands)
+        # Catch the first 16u cell (d=0) of every ramp, where ramp() writes no 'ramp' stand-in
+        # because h == z0; require exact f == rz0 so a stacked mezzanine above rz0 never matches.
+        in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and f == rz0
+                      for r, _, _, rz0, rz1, _ in RAMPS)
         if fm == 'ramp' or in_ramp:
             return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
                         door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
@@ -473,12 +475,18 @@ def detail_pieces():
             L = math.hypot(bx - ax, by - ay)
             n_ = ((by - ay) / L, -(bx - ax) / L, 0)
             mx_, my_ = (ax + bx) / 2, (ay + by) / 2
-            # Step past the prism's 16-unit 'diag' stand-in cells (diagonal = 22.6u) so chamfered
-            # corners pick up the room's air, kickplate, light strip, cornice, and SPLIT_Z/TRIM_Z.
+            # March outward in 8-unit steps past the prism's own 'diag' stand-in cells, stopping
+            # immediately if we hit real solid so a chamfer never reads through a thin wall.
             ni = None
-            for _d in (24, 32, 40, 12):
-                ni = air_info(mx_ + n_[0] * _d, my_ + n_[1] * _d, z0, z1)
+            for _d in (8, 16, 24, 32, 40):
+                px_, py_ = mx_ + n_[0] * _d, my_ + n_[1] * _d
+                pi_, pj_ = int((px_ - XMIN) // C), int((py_ - YMIN) // C)
+                if not (0 <= pi_ < NX and 0 <= pj_ < NY):
+                    break
+                ni = air_info(px_, py_, z0, z1)
                 if ni is not None:
+                    break
+                if not any(m2 == 'diag' and a2 < z1 and b2 > z0 for a2, b2, m2 in cols[pi_][pj_]):
                     break
             faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni))
         cuts = {z0, z1}

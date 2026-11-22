@@ -290,7 +290,9 @@ def _lamp_spot(r, x, y, ceil, reach=160):
                 i, j = (qx - XMIN) // C, (qy - YMIN) // C
                 if any(a < ceil and b > ceil - 48 for a, b, m in cols[i][j]):
                     return False
-                if any(a == ceil and m == 'sky' for a, b, m in cols[i][j]):
+                # Require an actual non-sky solid ceiling right at z == ceil (rejects both flush
+                # and recessed sky oculi / taller openings).
+                if not any(a == ceil and m != 'sky' for a, b, m in cols[i][j]):
                     return False
         return True
     for d in range(0, reach + 1, 16):
