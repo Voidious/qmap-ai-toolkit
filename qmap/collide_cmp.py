@@ -15,7 +15,7 @@ import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
-MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~20s max); refuse legibly instead of hanging
+MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
 
 def entities(txt):
