@@ -1,3 +1,10 @@
+# v3.6 (collide_cmp solidity rules)
+
+* `GUIDE.md`: caveat on `collide_cmp.py` in section 5 and new gotcha 31 — v3.5 counts solid
+  brushes in `worldspawn`/`func_group` only and ignores face textures, so solid brushes in the
+  `func_detail` family, walls retextured to `*`-prefixed liquids, and changes inside `liquid()`
+  pools all read as "collision identical". Documents the window before the code fix below.
+
 # v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
 
 Fixes and lessons found while building `ca_saddle`:

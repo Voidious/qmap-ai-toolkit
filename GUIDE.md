@@ -99,7 +99,7 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
    pass costs a texture round as well.
 5. **Visual pass** — ask the human to pick a style: 3–4 concrete options with a recommendation,
    each *different from the group's existing maps* (name them). Collision must stay identical;
-   prove it with `collide_cmp.py`.
+   prove it with `collide_cmp.py` — and read gotcha 31 first for the changes it cannot see.
 6. **Texture touch-up rounds** driven by the human's in-client screenshots. They find what your
    renderer can't: palette tints, lightmap seams, misaligned edges. Fix the whole *class* of
    problem each time, not just the pictured spot.
@@ -367,6 +367,13 @@ Measure our new maps the same way once the group has played them.
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-only builds**: `collide_cmp.py old.map new.map` → "collision identical", or explain.
+  **Know what it does not see**: it counts solid brushes in `worldspawn` and `func_group` only and
+  ignores face textures, so a clean run proves only that *that* set is unchanged. It misses a solid
+  brush added in `func_detail` / `func_detail_wall` / `func_detail_fence` (all three are solid to
+  players), and a wall retextured to a `*`-prefixed liquid (`*water`, `*slime`, `*lava`), which
+  stops being solid. It also counts `liquid()` pools as solid, so a change inside a pool is masked
+  and a pool added in open air reports `COLLISION DIFFERS` with nothing solid changed. If a visual
+  pass touched a detail entity or a `*` texture, check that part by hand (gotcha 31).
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   traps and unreachable items on the compiled map's **real collision** with a 32×32×56 player
@@ -551,6 +558,16 @@ Measure our new maps the same way once the group has played them.
 30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` automatically
     writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
     copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
+31. **`collide_cmp.py` does not see every solid brush**: it filters on the classnames
+    `worldspawn` and `func_group`, and its brush-identity key ignores face textures. Three real
+    collision changes therefore read as "collision identical": a solid brush added in
+    `func_detail`, `func_detail_wall` or `func_detail_fence` (measured: all three are in the
+    player collision hull, only `func_detail_illusionary` is not); a solid brush retextured to a
+    `*`-prefixed liquid, which stops being solid; and any solid change inside a `liquid()` volume,
+    which the pool masks because `template/_out.py` appends pool brushes to `worldspawn` and the
+    tool counts them as solid. The first two land on the identical-geometry fast path, so no
+    `--step` setting finds them. Treat a clean run on a pass that touched detail entities or `*`
+    textures as unproven.
 
 ---
 
@@ -599,7 +616,7 @@ maps with their `.map` source.
    rebuild, deliver with the plan, sections, views, README.
 6. Visual pass: write `texgen_<style>.py` (borrow techniques from the examples' generators),
    replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, verify with
-   `collide_cmp.py`.
+   `collide_cmp.py` (gotcha 31: what it cannot see).
 
 Insist on: render and check before delivering; a new name every build; in-client screenshots
 from the human for every visual round.
