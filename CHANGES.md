@@ -1,9 +1,13 @@
 # v3.6 (collide_cmp solidity rules)
 
-* `GUIDE.md`: caveat on `collide_cmp.py` in section 5 and new gotcha 31 — v3.5 counts solid
-  brushes in `worldspawn`/`func_group` only and ignores face textures, so solid brushes in the
-  `func_detail` family, walls retextured to `*`-prefixed liquids, and changes inside `liquid()`
-  pools all read as "collision identical". Documents the window before the code fix below.
+* `GUIDE.md`: new gotcha 31, **what is solid to a player is not what you would guess** — the full
+  measured solidity table `collide_cmp.py` now implements: which brush entities are in the player
+  collision hull, that `*`-prefixed faces make a liquid rather than a solid, that `clip` / `skip` /
+  `sky*` / `trigger` are all solid despite their names, and the two rules reading the qbsp source
+  gets wrong (one `hint` / `hintskip` face anywhere drops a whole brush; otherwise the first face
+  in file order decides). Section 5 points at it and now states the pass criterion as **exit 0**
+  rather than the words "collision identical", because with four content classes the solid pass
+  can print "collision identical" while a later class takes the exit code to 1.
 * `qmap/collide_cmp.py`: count solid brushes in every entity qbsp merges into the world collision
   hull, not just `worldspawn`/`func_group`. `func_detail`, `func_detail_wall` and
   `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
@@ -37,17 +41,19 @@
     face in slot 1 makes a whole wall a pool; the same face in slot 6 leaves it solid. Such
     brushes also get a loud stderr warning, since a `*` texture in a wall or floor theme slot is
     almost always a mistake.
-  - The one rule that source-reading gets backwards: **a single `hint` face anywhere** drops the
-    whole brush from the collision hulls, whatever the other faces say. `face_get_contents()`
-    returns *empty* for `hint`, which the first-face rule skips over, predicting solid;
-    `MapBrush_IsHint()` tests *any* face and wins. Only a compile shows this.
+  - The one rule that source-reading gets backwards: **a single `hint` or `hintskip` face
+    anywhere** drops the whole brush from the collision hulls, whatever the other faces say.
+    `face_get_contents()` returns *empty* for both names, which the first-face rule skips over,
+    predicting solid; `MapBrush_IsHint()` tests *any* face and wins. Only a compile shows this.
 
   Water, slime and lava are then compared as three separate content classes alongside the solid
   space, each with its own ROI set, reporting e.g. `WATER CONTENTS DIFFER` / `LAVA CONTENTS
   DIFFER` and exiting 1. Separate classes rather than one "non-solid" space on purpose: a `*water`
   pool retextured `*lava` fills exactly the same volume, so a combined pass would report nothing
-  while the room became lethal. The solid pass's wording and exit codes are unchanged, so
-  "collision identical" still means what GUIDE section 5 says it means.
+  while the room became lethal. The solid pass's own wording is unchanged, but **the pass
+  criterion is the exit code, not the string** — on a `*water` → `*lava` swap stdout prints
+  `collision identical` for the solid pass and `WATER`/`LAVA CONTENTS DIFFER` after it, and the
+  process exits 1. GUIDE section 5 says so explicitly now.
 
 # v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
 

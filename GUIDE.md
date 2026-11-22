@@ -366,7 +366,10 @@ Measure our new maps the same way once the group has played them.
   On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
-* **Visual-only builds**: `collide_cmp.py old.map new.map` → "collision identical", or explain.
+* **Visual-only builds**: `collide_cmp.py old.map new.map` must **exit 0**, or explain.
+  Check the exit code, not the text: it compares four content classes, so stdout can say
+  "collision identical" on the solid pass while `LAVA CONTENTS DIFFER` on a later one takes the
+  exit code to 1. `echo $?` after it, or run it under `set -e`.
   It counts every brush qbsp puts in the player collision hull — `worldspawn`, `func_group` and
   the whole `func_detail` / `func_detail_wall` / `func_detail_fence` family, with face textures
   read for contents — and compares water, slime and lava as their own classes, so retexturing a
@@ -572,12 +575,14 @@ Measure our new maps the same way once the group has played them.
       pools as plain `worldspawn` brushes, so a pool sits in the same brush list as the walls and
       is only distinguishable by its texture. `!water` is a Half-Life name: here it is solid.
     * **`clip`, `skip`, `sky*` and `trigger` textures are all solid** (`clip` and `skip` draw
-      nothing but still block you); `hint` and `origin` are not.
+      nothing but still block you); `hint`, `hintskip` and `origin` are not.
     * **A mixed-texture brush is decided by its first face in file order.** One `*lava` face in
       slot 1 turns a whole wall into a pool; the same face in slot 6 leaves it solid. qbsp warns
       `brush has multiple face contents`, which almost always means a `*` texture landed in a
-      wall or floor theme slot by mistake. The exception is `hint`: **one `hint` face anywhere**
-      removes the brush from the collision hull entirely, whatever the other five faces say.
+      wall or floor theme slot by mistake. The exception is `hint` / `hintskip`: **one such face
+      anywhere** removes the brush from the collision hull entirely, whatever the other five
+      faces say. qbsp's `IsHintName()` treats the two names identically, so `hintskip` on its own
+      drops a brush exactly as `hint` does.
     * `func_wall`, `func_illusionary` and `trigger_*` become separate BSP models with their own
       hulls, and their real solidity is set at runtime by the progs, not the BSP. `collide_cmp.py`
       lists them in its `note:` line instead of comparing them; a map that depends on one of them
