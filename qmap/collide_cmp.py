@@ -198,15 +198,15 @@ def main():
         _, rec_voxels, rec_max_slice = roi_grid(comps, rec)
         rec_fits = rec_max_slice <= MAX_SLICE and rec_voxels <= MAX_TOTAL_VOXELS
         if rec_max_slice > MAX_SLICE:
-            rec_over = f'{rec_max_slice / (1024 ** 2):.1f} MiB/slice > {MAX_SLICE / (1024 ** 2):.1f} MiB limit'
+            rec_over = f'{rec_max_slice / (1024 ** 2):.1f} MiB/slice, over {MAX_SLICE / (1024 ** 2):.1f} MiB limit'
         elif rec_voxels > MAX_TOTAL_VOXELS:
-            rec_over = f'{rec_voxels / 1e9:.2f}G voxels > {MAX_TOTAL_VOXELS / 1e9:g}G limit'
+            rec_over = f'{rec_voxels / 1e9:.2f}G voxels, over {MAX_TOTAL_VOXELS / 1e9:g}G limit'
 
     if rec is not None and rec_fits and rec > step + 1e-9:
         budget_tail = f'use a larger --step (finest differing plane gap is {gap_s} {unit}; --step {rec:g} suffices)'
     elif rec is not None and not rec_fits:
         budget_tail = (f'cannot resolve {gap_s}-unit features inside budget '
-                       f'(needs {rec_over} at --step {rec:g}); compare a narrower pair or use a coarser --step')
+                       f'(--step {rec:g} needs {rec_over}); compare a narrower pair or use a coarser --step')
     else:
         budget_tail = 'use a larger --step'
 
