@@ -107,26 +107,33 @@ def entities(txt):
 
 
 def parse_brush(br):
-    """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key, face_textures) for one brush, or None
-    if degenerate. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD, so inside is
-    n.x <= d. Face textures come back in file order, including any face whose plane was degenerate,
-    because qbsp reads the contents of every face regardless."""
-    planes, texes = [], []
+    """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key, face_textures, no_normal_faces) for one
+    brush, or None if degenerate. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD,
+    so inside is n.x <= d.
+
+    Face textures come back in file order, and only for the faces qbsp itself keeps. A face whose
+    three plane points give no normal is dropped by ParseBrushFace() (qbsp/map.cc) before it is
+    appended to brush.faces, so neither MapBrush_IsHint() nor Brush_GetContents() can see its
+    texture: measured, a degenerate '*lava' face in slot 1 ahead of six wall faces compiles solid,
+    and a degenerate 'hint' face in slot 1 does not drop the brush. Recording its texture anyway
+    would let a face qbsp discarded decide the brush's contents, in either direction."""
+    planes, texes, no_normal = [], [], 0
     for line in br.split('\n'):
         pts = list(PT_RE.finditer(line))
         if len(pts) < 3:
             continue
-        # the texture name is the first token after the third ( x y z ) plane point, in both the
-        # standard and the Valve 220 face format (whose [ s ] [ t ] axes follow the name)
-        rest = line[pts[2].end():].split()
-        texes.append(rest[0] if rest else '')
         p1, p2, p3 = (np.array([float(v) for v in pts[k].groups()]) for k in range(3))
         n = np.cross(p3 - p1, p2 - p1)
         ln = np.linalg.norm(n)
         if ln < 1e-9:
+            no_normal += 1
             continue
         n /= ln
         planes.append((n, float(np.dot(n, p1))))
+        # the texture name is the first token after the third ( x y z ) plane point, in both the
+        # standard and the Valve 220 face format (whose [ s ] [ t ] axes follow the name)
+        rest = line[pts[2].end():].split()
+        texes.append(rest[0] if rest else '')
     if len(planes) < 4:
         return None
     N = np.array([p[0] for p in planes])
@@ -148,7 +155,7 @@ def parse_brush(br):
         if all(v is not None for v in lo + hi):
             lo_a, hi_a = np.array(lo), np.array(hi)
             if np.all(hi_a > lo_a + 1e-6):
-                return (lo_a, hi_a, (N, D), True, gkey, texes)
+                return (lo_a, hi_a, (N, D), True, gkey, texes, no_normal)
             return None
     # General convex brush: exact bounding box from feasible plane-triple intersections
     verts = []
@@ -166,7 +173,7 @@ def parse_brush(br):
     lo_a, hi_a = V.min(0), V.max(0)
     if np.any(hi_a <= lo_a + 1e-6):
         return None
-    return (lo_a, hi_a, (N, D), False, gkey, texes)
+    return (lo_a, hi_a, (N, D), False, gkey, texes, no_normal)
 
 
 def brushes(path):
@@ -179,7 +186,7 @@ def brushes(path):
     The note is what keeps this blind spot from coming back: a classname or texture flavour these
     rules do not know about is reported by name instead of vanishing from the comparison."""
     out = {k: [] for k, _, _, _ in CLASSES}
-    skipped, mixed = 0, 0
+    skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
     for e in entities(open(path).read()):
         m = re.search(r'"classname" "([^"]+)"', e)
@@ -197,7 +204,8 @@ def brushes(path):
             if pb is None:
                 skipped += 1
                 continue
-            *geom, texes = pb
+            *geom, texes, dropped = pb
+            no_normal += dropped
             kind, is_mixed = brush_contents(texes)
             mixed += is_mixed
             if kind not in out:        # 'hint' or 'origin': in no collision hull at all
@@ -211,6 +219,11 @@ def brushes(path):
             out[kind].append(tuple(geom))
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
+    if no_normal:
+        print(f'WARNING: {path}: {no_normal} face(s) have three plane points with no normal; qbsp '
+              f'drops them before reading their texture ("Brush plane with no normal"), so they '
+              f'decide nothing here either -- but a generator emitting one is a bug',
+              file=sys.stderr)
     if mixed:
         print(f'WARNING: {path}: {mixed} brush(es) mix face contents (e.g. one "*" face among five '
               f'solid ones); qbsp takes the first face in file order and warns -- check the texture '

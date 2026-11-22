@@ -41,6 +41,17 @@
   `ILLUSIONARY_VISBLOCKER` whatever the textures say, so its liquid really does vanish (measured:
   no liquid leaf, no clipnodes). A `hint` face still wins over a liquid in either entity — hull 0
   forces hint brushes to empty contents too, not just the clip hulls.
+* `qmap/collide_cmp.py`: **only read contents off the faces qbsp keeps.** `parse_brush()` recorded
+  every face's texture before checking whether its three plane points gave a normal, on the stated
+  belief that "qbsp reads the contents of every face regardless". It does not:
+  `ParseBrushFace()` returns `std::nullopt` for a face with no normal and `ParseBrush()` skips it,
+  so the face never reaches `brush.faces` and neither `MapBrush_IsHint()` nor `Brush_GetContents()`
+  can see it. Measured with a 7-face brush whose face 1 has three collinear points — a degenerate
+  `*lava` face ahead of six wall faces compiles **solid** (180 clipnodes, no lava leaf), and a
+  degenerate `hint` face does **not** drop the brush — so the old order got it wrong in both
+  directions at once: it would call that brush a pool, and drop a solid brush that qbsp keeps.
+  A face with no normal is now counted and reported on stderr rather than silently ignored, since
+  a generator emitting one is a bug even though it changes nothing downstream.
 * `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
   counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
   `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
