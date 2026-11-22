@@ -1,6 +1,6 @@
 """Prove a visual-only build did not change collision: compare the SOLID space of two generated
 .map files on a voxel grid (default 8-unit, supports sub-unit floats e.g. --step 0.5). Counts all
-solid brushes in worldspawn and func_group — both axis-aligned boxes and general convex brushes
+solid brushes in worldspawn and func_group -- both axis-aligned boxes and general convex brushes
 (ramps, prisms, chamfers, veneers) via half-space planes (func_detail_illusionary fixtures, triggers
 and lights are not solid). Prefilters to differing brush geometry clustered into overlapping ROI
 components and streams one Z-slice at a time, so sub-unit resolution uses only a few MB of RAM.
@@ -105,6 +105,19 @@ def brushes(path):
     return out
 
 
+def roi_grid(comps, s):
+    specs, total, max_sl = [], 0, 0
+    for roi_lo, roi_hi in comps:
+        lo = np.floor(roi_lo / s) * s
+        hi = np.ceil(roi_hi / s) * s
+        nx, ny, nz = (max(1, int(round(float(v)))) for v in (hi - lo) / s)
+        sl = nx * ny
+        max_sl = max(max_sl, sl)
+        total += sl * nz
+        specs.append((lo, hi, nx, ny, nz))
+    return specs, total, max_sl
+
+
 def main():
     args = sys.argv[1:]
     step = 8.0
@@ -144,6 +157,18 @@ def main():
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
 
+    comps = []
+    for b in diff_brushes:
+        blo, bhi = b[0].copy(), b[1].copy()
+        merged, keep = (blo, bhi), []
+        for clo, chi in comps:
+            if np.all(chi >= merged[0] - 1e-6) and np.all(clo <= merged[1] + 1e-6):
+                merged = (np.minimum(merged[0], clo), np.maximum(merged[1], chi))
+            else:
+                keep.append((clo, chi))
+        keep.append(merged)
+        comps = keep
+
     # Finest parallel-plane gap among differing brushes: warns when --step is too coarse to resolve
     # thin cracks/slivers (e.g. a 1-unit gap between two shifted wedge planes).
     plane_groups = {}
@@ -164,42 +189,38 @@ def main():
             g_ = b_ - a_
             if g_ > 1e-4 and (min_gap is None or g_ < min_gap):
                 min_gap = g_
+    rec = min_gap / 2.0 if min_gap is not None else None
+    gap_s = f'{min_gap:g}' if min_gap is not None else None
+    unit = ('unit' if gap_s == '1' else 'units') if gap_s is not None else None
     under_resolved = min_gap is not None and step >= min_gap - 1e-6
-    if under_resolved:
-        rec = min_gap / 2.0
-        print(f'WARNING: differing geometry has parallel planes as close as {min_gap:g} units; '
-              f'--step {step:g} may not resolve them (try --step {rec:g})', file=sys.stderr)
+    rec_fits, rec_over = True, None
+    if rec is not None:
+        _, rec_voxels, rec_max_slice = roi_grid(comps, rec)
+        rec_fits = rec_max_slice <= MAX_SLICE and rec_voxels <= MAX_TOTAL_VOXELS
+        if rec_max_slice > MAX_SLICE:
+            rec_over = f'{rec_max_slice / (1024 ** 2):.1f} MiB/slice > {MAX_SLICE / (1024 ** 2):.1f} MiB limit'
+        elif rec_voxels > MAX_TOTAL_VOXELS:
+            rec_over = f'{rec_voxels / 1e9:.2f}G voxels > {MAX_TOTAL_VOXELS / 1e9:g}G limit'
 
-    comps = []
-    for b in diff_brushes:
-        blo, bhi = b[0].copy(), b[1].copy()
-        merged, keep = (blo, bhi), []
-        for clo, chi in comps:
-            if np.all(chi >= merged[0] - 1e-6) and np.all(clo <= merged[1] + 1e-6):
-                merged = (np.minimum(merged[0], clo), np.maximum(merged[1], chi))
-            else:
-                keep.append((clo, chi))
-        keep.append(merged)
-        comps = keep
+    if rec is not None and rec_fits and rec > step + 1e-9:
+        budget_tail = f'use a larger --step (finest differing plane gap is {gap_s} {unit}; --step {rec:g} suffices)'
+    elif rec is not None and not rec_fits:
+        budget_tail = (f'cannot resolve {gap_s}-unit features inside budget '
+                       f'(needs {rec_over} at --step {rec:g}); compare a narrower pair or use a coarser --step')
+    else:
+        budget_tail = 'use a larger --step'
 
-    roi_specs = []
-    total_voxels = 0
-    for roi_lo, roi_hi in comps:
-        lo = np.floor(roi_lo / step) * step
-        hi = np.ceil(roi_hi / step) * step
-        nx, ny, nz = (int(v) for v in np.maximum(1, np.round((hi - lo) / step).astype(int)))
+    roi_specs, total_voxels, _ = roi_grid(comps, step)
+    for lo, hi, nx, ny, nz in roi_specs:
         if nx * ny > MAX_SLICE:
             mb = (nx * ny) / (1024 ** 2)
-            print(f'ERROR: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) exceeds limit; use a larger --step',
+            print(f'ERROR: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) exceeds limit; {budget_tail}',
                   file=sys.stderr)
             sys.exit(2)
-        total_voxels += nx * ny * nz
-        roi_specs.append((lo, hi, nx, ny, nz))
     if total_voxels > MAX_TOTAL_VOXELS:
         gv = total_voxels / 1e9
-        hint = f' (finest differing plane gap is {min_gap:g}; --step {min_gap / 2.0:g} suffices)' if min_gap is not None else ''
         print(f'ERROR: total ROI work {gv:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g} exceeds '
-              f'{MAX_TOTAL_VOXELS / 1e9:g}G limit; use a larger --step{hint}', file=sys.stderr)
+              f'{MAX_TOTAL_VOXELS / 1e9:g}G limit; {budget_tail}', file=sys.stderr)
         sys.exit(2)
     if total_voxels > 500_000_000:
         print(f'checking {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g}...', file=sys.stderr)
@@ -252,8 +273,18 @@ def main():
         print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s)), e.g.', sample_pts)
         sys.exit(1)
     if under_resolved:
-        print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
-              f'(features down to {min_gap:g} units unresolved — rerun with --step {min_gap / 2.0:g})')
+        if rec_fits:
+            print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
+                  f'--step {step:g} may not resolve them (try --step {rec:g})', file=sys.stderr, flush=True)
+            print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
+                  f'(features down to {gap_s} {unit} unresolved; rerun with --step {rec:g})')
+        else:
+            print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
+                  f'--step {step:g} may not resolve them (resolving at --step {rec:g} needs {rec_over}; '
+                  f'compare a narrower pair)', file=sys.stderr, flush=True)
+            print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
+                  f'(features down to {gap_s} {unit} unresolved; resolving at --step {rec:g} exceeds budget, '
+                  f'compare a narrower pair)')
     else:
         print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(comps)} ROI(s) {shapes})')
 
