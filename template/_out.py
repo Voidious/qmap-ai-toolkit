@@ -136,7 +136,7 @@ def detail_pieces():
         # Catch the first 16u cell (d=0) of every ramp, where ramp() writes no 'ramp' stand-in
         # because h == z0; require exact f == rz0 so a stacked mezzanine above rz0 never matches.
         in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and f == rz0
-                      for r, _, _, rz0, rz1, _ in RAMPS)
+                      for r, _, _, rz0, _, _ in RAMPS)
         if fm == 'ramp' or in_ramp:
             return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
                         door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
@@ -230,6 +230,8 @@ def detail_pieces():
                         cuts |= band_cuts(n)
                     elif n.get('proxy'):
                         cuts |= {z for z in band_cuts(n['proxy']) if n['f'] < z < n['c']}
+                # Mirrors the face role chain below (lines ~265-290: step-edge, cornice, sill, base,
+                # strp, architrave) so a + 16 is only cut when at least one face will render as architrave.
                 def wants_arch(n):
                     if n['door']:
                         n = n.get('proxy')

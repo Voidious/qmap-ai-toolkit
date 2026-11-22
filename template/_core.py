@@ -270,6 +270,7 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
     x0, y0, x1, y1 = r
     nx = max(1, round((x1 - x0) / step))
     ny = max(1, round((y1 - y0) / step))
+    placed = 0
     for a in range(nx):
         for b in range(ny):
             x = x0 + (x1 - x0) * (2 * a + 1) // (2 * nx)
@@ -277,6 +278,9 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
             p = _lamp_spot(r, x // 16 * 16, y // 16 * 16, ceil)
             if p:
                 lamp(p[0], p[1], ceil, value, sym)
+                placed += 1
+    if not placed:
+        print(f'note: room_lamps({r}, ceil={ceil}) placed 0 lamps (no non-sky ceiling spot found)', file=sys.stderr)
 
 
 def _lamp_spot(r, x, y, ceil, reach=160):
