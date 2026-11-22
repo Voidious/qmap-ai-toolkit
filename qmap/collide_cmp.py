@@ -29,8 +29,12 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-# one quoted .map token; classname() explains why they are paired by position, not searched for
-QUOTED_RE = re.compile(r'"([^"\n]*)"')
+# A quoted .map token, or a comment to skip. One pattern with the comment first so that scanning
+# left to right reaches a '//' or ';' before any quote on the same line, exactly as parse_token()
+# (common/parser.cc) does -- it tests for a comment before it tests for a quote, so a quote inside
+# a comment is not a token, while '//' inside a quoted value is just text. classname() explains
+# why the tokens are paired by position rather than searched for.
+TOKEN_RE = re.compile(r'(?://|;)[^\n]*|"([^"\n]*)"')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
@@ -183,13 +187,18 @@ def classname(e):
       - Tabs, runs of spaces and several epairs on one line are all fine, including the whole
         entity header on the line with its opening brace -- measured at 180 clipnodes, so an
         anchored line-start pattern would have missed a solid entity.
+      - Comments have to be skipped, not just ignored. parse_token() tests for '//' or ';' before
+        it tests for a quote, so one double quote in a comment is not a token -- but it would
+        shift a naive pairing by one for the rest of the entity. Measured: '// a "comment"' above
+        a real classname still compiles at 180, as does a ';' comment, a trailing comment, and
+        '"wad" "a//b.wad"' (the '//' there is inside a quoted value, where the quote comes first).
 
     The key is compared case-sensitively: entdict_t::find() (common/entdata.cc) compares with
     `key == it->first` and returns the first match, so qbsp does not recognise '"CLASSNAME"' as a
     classname at all and that entity measures as a submodel (24, not 180). Only the classname
     *value* is matched case-insensitively, by the callers, which is where qbsp uses Q_strcasecmp.
     """
-    toks = [(m.group(1), m.start(), m.end()) for m in QUOTED_RE.finditer(e)]
+    toks = [(m.group(1), m.start(), m.end()) for m in TOKEN_RE.finditer(e) if m.group(1) is not None]
     for (key, _, key_end), (val, val_start, _) in zip(toks[::2], toks[1::2]):
         if '\n' in e[key_end:val_start]:
             break          # not a pair qbsp would accept: it errors out on this map
