@@ -184,7 +184,9 @@ def brushes(path):
             kind, is_mixed = brush_contents(texes)
             mixed += is_mixed
             if kind not in out:        # 'hint' or 'origin': in no collision hull at all
-                no_contents[(texes or ['(no faces)'])[0].lower()] += 1
+                # name the face that decided it, not texes[0]: a hint face in slot 3 drops the
+                # brush, and reporting the slot-1 wall texture there would be actively misleading
+                no_contents[next((t.lower() for t in texes if face_class(t) == kind), kind)] += 1
                 continue
             out[kind].append(tuple(geom))
     if skipped:
@@ -193,12 +195,12 @@ def brushes(path):
         print(f'WARNING: {path}: {mixed} brush(es) mix face contents (e.g. one "*" face among five '
               f'solid ones); qbsp takes the first face in file order and warns -- check the texture '
               f'theme slots, this is usually a mistake', file=sys.stderr)
-    for tally, why in ((no_collision, 'entities with no player collision'),
-                       (submodel, 'submodel entities (own collision hull, solidity set at runtime)'),
-                       (no_contents, 'brushes whose texture gives them no collision contents')):
+    for tally, why in ((no_collision, 'in entities with no player collision'),
+                       (submodel, 'in submodel entities (own collision hull, solidity set at runtime)'),
+                       (no_contents, 'whose face textures give them no collision contents')):
         if tally:
             named = ', '.join(f'{c} x{n}' for c, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0])))
-            print(f'note: {path}: ignored {sum(tally.values())} brush(es) in {why}: {named}',
+            print(f'note: {path}: ignored {sum(tally.values())} brush(es) {why}: {named}',
                   file=sys.stderr)
     return out
 
