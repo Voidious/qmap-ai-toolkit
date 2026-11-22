@@ -274,18 +274,12 @@ def main():
         print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s){caveat}), e.g.', sample_pts)
         sys.exit(1)
     if under_resolved:
-        if rec_fits:
-            print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
-                  f'--step {step:g} may not resolve them (try --step {rec:g})', file=sys.stderr, flush=True)
-            print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
-                  f'(features down to {gap_s} {unit} unresolved; rerun with --step {rec:g})')
-        else:
-            print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
-                  f'--step {step:g} may not resolve them (resolving at --step {rec:g} needs {rec_over}; '
-                  f'compare a narrower pair)', file=sys.stderr, flush=True)
-            print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
-                  f'(features down to {gap_s} {unit} unresolved; resolving at --step {rec:g} exceeds budget, '
-                  f'compare a narrower pair)')
+        warn_tail = f'try --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} needs {rec_over}; compare a narrower pair'
+        out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
+        print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
+              f'--step {step:g} may not resolve them ({warn_tail})', file=sys.stderr, flush=True)
+        print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
+              f'(features down to {gap_s} {unit} unresolved; {out_tail})')
     else:
         print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(comps)} ROI(s) {shapes})')
 
