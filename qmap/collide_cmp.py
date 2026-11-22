@@ -29,6 +29,7 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
+# one quoted .map token; classname() explains why they are paired by position, not searched for
 QUOTED_RE = re.compile(r'"([^"\n]*)"')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
@@ -298,7 +299,8 @@ def brushes(path):
             no_normal += dropped
             typ, is_mixed = brush_contents(texes)
             mixed += is_mixed
-            if typ in ('hint', 'origin'):   # in no collision hull, in no entity
+            cmp_class = 'solid' if typ in SOLID_TYPES else typ
+            if cmp_class not in out:   # 'hint'/'origin' -- or a type no class covers yet
                 # name the face that decided it, not texes[0]: a hint face in slot 3 drops the
                 # brush, and reporting the slot-1 wall texture there would be actively misleading
                 no_contents[next((t.lower() for t in texes if face_class(t) == typ), typ)] += 1
@@ -306,7 +308,7 @@ def brushes(path):
             if typ not in kept:
                 no_collision[cls] += 1   # e.g. solid in func_detail_illusionary: mist, in no hull
                 continue
-            out['solid' if typ in SOLID_TYPES else typ].append(tuple(geom))
+            out[cmp_class].append(tuple(geom))
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
     if no_normal:
