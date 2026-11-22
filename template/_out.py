@@ -230,6 +230,8 @@ def detail_pieces():
                         cuts |= {z for z in band_cuts(n['proxy']) if n['f'] < z < n['c']}
                 if ztop is not None and a < b - 16:
                     cuts.add(b - 16)                      # sill band under a raised opening
+                if zbot is not None and a < b - 16:
+                    cuts.add(a + 16)                      # architrave lintel at bottom of an overhang
                 cuts = sorted(z for z in cuts if a <= z <= b)
                 for p, q in zip(cuts, cuts[1:]):
                     mid = (p + q) / 2
@@ -262,7 +264,9 @@ def detail_pieces():
                         elif n['foot'] is not None and mid < n['foot']:
                             role, anc = 'base', n['foot']
                         elif sz <= mid < sz + 16:
-                            role, anc = 'strp', sz + 16      # (before the band: a strip climbing a stair crosses the seam)
+                            role, anc = 'strp', sz + 16      # (before band/architrave: never clobber a light strip)
+                        elif zbot is not None and a <= mid < a + 16 and p == a and c > a and (c > a + 16 or zbot != n['th']):
+                            role, anc = 'trim', a + 16       # architrave lintel framing overhang/doorway bottoms
                         elif n['tz'] is not None and n['tz'] <= mid < n['tz'] + TRIM_H and n['tz'] + TRIM_H < c - 16:
                             role, anc = 'band', n['tz'] + TRIM_H     # string course / seam (TRIM_H tall)
                         elif (gz is not None and f + 32 <= gz and gz + 96 <= c - 16 and gz <= mid < gz + 96
