@@ -16,6 +16,17 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
+# An entity key/value pair is a quoted key, any run of whitespace, then a quoted value. The
+# generators in this repo always emit exactly one space, but qbsp's tokenizer does not care, so a
+# hand-edited or TrenchBroom-saved '"classname"\t"func_detail"' would otherwise fall through to
+# '(no classname)' and be tallied as a submodel instead of compared. Measured: a tab or two spaces
+# compiles identically to one space (180 clipnodes), and a newline there makes qbsp error out.
+#
+# Deliberately NOT case-insensitive on the key. entdict_t::find() (common/entdata.cc) compares
+# keys with `key == it->first`, exact and case-sensitive, so qbsp does not recognise '"CLASSNAME"'
+# as a classname at all -- measured, that entity becomes a submodel (24 clipnodes, not 180). Only
+# the classname *value* is matched case-insensitively, below, which is where Q_strcasecmp is used.
+CLASSNAME_RE = re.compile(r'"classname"\s+"([^"]+)"')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
@@ -212,7 +223,7 @@ def brushes(path):
     skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
     for e in entities(open(path).read()):
-        m = re.search(r'"classname" "([^"]+)"', e)
+        m = CLASSNAME_RE.search(e)
         cls = m.group(1) if m else '(no classname)'
         lc = cls.lower()
         brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)

@@ -64,6 +64,15 @@
   which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
   does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
   contain a mixed-contents brush, so this adds no noise to existing builds.
+* `qmap/collide_cmp.py`: the classname pattern accepts any whitespace between the quoted key and
+  the quoted value (`"classname"\s+"..."`), not just one space. The generators here always emit
+  one, but qbsp's tokenizer does not care, so a hand-edited or TrenchBroom-saved
+  `"classname"\t"func_detail"` used to fall through to `(no classname)` and be tallied as a
+  submodel instead of compared. Measured: a tab or two spaces compiles identically to one space,
+  and a newline there makes qbsp error out. The key is matched **case-sensitively** on purpose —
+  `entdict_t::find()` compares keys with `key == it->first`, so qbsp does not read `"CLASSNAME"`
+  as a classname either, and that entity measures as a submodel (24 clipnodes, not 180). Only the
+  classname *value* is case-insensitive, which is where qbsp uses `Q_strcasecmp`.
 * `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
   counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
   `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
