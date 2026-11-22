@@ -130,7 +130,7 @@ def main():
     A, B = brushes(pA), brushes(pB)
     na = sum(not b[3] for b in A)
     nb = sum(not b[3] for b in B)
-    print(f'{pA}: {len(A)} solid brushes ({na} non-axis), {pB}: {len(B)} solid brushes ({nb} non-axis)')
+    print(f'{pA}: {len(A)} solid brushes ({na} non-axis), {pB}: {len(B)} solid brushes ({nb} non-axis)', flush=True)
 
     # Exact prefilter: any symmetric difference must lie inside the bbox of brushes whose geometry
     # is not present in both maps. Cluster differing brushes into overlapping AABB components so
@@ -164,7 +164,8 @@ def main():
             g_ = b_ - a_
             if g_ > 1e-4 and (min_gap is None or g_ < min_gap):
                 min_gap = g_
-    if min_gap is not None and step >= min_gap - 1e-6:
+    under_resolved = min_gap is not None and step >= min_gap - 1e-6
+    if under_resolved:
         rec = min_gap / 2.0
         print(f'WARNING: differing geometry has parallel planes as close as {min_gap:g} units; '
               f'--step {step:g} may not resolve them (try --step {rec:g})', file=sys.stderr)
@@ -250,7 +251,11 @@ def main():
     if total_diff:
         print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s)), e.g.', sample_pts)
         sys.exit(1)
-    print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(comps)} ROI(s) {shapes})')
+    if under_resolved:
+        print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
+              f'(features down to {min_gap:g} units unresolved — rerun with --step {min_gap / 2.0:g})')
+    else:
+        print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(comps)} ROI(s) {shapes})')
 
 
 if __name__ == '__main__':
