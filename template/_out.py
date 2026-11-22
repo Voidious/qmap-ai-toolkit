@@ -84,7 +84,8 @@ def band_role(n, mid):
     tz = n['tz']
     if tz is not None and tz <= mid < tz + TRIM_H and tz + TRIM_H < c - 16:
         return 'band', tz + TRIM_H
-    anc = STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32
+    nsz = STRIPE_Z.get(th, sz)
+    anc = nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32
     return ('wall_lo' if mid < SPLIT_Z.get(th, -10 ** 6) else 'wall'), anc
 
 
@@ -131,7 +132,10 @@ def detail_pieces():
         th = room_theme(p, q, f, zmap)
         cm = next((m2 for (a2, b2), m2 in mats.items() if a2 == c), None)
         fm = next((m2 for (a2, b2), m2 in mats.items() if b2 == f), None)
-        if fm == 'ramp':
+        cx_, cy_ = XMIN + p * C + C / 2, YMIN + q * C + C / 2
+        in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and rz0 <= f <= rz1
+                      for r, _, _, rz0, rz1, rbands in RAMPS if rbands)
+        if fm == 'ramp' or in_ramp:
             return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
                         door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
         if fm == 'bridge':
@@ -267,9 +271,10 @@ def detail_pieces():
                             role, anc = 'glass', gz + 96   # only on straight runs wide enough for a window
                         else:
                             # stone sits on the band below it: the kickplate top, or the strip top above the strip
-                            # stone is anchored to the room's NOMINAL strip, not a strip that climbs a stair:
-                            # anchoring to the climbing strip shifted the courses 16 per step (b3 base stairs)
-                            role, anc = 'wall', (STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32)
+                            # anchor to the room's NOMINAL strip (and compare mid against it too) so walls beside
+                            # stairs or above/beside ramps (where sz=10**6) stay aligned with the rest of the room
+                            nsz = STRIPE_Z.get(th, sz)
+                            role, anc = 'wall', (nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32)
                             if mid < SPLIT_Z.get(th, -10 ** 6):
                                 role = 'wall_lo'           # stratified rooms: a different stone below the split
                         per = WALL_PERIOD.get(zone(th), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
@@ -307,9 +312,58 @@ def detail_pieces():
         hi_p = ((x1 if sg > 0 else x0), y0, z0) if axis == 'x' else (x0, (y1 if sg > 0 else y0), z0)
         lat = [((0, -1, 0), (x0, y0, z0)), ((0, 1, 0), (x0, y1, z0))] if axis == 'x' else \
               [((-1, 0, 0), (x0, y0, z0)), ((1, 0, 0), (x1, y0, z0))]
+        # Probe adjacent air outside each lateral face: if a ramp's side is exposed to another room,
+        # texture that face with the adjacent room's wall, carry its light strip across backed cells,
+        # and emit the ramp in worldspawn so the wall lightmap matches the surrounding room.
+        lat_faces = []
+        exposed_to_other_room = False
+        for n_, p_ in lat:
+            ox_, oy_ = n_[0] * 8, n_[1] * 8
+            n_cells = int(((x1 - x0) if axis == 'x' else (y1 - y0)) // C)
+            adj_samples = []
+            for k_ in range(n_cells):
+                sx = (x0 + C / 2 + k_ * C) if axis == 'x' else (x0 if n_[0] < 0 else x1)
+                sy = (y0 if n_[1] < 0 else y1) if axis == 'x' else (y0 + C / 2 + k_ * C)
+                ai_ = air_info(sx + ox_, sy + oy_, z0, z1)
+                if ai_ and ai_['th'] != th and not ai_['door']:
+                    adj_samples.append((k_, sx, sy, ai_))
+            if adj_samples:
+                exposed_to_other_room = True
+                adj_th = adj_samples[0][3]['th']
+                l_tex = textures('wall', adj_th, 'wall')[2]
+                l_yo = (ZONE_FLOOR.get(adj_th, 0) + 32) % WALL_PERIOD.get(zone(adj_th), 128)
+                lat_faces.append(sface(n_, p_, l_tex, 0, l_yo))
+                sz_adj = adj_samples[0][3]['sz']
+                if sz_adj < 10 ** 6 and z0 <= sz_adj and sz_adj + 16 <= z1:
+                    st_tex = textures('wall', adj_th, 'strp')[2]
+                    backed = []
+                    for k_, sx, sy, ai_ in adj_samples:
+                        frac = ((sx - x0) / run if sg > 0 else (x1 - sx) / run) if axis == 'x' else \
+                               ((sy - y0) / run if sg > 0 else (y1 - sy) / run)
+                        if z0 + rise * frac >= sz_adj + 16 - 0.5:
+                            backed.append(k_)
+                    if backed:
+                        k_lo, k_hi = min(backed), max(backed) + 1
+                        if axis == 'x':
+                            bx0, bx1 = x0 + k_lo * C, x0 + k_hi * C
+                            by0, by1 = (y0 - 2, y0) if n_[1] < 0 else (y1, y1 + 2)
+                        else:
+                            bx0, bx1 = (x0 - 2, x0) if n_[0] < 0 else (x1, x1 + 2)
+                            by0, by1 = y0 + k_lo * C, y0 + k_hi * C
+                        sfs = [
+                            sface((-1, 0, 0), (bx0, by0, sz_adj), st_tex if n_[0] < 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
+                            sface((1, 0, 0), (bx1, by0, sz_adj), st_tex if n_[0] > 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
+                            sface((0, -1, 0), (bx0, by0, sz_adj), st_tex if n_[1] < 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
+                            sface((0, 1, 0), (bx0, by1, sz_adj), st_tex if n_[1] > 0 else EDGE_TEX, 0, (sz_adj + 16) % 16),
+                            sface((0, 0, -1), (bx0, by0, sz_adj), EDGE_TEX, 0, 0),
+                            sface((0, 0, 1), (bx0, by0, sz_adj + 16), EDGE_TEX, 0, 0),
+                        ]
+                        EXTRA['detail'].append('{\n' + '\n'.join(sfs) + '\n}')
+            else:
+                lat_faces.append(sface(n_, p_, side, 0, z1 % 128))
         fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
-              sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
-        EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+              sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_faces
+        EXTRA['world' if exposed_to_other_room else 'skin'].append('{\n' + '\n'.join(fs) + '\n}')
         if not bands:
             continue
         # the rooms at the foot and at the head: the sloped strip runs from one's strip to the other's
@@ -337,7 +391,7 @@ def detail_pieces():
                        for sx, sy in samples for zz in (z0 + 8, top_band - 8)):
                 continue
             inward = (-wn[0], -wn[1], 0)
-            fr = (wp[0] + inward[0] * 2, wp[1] + inward[1] * 2, 0)
+            fr = (wp[0] + inward[0] * 1, wp[1] + inward[1] * 1, 0)
             ends = [((-h[0], -h[1], 0), (x0, y0, 0)), ((h[0], h[1], 0), (x1, y1, 0))]
             for alo, ahi, hgt, role in bands_:
                 R = ahi - alo
