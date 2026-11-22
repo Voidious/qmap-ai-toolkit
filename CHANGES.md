@@ -13,16 +13,18 @@
   `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
   a sealed room, compared by clipnode count against an empty control), so a solid brush added in
   any of them used to land on the identical-geometry fast path and report "collision identical"
-  at every `--step`. The two illusionary entities are excluded from the *solid* space —
-  `func_illusionary_visblocker` explicitly, because it passes qbsp's `IsWorldBrushEntity()` but
-  has its contents replaced with `ILLUSIONARY_VISBLOCKER`, so deriving the set from that
-  predicate would wrongly add it. (`func_detail_illusionary` still contributes its *liquids*; see
-  below.) Classname values are matched case-insensitively, as qbsp does. Every ignored brush is
-  accounted for in a stderr `note:` line, split by reason, which is what stops the blind spot
-  returning:
+  at every `--step`. An ordinary wall brush in either illusionary entity is excluded from the
+  *solid* space — `func_illusionary_visblocker` explicitly, because it passes qbsp's
+  `IsWorldBrushEntity()` but has its visible contents replaced with `ILLUSIONARY_VISBLOCKER`, so
+  deriving the set from that predicate would wrongly add it. Neither exclusion is unconditional:
+  `func_detail_illusionary` still contributes its *liquids* and `func_illusionary_visblocker` its
+  `clip` brushes, both below — so what the tool carries is a per-entity table of which content
+  types survive, not an allowlist of classnames. Classname values are matched case-insensitively,
+  as qbsp does. Every ignored brush is accounted for in a stderr `note:` line, split by reason,
+  which is what stops the blind spot returning:
 
-      note: ca_saddle_b7.map: ignored 123 brush(es) in entities with no player collision:
-            func_detail_illusionary x123
+      note: ca_saddle_b7.map: ignored 123 brush(es) whose entity drops them from every
+            collision hull: func_detail_illusionary x123
       note: ca_saddle_b7.map: ignored 8 brush(es) in submodel entities (own collision hull,
             solidity set at runtime): func_illusionary x3, trigger_teleport x3, trigger_push x2
 
@@ -38,11 +40,23 @@
   It adds no clipnodes, so the clipnode probe behind the rest of these rules could not see it;
   measured instead by counting hull-0 leaf contents, where a `*lava` cube in
   `func_detail_illusionary` yields a `CONTENTS_LAVA` leaf exactly as it does in `worldspawn`.
-  `func_illusionary_visblocker` stays a full exclusion, and the distinction is now the point:
+  `func_illusionary_visblocker` is the contrast that makes this a per-entity rule:
   `Brush_GetContents()` strips every visible content there and substitutes
-  `ILLUSIONARY_VISBLOCKER` whatever the textures say, so its liquid really does vanish (measured:
+  `ILLUSIONARY_VISBLOCKER` whatever the textures say, so a liquid really does vanish (measured:
   no liquid leaf, no clipnodes). A `hint` face still wins over a liquid in either entity — hull 0
   forces hint brushes to empty contents too, not just the clip hulls.
+* `qmap/collide_cmp.py`: **a `clip` brush in a `func_illusionary_visblocker` is as solid to a
+  player as a wall**, and was being ignored along with the rest of that entity. The substitution
+  above masks off `EWT_ALL_VISIBLE_CONTENTS` only, and `PLAYERCLIP` is an *invisible* content, so
+  it survives — and unlike `func_detail_illusionary`, a visblocker is not `continue`d out of hulls
+  1/2 before `qbsp/brush.cc` converts `clip` to `CONTENTS_SOLID` there. Measured: a `clip` cube in
+  a `func_illusionary_visblocker` gives a full clipnode count, identical to the same cube in
+  `worldspawn`, while the same entity holding a plain, `*lava` or `sky1` cube measures at the empty
+  control. The two illusionary entities therefore need opposite rules — `func_detail_illusionary`
+  keeps its liquids and drops its `clip`, `func_illusionary_visblocker` the reverse — which is why
+  the classname sets became one table of per-entity content types. The first-face and any-`hint`
+  rules apply inside a visblocker as everywhere else (measured: `clip` in slot 1 of 6 is solid,
+  `clip` in slots 2–6 behind a wall face is not, and a `hint` face anywhere drops it).
 * `qmap/collide_cmp.py`: **only read contents off the faces qbsp keeps.** `parse_brush()` recorded
   every face's texture before checking whether its three plane points gave a normal, on the stated
   belief that "qbsp reads the contents of every face regardless". It does not:

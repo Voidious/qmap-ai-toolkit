@@ -43,30 +43,6 @@ CLASSNAME_RE = re.compile(r'"classname"\s+"([^"]+)"')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
-# Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc)
-# and keeps in the collision hulls. Measured by compiling a 128-unit cube in a
-# sealed room per flavour and comparing clipnode counts against an empty control, not read off the
-# source: func_detail / func_detail_wall / func_detail_fence all raise the count, so all three are
-# solid to players. func_illusionary_visblocker is the trap -- it passes IsWorldBrushEntity(), so
-# "count everything IsWorldBrushEntity accepts" would wrongly include it, but qbsp replaces its
-# contents with ILLUSIONARY_VISBLOCKER (qbsp/map.cc, string_iequals branch) and it measures at the
-# control's clipnode count. qbsp compares classnames with Q_strcasecmp, so match case-insensitively.
-SOLID_CLASSNAMES = frozenset(('worldspawn', 'func_group', 'func_detail',
-                              'func_detail_wall', 'func_detail_fence'))
-# Merged into the world, solid brushes dropped from every collision hull -- but *only* solid ones.
-# qbsp converts a brush here to illusionary mist in hull 0 behind `if (contents.is_any_solid())`
-# (qbsp/brush.cc), so a '*water'/'*slime'/'*lava' brush is untouched and keeps real liquid
-# contents in hull 0, which is the hull SV_PointContents reads. It adds no clipnodes, so the
-# clipnode probe that produced the table above cannot see it: measured by counting hull-0 leaf
-# contents instead, a '*lava' cube in func_detail_illusionary yields a CONTENTS_LAVA leaf exactly
-# as it does in worldspawn. Its liquids are therefore compared; its solids are ignored.
-LIQUID_ONLY_CLASSNAMES = frozenset(('func_detail_illusionary',))
-# Merged into the world with every visible content stripped and replaced by
-# ILLUSIONARY_VISBLOCKER (Brush_GetContents, qbsp/map.cc), whatever the face textures say -- so
-# unlike the above, a liquid brush here really does vanish. Measured: '*lava' in
-# func_illusionary_visblocker produces no liquid leaf in hull 0 and no clipnodes.
-NO_CONTENTS_CLASSNAMES = frozenset(('func_illusionary_visblocker',))
-
 HINT_TEX = frozenset(('hint', 'hintskip'))
 # Content classes, each compared independently: (class, label, DIFFERS banner, space noun).
 # Independently, because a brush that changes class -- a wall retextured '*lava', a '*water' pool
@@ -111,10 +87,44 @@ def face_class(tex):
 # entirely, so projectiles pass through, and 'sky*' makes a SKY leaf that swallows them -- which is
 # outside this tool's stated scope (see the module docstring).
 SOLID_TYPES = frozenset(('solid', 'clip', 'sky'))
+LIQUID_TYPES = frozenset(LIQUIDS)
+
+# Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc),
+# each mapped to the content types a brush there still contributes to a hull after the
+# entity-level rules in Brush_GetContents() and BrushFromContents() have run. Everything else
+# becomes its own BSP model and is out of scope. Classnames are compared case-insensitively, as
+# qbsp's Q_strcasecmp does.
+#
+# Measured by compiling a 128-unit cube in a sealed room per entity/texture pair and reading the
+# BSP, never inferred: clipnodes for the player hull, hull-0 leaf contents for the liquids. Three
+# of the five rows exist only because a measurement contradicted a reading of the source.
+#   - The whole detail family is solid. func_detail / func_detail_wall / func_detail_fence all
+#     raise the clipnode count, so reaching for func_detail to cut vis cost still blocks players.
+#   - func_detail_illusionary keeps real liquids. qbsp converts a brush there to illusionary mist
+#     behind `if (contents.is_any_solid())` (qbsp/brush.cc), so a '*lava' face is never converted
+#     and keeps CONTENTS_LAVA in hull 0 -- the hull SV_PointContents reads -- while adding zero
+#     clipnodes. A clipnode probe cannot see that at all; it took the leafs lump.
+#   - func_illusionary_visblocker is the trap in both directions. It passes IsWorldBrushEntity(),
+#     so "count everything that predicate accepts" would wrongly make its walls solid: qbsp
+#     replaces its contents with ILLUSIONARY_VISBLOCKER (qbsp/map.cc, string_iequals branch) and
+#     a plain or '*lava' brush there measures at the control. But that replacement masks off
+#     EWT_ALL_VISIBLE_CONTENTS only, and PLAYERCLIP is an *invisible* content, so a 'clip' brush
+#     keeps it -- and unlike func_detail_illusionary, visblocker is not `continue`d out of hulls
+#     1/2 before qbsp/brush.cc converts clip to CONTENTS_SOLID there. Measured: a 'clip' cube in
+#     func_illusionary_visblocker is 180 clipnodes, exactly as solid to a player as a wall.
+WORLD_ENTITY_TYPES = {
+    'worldspawn':                  SOLID_TYPES | LIQUID_TYPES,
+    'func_group':                  SOLID_TYPES | LIQUID_TYPES,
+    'func_detail':                 SOLID_TYPES | LIQUID_TYPES,
+    'func_detail_wall':            SOLID_TYPES | LIQUID_TYPES,
+    'func_detail_fence':           SOLID_TYPES | LIQUID_TYPES,
+    'func_detail_illusionary':     LIQUID_TYPES,
+    'func_illusionary_visblocker': frozenset(('clip',)),
+}
 
 
 def brush_contents(texes):
-    """(comparison class, mixed-contents?) for one brush, from its face textures in file order.
+    """(qbsp content type, mixed-contents?) for one brush, from its face textures in file order.
 
     Three qbsp rules, all measured rather than read off the source:
       - A single 'hint'/'hintskip' face anywhere drops the whole brush from the collision hulls,
@@ -130,13 +140,18 @@ def brush_contents(texes):
         later face's content *type* differs from that base. Measured, that includes 'clip' or
         'sky*' sharing a brush with ordinary solid, even though all three are equally solid to a
         player -- and it fires on a hint brush too, over its non-hint faces. 'skip' and 'trigger'
-        do not warn, because they are plain solid."""
+        do not warn, because they are plain solid.
+
+    The type comes back unfolded -- 'clip' and 'sky' separate from 'solid' -- because the entity
+    the brush sits in can care about the difference even though a player cannot: see
+    WORLD_ENTITY_TYPES on func_illusionary_visblocker. brushes() folds SOLID_TYPES into the one
+    'solid' comparison class afterwards."""
     fcs = [face_class(t) for t in texes]
     typed = [f for f in fcs if f != 'hint']       # the faces Brush_GetContents() actually weighs
     mixed = len(set(typed)) > 1
     if not typed or 'hint' in fcs:
         return 'hint', mixed
-    return ('solid' if typed[0] in SOLID_TYPES else typed[0]), mixed
+    return typed[0], mixed
 
 
 def entities(txt):
@@ -226,9 +241,11 @@ def parse_brush(br):
 def brushes(path):
     """Brushes per content class, with a stderr note accounting for every one ignored.
 
-    A brush entity's classname decides how much of its contents counts: SOLID_CLASSNAMES get the
-    full texture-driven classification, LIQUID_ONLY_CLASSNAMES contribute their liquids but not
-    their solids, and everything else contributes nothing.
+    A brush entity's classname decides which of qbsp's content types still reach a hull from
+    inside it (WORLD_ENTITY_TYPES); its face textures decide which type the brush is
+    (brush_contents). A brush counts only if its entity keeps its type: an ordinary wall in
+    func_detail_illusionary and a '*lava' pool in func_illusionary_visblocker are both ignored,
+    as is every brush in an entity that becomes its own BSP model.
 
     The note is what keeps this blind spot from coming back: a classname or texture flavour these
     rules do not know about is reported by name instead of vanishing from the comparison."""
@@ -238,14 +255,12 @@ def brushes(path):
     for e in entities(open(path).read()):
         m = CLASSNAME_RE.search(e)
         cls = m.group(1) if m else '(no classname)'
-        lc = cls.lower()
         brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
-        if lc not in SOLID_CLASSNAMES and lc not in LIQUID_ONLY_CLASSNAMES:
+        kept = WORLD_ENTITY_TYPES.get(cls.lower())
+        if kept is None:
             if brs:                    # lights, spawns and items have no brushes: nothing ignored
-                tally = no_collision if lc in NO_CONTENTS_CLASSNAMES else submodel
-                tally[cls] += len(brs)
+                submodel[cls] += len(brs)
             continue
-        liquid_only = lc in LIQUID_ONLY_CLASSNAMES
         for br in brs:
             pb = parse_brush(br)
             if pb is None:
@@ -253,17 +268,17 @@ def brushes(path):
                 continue
             *geom, texes, dropped = pb
             no_normal += dropped
-            kind, is_mixed = brush_contents(texes)
+            typ, is_mixed = brush_contents(texes)
             mixed += is_mixed
-            if kind not in out:        # 'hint' or 'origin': in no collision hull at all
+            if typ in ('hint', 'origin'):   # in no collision hull, in no entity
                 # name the face that decided it, not texes[0]: a hint face in slot 3 drops the
                 # brush, and reporting the slot-1 wall texture there would be actively misleading
-                no_contents[next((t.lower() for t in texes if face_class(t) == kind), kind)] += 1
+                no_contents[next((t.lower() for t in texes if face_class(t) == typ), typ)] += 1
                 continue
-            if liquid_only and kind not in LIQUIDS:
-                no_collision[cls] += 1   # solid here is mist: in no hull. Its liquids are not.
+            if typ not in kept:
+                no_collision[cls] += 1   # e.g. solid in func_detail_illusionary: mist, in no hull
                 continue
-            out[kind].append(tuple(geom))
+            out['solid' if typ in SOLID_TYPES else typ].append(tuple(geom))
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
     if no_normal:
@@ -276,7 +291,7 @@ def brushes(path):
               f'"sky*" face among five ordinary solid ones); qbsp takes the first face in file '
               f'order and warns -- check the texture theme slots, this is usually a mistake',
               file=sys.stderr)
-    for tally, why in ((no_collision, 'in entities with no player collision'),
+    for tally, why in ((no_collision, 'whose entity drops them from every collision hull'),
                        (submodel, 'in submodel entities (own collision hull, solidity set at runtime)'),
                        (no_contents, 'whose face textures give them no collision contents')):
         if tally:
