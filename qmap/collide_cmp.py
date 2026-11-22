@@ -222,8 +222,18 @@ def main():
         print(f'ERROR: total ROI work {gv:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g} exceeds '
               f'{MAX_TOTAL_VOXELS / 1e9:g}G limit; {budget_tail}', file=sys.stderr)
         sys.exit(2)
+    warn_msg = None
+    if under_resolved:
+        warn_tail = f'try --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} needs {rec_over}; compare a narrower pair'
+        warn_msg = (f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
+                    f'--step {step:g} may not resolve them ({warn_tail})')
+    warned = False
     if total_voxels > 500_000_000:
-        print(f'checking {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g}...', file=sys.stderr)
+        if warn_msg:
+            print(warn_msg, file=sys.stderr, flush=True)
+            warned = True
+        print(f'checking {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g}...',
+              file=sys.stderr, flush=True)
 
     def vox_slice(bs, lo, nx, ny, zc):
         g = np.zeros((nx, ny), bool)
@@ -274,10 +284,9 @@ def main():
         print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(comps)} ROI(s){caveat}), e.g.', sample_pts)
         sys.exit(1)
     if under_resolved:
-        warn_tail = f'try --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} needs {rec_over}; compare a narrower pair'
+        if not warned:
+            print(warn_msg, file=sys.stderr, flush=True)
         out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
-        print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
-              f'--step {step:g} may not resolve them ({warn_tail})', file=sys.stderr, flush=True)
         print(f'no difference found at step={step:g}, {len(comps)} ROI(s) {shapes} '
               f'(features down to {gap_s} {unit} unresolved; {out_tail})')
     else:
