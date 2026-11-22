@@ -57,39 +57,62 @@ LIQUIDS = ('water', 'slime', 'lava')
 
 
 def face_class(tex):
-    """The content class one face texture asks for, by ericw-tools' Quake rules
-    (face_get_contents, common/bspfile.cc). 'hint' and 'origin' mean no collision at all.
+    """The qbsp content *type* one face texture asks for, by ericw-tools' Quake rules
+    (face_get_contents, common/bspfile.cc). 'hint'/'hintskip' mean EWT_VISCONTENTS_EMPTY -- no
+    contents at all, which is why the first-face rule skips over them -- and 'origin' brushes are
+    discarded before the hulls are built.
 
-    Everything not listed is solid, which includes 'clip', 'skip', 'sky*' and 'trigger' -- all
-    measured solid in the player hull, so none of them may be excluded on the strength of their
-    name -- and includes '!'-prefixed names, which are liquid only in Half-Life, not here."""
+    These are qbsp's types, not this tool's comparison classes: 'clip' and 'sky' are separate
+    types that both measure solid in the player hull, and SOLID_TYPES folds them in. Keeping them
+    distinct here is what lets the mixed-contents warning fire where qbsp's does. 'skip' and
+    'trigger' really are EWT_VISCONTENTS_SOLID -- the names mean nothing to qbsp -- as are
+    '!'-prefixed names, which are liquid only in Half-Life."""
     t = tex.lower()
     if t in HINT_TEX:
         return 'hint'
     if t == 'origin':
         return 'origin'
+    if t == 'clip':
+        return 'clip'
     if t.startswith('*'):
         return ('lava' if t[1:].startswith('lava') else
                 'slime' if t[1:].startswith('slime') else 'water')
+    if t.startswith('sky'):
+        return 'sky'
     return 'solid'
 
 
-def brush_contents(texes):
-    """(content class, mixed-contents?) for one brush, from its face textures in file order.
+# Content types that are indistinguishable in the player collision hull: measured at 180 clipnodes
+# each against a 12-clipnode control. They differ in hull 0 -- a 'clip' brush is absent from it
+# entirely, so projectiles pass through, and 'sky*' makes a SKY leaf that swallows them -- which is
+# outside this tool's stated scope (see the module docstring).
+SOLID_TYPES = frozenset(('solid', 'clip', 'sky'))
 
-    Two independent qbsp rules, both measured by clipnode count rather than read off the source:
+
+def brush_contents(texes):
+    """(comparison class, mixed-contents?) for one brush, from its face textures in file order.
+
+    Three qbsp rules, all measured rather than read off the source:
       - A single 'hint'/'hintskip' face anywhere drops the whole brush from the collision hulls,
-        whatever the other five faces say (MapBrush_IsHint tests *any* face). Reading only
-        face_get_contents() gets this backwards: hint returns *empty* contents there, which the
-        first-face rule below skips over, predicting solid.
-      - Otherwise the FIRST face in file order decides, and qbsp prints 'brush has multiple face
-        contents (X vs Y), the former will be used'. So face order in the .map file decides whether
-        a brush with one '*' face is a pool or a wall: '*lava' on face 1 of 6 measures non-solid,
-        the same brush with '*lava' on face 6 measures solid."""
+        whatever the other five faces say (MapBrush_IsHint tests *any* face), and forces its
+        contents empty in hull 0 as well (qbsp/brush.cc), so it is not a liquid either. Reading
+        only face_get_contents() gets this backwards: hint returns *empty* contents there, which
+        the first-face rule below skips over, predicting solid.
+      - Otherwise the first face *with contents* in file order decides -- Brush_GetContents()
+        `continue`s past empty ones, and only hint/hintskip are empty. So face order in the .map
+        file decides whether a brush with one '*' face is a pool or a wall: '*lava' on face 1 of 6
+        measures non-solid, the same brush with '*lava' on face 6 measures solid.
+      - qbsp prints 'brush has multiple face contents (X vs Y), the former will be used' when any
+        later face's content *type* differs from that base. Measured, that includes 'clip' or
+        'sky*' sharing a brush with ordinary solid, even though all three are equally solid to a
+        player -- and it fires on a hint brush too, over its non-hint faces. 'skip' and 'trigger'
+        do not warn, because they are plain solid."""
     fcs = [face_class(t) for t in texes]
-    if not fcs or 'hint' in fcs:
-        return 'hint', False
-    return fcs[0], len(set(fcs)) > 1
+    typed = [f for f in fcs if f != 'hint']       # the faces Brush_GetContents() actually weighs
+    mixed = len(set(typed)) > 1
+    if not typed or 'hint' in fcs:
+        return 'hint', mixed
+    return ('solid' if typed[0] in SOLID_TYPES else typed[0]), mixed
 
 
 def entities(txt):
@@ -225,9 +248,10 @@ def brushes(path):
               f'decide nothing here either -- but a generator emitting one is a bug',
               file=sys.stderr)
     if mixed:
-        print(f'WARNING: {path}: {mixed} brush(es) mix face contents (e.g. one "*" face among five '
-              f'solid ones); qbsp takes the first face in file order and warns -- check the texture '
-              f'theme slots, this is usually a mistake', file=sys.stderr)
+        print(f'WARNING: {path}: {mixed} brush(es) mix face content types (e.g. one "*", "clip" or '
+              f'"sky*" face among five ordinary solid ones); qbsp takes the first face in file '
+              f'order and warns -- check the texture theme slots, this is usually a mistake',
+              file=sys.stderr)
     for tally, why in ((no_collision, 'in entities with no player collision'),
                        (submodel, 'in submodel entities (own collision hull, solidity set at runtime)'),
                        (no_contents, 'whose face textures give them no collision contents')):

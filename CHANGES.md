@@ -52,6 +52,18 @@
   directions at once: it would call that brush a pool, and drop a solid brush that qbsp keeps.
   A face with no normal is now counted and reported on stderr rather than silently ignored, since
   a generator emitting one is a bug even though it changes nothing downstream.
+* `qmap/collide_cmp.py`: **the mixed-contents warning now fires exactly where qbsp's does.**
+  `face_class()` returns qbsp's content *type* rather than this tool's comparison class, so `clip`
+  and `sky*` are distinct from ordinary solid (a new `SOLID_TYPES` folds all three into the solid
+  space, which is still exactly right for the player hull). They had been lumped together, so a
+  `clip` or `sky*` face landing in a wall or floor theme slot — the same theme-slot mistake the
+  warning exists to catch — passed silently while qbsp warned. Measured against qbsp on the whole
+  cross product: `clip`, `sky*`, `*lava` and `origin` mixed with solid all warn; `skip` and
+  `trigger` do not, because they genuinely *are* `CONTENTS_SOLID`. The warning is also now
+  computed over the faces `Brush_GetContents()` weighs — every face except `hint`/`hintskip`,
+  which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
+  does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
+  contain a mixed-contents brush, so this adds no noise to existing builds.
 * `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
   counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
   `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
