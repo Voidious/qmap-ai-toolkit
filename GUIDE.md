@@ -592,6 +592,12 @@ Measure our new maps the same way once the group has played them.
       hulls, and their real solidity is set at runtime by the progs, not the BSP. `collide_cmp.py`
       lists them in its `note:` line instead of comparing them; a map that depends on one of them
       for collision needs checking by hand.
+    * **`collide_cmp.py` compares the player hull, not the projectile hull.** `clip` and `sky*`
+      are exactly as solid as a wall to a player, so retexturing a wall to either is reported
+      identical — but a rocket passes straight through `clip` and vanishes on `sky*`. If a visual
+      pass touches `clip` or sky brushes, check those by hand. (The other direction is safe: it
+      compares each liquid class on its own, so reshaping a liquid buried inside a solid wall
+      reports a difference nobody can feel — a false alarm rather than a miss.)
 
 ---
 

@@ -73,6 +73,15 @@
   `entdict_t::find()` compares keys with `key == it->first`, so qbsp does not read `"CLASSNAME"`
   as a classname either, and that entity measures as a submodel (24 clipnodes, not 180). Only the
   classname *value* is case-insensitive, which is where qbsp uses `Q_strcasecmp`.
+* `qmap/collide_cmp.py` module docstring and `GUIDE.md` gotcha 31: state the two things the tool
+  does **not** claim, so "exit 0" cannot be read as more than it means. It compares the player
+  collision hull and liquid contents — not projectile collision, where `clip` and `sky*` diverge
+  from a wall even though all three are identically solid to a player (a `clip` brush is absent
+  from hull 0, so rockets pass through; `sky*` makes a SKY leaf that swallows them). Covering that
+  needs a second hull-0 pass and is its own ticket. The other gap is a false positive rather than
+  a false negative: because each liquid class is compared independently, reshaping a liquid brush
+  buried inside an unchanged solid wall reports a difference that solid CSG makes unreachable.
+  That direction is the safe one for a tool whose job is to refuse to certify.
 * `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
   counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
   `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive

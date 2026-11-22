@@ -6,6 +6,19 @@ so a brush flavour the rules below do not know about is named rather than silent
 Water, slime and lava volumes are not solid, so they are excluded from the solid space and each
 compared as its own class: a *water pool retextured *lava occupies the same volume but is a very
 different room, and that shows up as a lava/water difference rather than vanishing.
+
+Scope: the player collision hull (qbsp hulls 1 and 2) plus liquid contents. Two things it does
+not claim, both measured rather than assumed:
+  - Projectile collision. 'clip' and 'sky*' are exactly as solid as a wall to a player, so
+    retexturing a wall to either is reported identical -- correctly for this scope -- but hull 0
+    differs: a 'clip' brush is absent from hull 0 entirely, so rockets and hitscan pass through,
+    and 'sky*' makes a SKY leaf that swallows them. Covering that means a second hull-0 pass, not
+    a wider allowlist.
+  - Solid/liquid overlap. The classes are compared independently, so reshaping a liquid brush
+    buried inside an unchanged solid wall reports a liquid difference even though solid wins the
+    BSP CSG and a player can reach neither. That is a false positive, not a false negative, which
+    is the safe direction for a tool whose job is to refuse to certify.
+
 Usage: python3 collide_cmp.py old.map new.map [--step 8]"""
 from collections import Counter
 import itertools
