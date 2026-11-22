@@ -230,8 +230,8 @@ def detail_pieces():
                         cuts |= band_cuts(n)
                     elif n.get('proxy'):
                         cuts |= {z for z in band_cuts(n['proxy']) if n['f'] < z < n['c']}
-                # Mirrors the face role chain below (lines ~265-290: step-edge, cornice, sill, base,
-                # strp, architrave) so a + 16 is only cut when at least one face will render as architrave.
+                # Mirrors the face role chain below (step-edge, cornice, sill, base, strp, architrave)
+                # so a + 16 is only cut when at least one face will render as architrave.
                 def wants_arch(n):
                     if n['door']:
                         n = n.get('proxy')
@@ -373,19 +373,20 @@ def detail_pieces():
                   sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
             EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
         else:
-            # Main walking wedge shrunk 1u inward on exposed lateral side(s); stays in EXTRA['skin']!
+            # Main walking wedge shrunk VENEER_THICK inward on exposed lateral side(s); stays in EXTRA['skin']!
+            VENEER_THICK = 1
             lat_main = []
             for n_, p_, exp, _ in side_runs:
-                mp = (p_[0] - n_[0] * (1 if exp else 0), p_[1] - n_[1] * (1 if exp else 0), p_[2])
+                mp = (p_[0] - n_[0] * (VENEER_THICK if exp else 0), p_[1] - n_[1] * (VENEER_THICK if exp else 0), p_[2])
                 lat_main.append(sface(n_, mp, side, 0, z1 % 128))
             fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
                   sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_main
             EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
-            # 1-unit outer veneer(s) on each exposed lateral side (exact union == original wedge!)
+            # VENEER_THICK outer veneer(s) on each exposed lateral side (exact union == original wedge!)
             for n_, p_, exp, runs_ in side_runs:
                 if not exp:
                     continue
-                in_p = (p_[0] - n_[0], p_[1] - n_[1], p_[2])
+                in_p = (p_[0] - n_[0] * VENEER_THICK, p_[1] - n_[1] * VENEER_THICK, p_[2])
                 in_n = (-n_[0], -n_[1], 0)
                 for k_lo, k_hi, key_, adj in runs_:
                     r0 = (x0 if axis == 'x' else y0) + k_lo * C
