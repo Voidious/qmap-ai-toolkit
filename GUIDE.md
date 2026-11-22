@@ -541,15 +541,16 @@ Measure our new maps the same way once the group has played them.
     rail) and 2.5 squares on an 80-wide side. Quake WAD2 allows any multiple of 16 (`64×48`,
     `96×64`, `16×64`, `64×16`) — make crate sides exact crate height with a bottom foot rail and a
     horizontal bay period that divides every crate width (16 divides both 64 and 80).
-28. **Wood palette trap (`TIMBER_PAL`)**: Quake palette indices **80–95** are olive-green, not
-    brown. Exclude them from error-diffusion wood palettes (`fsq.py`) or warm timber turns visibly
-    greenish under lamplight.
+28. **Wood palette trap (olive end of the 80–95 ramp)**: in `qmap/quake_palette.lmp`, indices
+    **80–85** are olive/dark-khaki (`(19,19,0)` to `(67,55,0)`), while 90–95 are warm mid-browns.
+    Exclude 80–85 from error-diffusion wood palettes (`fsq.py`) or warm timber picks up a
+    greenish cast under lamplight while keeping 90–95 for rich wood tones.
 29. **Redundant overlapping `carve()` calls overwrite room themes**: carving a connecting stair
     rect with the adjacent room's theme inside an already-carved room carves zero new space while
     overwriting `theme`, bleeding the neighbour's ceiling and overhang textures into the main room.
-30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` writes colored
-    lightmaps to `<map>.lit`; install and package `.lit` with `.bsp` (while keeping team/gameplay
-    read clear without `.lit`).
+30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` automatically
+    writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
+    copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
 
 ---
 
