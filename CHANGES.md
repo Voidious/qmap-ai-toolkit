@@ -80,15 +80,27 @@
   which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
   does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
   contain a mixed-contents brush, so this adds no noise to existing builds.
-* `qmap/collide_cmp.py`: the classname pattern accepts any whitespace between the quoted key and
-  the quoted value (`"classname"\s+"..."`), not just one space. The generators here always emit
-  one, but qbsp's tokenizer does not care, so a hand-edited or TrenchBroom-saved
-  `"classname"\t"func_detail"` used to fall through to `(no classname)` and be tallied as a
-  submodel instead of compared. Measured: a tab or two spaces compiles identically to one space,
-  and a newline there makes qbsp error out. The key is matched **case-sensitively** on purpose —
+* `qmap/collide_cmp.py`: **read the classname by pairing entity tokens the way qbsp does**, rather
+  than searching the entity text for the key. A key and a value are the same kind of token and
+  only position tells them apart, so `"classname"` appearing as somebody else's *value* used to be
+  mistaken for a key and paired with whatever quoted token came next. Measured, that was wrong in
+  both directions: `"target" "classname"` ahead of a real `"classname" "func_detail"` compiles
+  solid (180 clipnodes) but read as `origin`, excluding a solid entity from the comparison
+  entirely; the same decoy ahead of `"func_detail" "1"` and no real classname is a submodel (24
+  clipnodes) but read as `func_detail` and counted as world geometry. Pairing matches
+  `map_entity_t::parse()` (`common/mapfile.cc`), which takes any non-`{` token as a key and the
+  next token on the same line as its value; a face line contains no quotes, so brushes contribute
+  no tokens and the alternation survives them. It keeps the tab and multi-space tolerance of the
+  previous pattern, accepts several epairs on one line and an entity header sharing the line with
+  its opening brace (measured at 180 clipnodes, so a line-anchored pattern would have missed a
+  solid entity), and holds the value to the key's line, which is `PARSE_SAMELINE` — a newline
+  between the two makes qbsp refuse the map outright (`parse_token: line is incomplete`), so there
+  is no such map to be compatible with. The key stays **case-sensitive** on purpose:
   `entdict_t::find()` compares keys with `key == it->first`, so qbsp does not read `"CLASSNAME"`
   as a classname either, and that entity measures as a submodel (24 clipnodes, not 180). Only the
-  classname *value* is case-insensitive, which is where qbsp uses `Q_strcasecmp`.
+  classname *value* is case-insensitive, which is where qbsp uses `Q_strcasecmp`. Checked against
+  every entity of all 22 real maps in the tree (4,449 of them): the new reading agrees with the old
+  one on every single one, so nothing in anyone's build moves.
 * `qmap/collide_cmp.py` module docstring and `GUIDE.md` gotcha 31: state the two things the tool
   does **not** claim, so "exit 0" cannot be read as more than it means. It compares the player
   collision hull and liquid contents — not projectile collision, where `clip` and `sky*` diverge

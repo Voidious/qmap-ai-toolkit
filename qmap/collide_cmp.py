@@ -29,17 +29,7 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-# An entity key/value pair is a quoted key, any run of whitespace, then a quoted value. The
-# generators in this repo always emit exactly one space, but qbsp's tokenizer does not care, so a
-# hand-edited or TrenchBroom-saved '"classname"\t"func_detail"' would otherwise fall through to
-# '(no classname)' and be tallied as a submodel instead of compared. Measured: a tab or two spaces
-# compiles identically to one space (180 clipnodes), and a newline there makes qbsp error out.
-#
-# Deliberately NOT case-insensitive on the key. entdict_t::find() (common/entdata.cc) compares
-# keys with `key == it->first`, exact and case-sensitive, so qbsp does not recognise '"CLASSNAME"'
-# as a classname at all -- measured, that entity becomes a submodel (24 clipnodes, not 180). Only
-# the classname *value* is matched case-insensitively, below, which is where Q_strcasecmp is used.
-CLASSNAME_RE = re.compile(r'"classname"\s+"([^"]+)"')
+QUOTED_RE = re.compile(r'"([^"\n]*)"')
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
@@ -168,6 +158,45 @@ def entities(txt):
     return out
 
 
+def classname(e):
+    """The classname qbsp reads out of one entity block, or None if it has none.
+
+    Pairs the quoted tokens the way qbsp's parser does rather than searching for the key, because
+    a key and a value are the same kind of token and only their position tells them apart.
+    map_entity_t::parse() (common/mapfile.cc) walks tokens: '{' opens a brush, anything else is a
+    key whose value is the next token, read with PARSE_SAMELINE. A face line contains no quotes,
+    so brushes contribute no quoted tokens and the alternation holds across them.
+
+    Three things that follow from pairing instead of searching, all measured against qbsp with a
+    128-unit cube in a sealed room (12 clipnodes empty, 180 merged into the world as func_detail,
+    24 as its own submodel):
+      - An epair whose *value* is the word classname does not make the next epair's key a
+        classname. '"target" "classname"' followed by '"origin" "0 0 0"' and then a real
+        '"classname" "func_detail"' compiles solid (180); searching for the key matched the decoy
+        and read the classname as 'origin', excluding a solid entity entirely. The same decoy
+        followed by '"func_detail" "1"' and no real classname is a submodel (24), where searching
+        read 'func_detail' and counted it as world geometry -- wrong in both directions.
+      - The value must be on the key's line. PARSE_SAMELINE is why: a newline between the two
+        makes qbsp refuse the map outright ("parse_token: line is incomplete"), so a pattern that
+        allowed one there was describing maps that cannot compile.
+      - Tabs, runs of spaces and several epairs on one line are all fine, including the whole
+        entity header on the line with its opening brace -- measured at 180 clipnodes, so an
+        anchored line-start pattern would have missed a solid entity.
+
+    The key is compared case-sensitively: entdict_t::find() (common/entdata.cc) compares with
+    `key == it->first` and returns the first match, so qbsp does not recognise '"CLASSNAME"' as a
+    classname at all and that entity measures as a submodel (24, not 180). Only the classname
+    *value* is matched case-insensitively, by the callers, which is where qbsp uses Q_strcasecmp.
+    """
+    toks = [(m.group(1), m.start(), m.end()) for m in QUOTED_RE.finditer(e)]
+    for (key, _, key_end), (val, val_start, _) in zip(toks[::2], toks[1::2]):
+        if '\n' in e[key_end:val_start]:
+            break          # not a pair qbsp would accept: it errors out on this map
+        if key == 'classname':
+            return val
+    return None
+
+
 def parse_brush(br):
     """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key, face_textures, no_normal_faces) for one
     brush, or None if degenerate. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD,
@@ -253,8 +282,7 @@ def brushes(path):
     skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
     for e in entities(open(path).read()):
-        m = CLASSNAME_RE.search(e)
-        cls = m.group(1) if m else '(no classname)'
+        cls = classname(e) or '(no classname)'
         brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
         kept = WORLD_ENTITY_TYPES.get(cls.lower())
         if kept is None:
