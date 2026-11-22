@@ -228,9 +228,28 @@ def detail_pieces():
                         cuts |= band_cuts(n)
                     elif n.get('proxy'):
                         cuts |= {z for z in band_cuts(n['proxy']) if n['f'] < z < n['c']}
+                def wants_arch(n):
+                    if n['door']:
+                        n = n.get('proxy')
+                        if not n:
+                            return False
+                    mid_ = a + 8
+                    if not (n['f'] < mid_ < n['c']):
+                        return False
+                    if ztop is not None and ztop == n['th'] and b - max(n['f'], a) <= 16:
+                        return False
+                    if mid_ >= n['c'] - 16 and not n['nocap']:
+                        return False
+                    if ztop is not None and b - 16 <= mid_ < b and n['f'] < b and (n['f'] < b - 16 or ztop != n['th']):
+                        return False
+                    if n['foot'] is not None and mid_ < n['foot']:
+                        return False
+                    if n['sz'] <= mid_ < n['sz'] + 16:
+                        return False
+                    return n['c'] > a + 16 or zbot != n['th']
                 if ztop is not None and a < b - 16:
                     cuts.add(b - 16)                      # sill band under a raised opening
-                if zbot is not None and a < b - 16:
+                if zbot is not None and a < b - 16 and (i, j, a) not in NOARCH and any(wants_arch(n) for n in allair):
                     cuts.add(a + 16)                      # architrave lintel at bottom of an overhang
                 cuts = sorted(z for z in cuts if a <= z <= b)
                 for p, q in zip(cuts, cuts[1:]):
@@ -265,7 +284,7 @@ def detail_pieces():
                             role, anc = 'base', n['foot']
                         elif sz <= mid < sz + 16:
                             role, anc = 'strp', sz + 16      # (before band/architrave: never clobber a light strip)
-                        elif zbot is not None and a <= mid < a + 16 and p == a and c > a and (c > a + 16 or zbot != n['th']):
+                        elif zbot is not None and (i, j, a) not in NOARCH and a <= mid < a + 16 and p == a and (c > a + 16 or zbot != n['th']):
                             role, anc = 'trim', a + 16       # architrave lintel framing overhang/doorway bottoms
                         elif n['tz'] is not None and n['tz'] <= mid < n['tz'] + TRIM_H and n['tz'] + TRIM_H < c - 16:
                             role, anc = 'band', n['tz'] + TRIM_H     # string course / seam (TRIM_H tall)

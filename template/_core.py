@@ -168,9 +168,10 @@ STEP_KICK = set()   # themes whose kickplate steps up and down beside stairs (us
 ZONE_FLOOR = {}     # theme -> its main floor z (wall textures are anchored to it); set by carve()
 STRIPE_Z = {}       # theme -> z of its light strip; default floor + 128; 10**6 = no strip
 NOCAP = set()       # (i, j, ceiling z): openings whose low ceiling gets no cornice (arcades)
+NOARCH = set()      # (i, j, bottom z): overhangs whose bottom edge gets no architrave lintel
 
 
-def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, strip=None):
+def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, noarch=False, strip=None):
     """Hollow out a room: air from floor z0 to ceiling z1 over rect r, theme th.
     door=True: a passage (framed, takes the colour of the rooms around it, no bands of its own).
     The first carve of a theme sets its main floor (ZONE_FLOOR) and light-strip height (strip=,
@@ -182,6 +183,8 @@ def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, strip=Non
     for rr in _both(r, sym):
         if nocap:
             NOCAP.update((i, j, z1) for i, j in cells(rr))
+        if noarch:
+            NOARCH.update((i, j, z1) for i, j in cells(rr))
         if door:
             doors.append((rr, z0, z1))
         for i, j in cells(rr):
