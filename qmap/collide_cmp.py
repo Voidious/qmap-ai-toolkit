@@ -3,6 +3,9 @@
 brush qbsp puts in the player collision hull -- both axis-aligned boxes and general convex brushes
 (ramps, prisms, chamfers, veneers) via half-space planes -- and reports on stderr what it ignored,
 so a brush flavour the rules below do not know about is named rather than silently dropped.
+Water, slime and lava volumes are not solid, so they are excluded from the solid space and each
+compared as its own class: a *water pool retextured *lava occupies the same volume but is a very
+different room, and that shows up as a lava/water difference rather than vanishing.
 Usage: python3 collide_cmp.py old.map new.map [--step 8]"""
 from collections import Counter
 import itertools
@@ -29,6 +32,54 @@ SOLID_CLASSNAMES = frozenset(('worldspawn', 'func_group', 'func_detail',
 # Merged into the world and then explicitly absent from every collision hull.
 NO_COLLISION_CLASSNAMES = frozenset(('func_detail_illusionary', 'func_illusionary_visblocker'))
 
+HINT_TEX = frozenset(('hint', 'hintskip'))
+# Content classes, each compared independently: (class, label, DIFFERS banner, space noun).
+# Independently, because a brush that changes class -- a wall retextured '*lava', a '*water' pool
+# retextured '*lava' -- leaves one set and joins another, so both report a difference. Lumping the
+# liquids together as one "non-solid" space would miss a water->lava swap, which fills exactly the
+# same volume. 'solid' is always compared; a liquid class absent from both maps is skipped.
+CLASSES = (('solid', 'collision', 'COLLISION DIFFERS', 'solid space'),
+           ('water', 'water contents', 'WATER CONTENTS DIFFER', 'water volume'),
+           ('slime', 'slime contents', 'SLIME CONTENTS DIFFER', 'slime volume'),
+           ('lava', 'lava contents', 'LAVA CONTENTS DIFFER', 'lava volume'))
+LIQUIDS = ('water', 'slime', 'lava')
+
+
+def face_class(tex):
+    """The content class one face texture asks for, by ericw-tools' Quake rules
+    (face_get_contents, common/bspfile.cc). 'hint' and 'origin' mean no collision at all.
+
+    Everything not listed is solid, which includes 'clip', 'skip', 'sky*' and 'trigger' -- all
+    measured solid in the player hull, so none of them may be excluded on the strength of their
+    name -- and includes '!'-prefixed names, which are liquid only in Half-Life, not here."""
+    t = tex.lower()
+    if t in HINT_TEX:
+        return 'hint'
+    if t == 'origin':
+        return 'origin'
+    if t.startswith('*'):
+        return ('lava' if t[1:].startswith('lava') else
+                'slime' if t[1:].startswith('slime') else 'water')
+    return 'solid'
+
+
+def brush_contents(texes):
+    """(content class, mixed-contents?) for one brush, from its face textures in file order.
+
+    Two independent qbsp rules, both measured by clipnode count rather than read off the source:
+      - A single 'hint'/'hintskip' face anywhere drops the whole brush from the collision hulls,
+        whatever the other five faces say (MapBrush_IsHint tests *any* face). Reading only
+        face_get_contents() gets this backwards: hint returns *empty* contents there, which the
+        first-face rule below skips over, predicting solid.
+      - Otherwise the FIRST face in file order decides, and qbsp prints 'brush has multiple face
+        contents (X vs Y), the former will be used'. So face order in the .map file decides whether
+        a brush with one '*' face is a pool or a wall: '*lava' on face 1 of 6 measures non-solid,
+        the same brush with '*lava' on face 6 measures solid."""
+    fcs = [face_class(t) for t in texes]
+    if not fcs or 'hint' in fcs:
+        return 'hint', False
+    return fcs[0], len(set(fcs)) > 1
+
 
 def entities(txt):
     out, depth, start = [], 0, 0
@@ -45,14 +96,20 @@ def entities(txt):
 
 
 def parse_brush(br):
-    """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key) for one brush, or None if degenerate.
-    Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD, so inside is n.x <= d."""
-    planes = []
+    """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key, face_textures) for one brush, or None
+    if degenerate. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD, so inside is
+    n.x <= d. Face textures come back in file order, including any face whose plane was degenerate,
+    because qbsp reads the contents of every face regardless."""
+    planes, texes = [], []
     for line in br.split('\n'):
-        pts = PT_RE.findall(line)
+        pts = list(PT_RE.finditer(line))
         if len(pts) < 3:
             continue
-        p1, p2, p3 = (np.array([float(v) for v in pts[k]]) for k in range(3))
+        # the texture name is the first token after the third ( x y z ) plane point, in both the
+        # standard and the Valve 220 face format (whose [ s ] [ t ] axes follow the name)
+        rest = line[pts[2].end():].split()
+        texes.append(rest[0] if rest else '')
+        p1, p2, p3 = (np.array([float(v) for v in pts[k].groups()]) for k in range(3))
         n = np.cross(p3 - p1, p2 - p1)
         ln = np.linalg.norm(n)
         if ln < 1e-9:
@@ -80,7 +137,7 @@ def parse_brush(br):
         if all(v is not None for v in lo + hi):
             lo_a, hi_a = np.array(lo), np.array(hi)
             if np.all(hi_a > lo_a + 1e-6):
-                return (lo_a, hi_a, (N, D), True, gkey)
+                return (lo_a, hi_a, (N, D), True, gkey, texes)
             return None
     # General convex brush: exact bounding box from feasible plane-triple intersections
     verts = []
@@ -98,16 +155,17 @@ def parse_brush(br):
     lo_a, hi_a = V.min(0), V.max(0)
     if np.any(hi_a <= lo_a + 1e-6):
         return None
-    return (lo_a, hi_a, (N, D), False, gkey)
+    return (lo_a, hi_a, (N, D), False, gkey, texes)
 
 
 def brushes(path):
-    """Brushes in the player collision hull, with a stderr note accounting for every one ignored.
+    """Brushes per content class, with a stderr note accounting for every one ignored.
 
-    The note is what keeps this blind spot from coming back: a classname these rules do not know
-    about is reported by name instead of vanishing from the comparison."""
-    out, skipped = [], 0
-    no_collision, submodel = Counter(), Counter()
+    The note is what keeps this blind spot from coming back: a classname or texture flavour these
+    rules do not know about is reported by name instead of vanishing from the comparison."""
+    out = {k: [] for k, _, _, _ in CLASSES}
+    skipped, mixed = 0, 0
+    no_collision, submodel, no_contents = Counter(), Counter(), Counter()
     for e in entities(open(path).read()):
         m = re.search(r'"classname" "([^"]+)"', e)
         cls = m.group(1) if m else '(no classname)'
@@ -121,12 +179,23 @@ def brushes(path):
             pb = parse_brush(br)
             if pb is None:
                 skipped += 1
-            else:
-                out.append(pb)
+                continue
+            *geom, texes = pb
+            kind, is_mixed = brush_contents(texes)
+            mixed += is_mixed
+            if kind not in out:        # 'hint' or 'origin': in no collision hull at all
+                no_contents[(texes or ['(no faces)'])[0].lower()] += 1
+                continue
+            out[kind].append(tuple(geom))
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
+    if mixed:
+        print(f'WARNING: {path}: {mixed} brush(es) mix face contents (e.g. one "*" face among five '
+              f'solid ones); qbsp takes the first face in file order and warns -- check the texture '
+              f'theme slots, this is usually a mistake', file=sys.stderr)
     for tally, why in ((no_collision, 'entities with no player collision'),
-                       (submodel, 'submodel entities (own collision hull, solidity set at runtime)')):
+                       (submodel, 'submodel entities (own collision hull, solidity set at runtime)'),
+                       (no_contents, 'brushes whose texture gives them no collision contents')):
         if tally:
             named = ', '.join(f'{c} x{n}' for c, n in sorted(tally.items(), key=lambda kv: (-kv[1], kv[0])))
             print(f'note: {path}: ignored {sum(tally.values())} brush(es) in {why}: {named}',
@@ -173,33 +242,9 @@ def roi_grid(comps, s):
     return specs, total, max_sl
 
 
-def main():
-    args = sys.argv[1:]
-    step = 8.0
-    if '--step' in args:
-        idx = args.index('--step')
-        if idx + 1 >= len(args):
-            print('usage: collide_cmp.py old.map new.map [--step N]', file=sys.stderr)
-            sys.exit(2)
-        try:
-            step = float(args[idx + 1])
-        except ValueError:
-            print(f'invalid --step value: {args[idx + 1]}', file=sys.stderr)
-            sys.exit(2)
-        if not math.isfinite(step) or step <= 0:
-            print(f'--step must be positive, got {step}', file=sys.stderr)
-            sys.exit(2)
-        args = args[:idx] + args[idx + 2:]
-    if len(args) != 2:
-        print('usage: collide_cmp.py old.map new.map [--step N]', file=sys.stderr)
-        sys.exit(2)
-
-    pA, pB = args[0], args[1]
-    A, B = brushes(pA), brushes(pB)
-    na = sum(not b[3] for b in A)
-    nb = sum(not b[3] for b in B)
-    print(f'{pA}: {len(A)} solid brushes ({na} non-axis), {pB}: {len(B)} solid brushes ({nb} non-axis)', flush=True)
-
+def compare(A, B, step, kind, label, differs, space):
+    """Voxel-compare one content class's space between the two maps. True if they differ.
+    Exits 2 if --step cannot be resolved within the memory/time budget."""
     # Exact prefilter: any symmetric difference must lie inside the bbox of brushes whose geometry
     # is not present in both maps. Cluster differing brushes into overlapping AABB components so
     # distant changed corners don't inflate one giant ROI box across empty space between them.
@@ -207,8 +252,8 @@ def main():
     common = cA & cB
     remA, remB = cA - common, cB - common
     if not remA and not remB:
-        print(f'collision identical (all {len(A)} solid brush geometries identical)')
-        return
+        print(f'{label} identical (all {len(A)} {kind} brush geometries identical)')
+        return False
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
     comps = merge_boxes([(b[0], b[1]) for b in diff_brushes])
@@ -258,21 +303,21 @@ def main():
     for lo, hi, nx, ny, nz in roi_specs:
         if nx * ny > MAX_SLICE:
             mb = (nx * ny) / (1024 ** 2)
-            print(f'ERROR: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) exceeds limit; {budget_tail}',
-                  file=sys.stderr)
+            print(f'ERROR: {label}: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) '
+                  f'exceeds limit; {budget_tail}', file=sys.stderr)
             sys.exit(2)
     if total_voxels > MAX_TOTAL_VOXELS:
         gv = total_voxels / 1e9
-        print(f'ERROR: total ROI work {gv:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g} exceeds '
-              f'{MAX_TOTAL_VOXELS / 1e9:g}G limit; {budget_tail}', file=sys.stderr)
+        print(f'ERROR: {label}: total ROI work {gv:.2f}G voxels across {len(roi_specs)} ROI(s) at '
+              f'step={step:g} exceeds {MAX_TOTAL_VOXELS / 1e9:g}G limit; {budget_tail}', file=sys.stderr)
         sys.exit(2)
     if under_resolved:
         warn_tail = f'try --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} needs {rec_over}; compare a narrower pair'
-        print(f'WARNING: differing geometry has parallel planes as close as {gap_s} {unit}; '
+        print(f'WARNING: {label}: differing geometry has parallel planes as close as {gap_s} {unit}; '
               f'--step {step:g} may not resolve them ({warn_tail})', file=sys.stderr, flush=True)
     if total_voxels > 500_000_000:
-        print(f'checking {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at step={step:g}...',
-              file=sys.stderr, flush=True)
+        print(f'checking {label}: {total_voxels / 1e9:.2f}G voxels across {len(roi_specs)} ROI(s) at '
+              f'step={step:g}...', file=sys.stderr, flush=True)
 
     def vox_slice(bs, lo, nx, ny, zc):
         g = np.zeros((nx, ny), bool)
@@ -320,14 +365,56 @@ def main():
 
     if total_diff:
         caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
-        print(f'COLLISION DIFFERS: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g.', sample_pts)
-        sys.exit(1)
+        print(f'{differs}: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g.', sample_pts)
+        return True
     if under_resolved:
         out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
-        print(f'no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
+        print(f'{label}: no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
               f'(features down to {gap_s} {unit} unresolved; {out_tail})')
-    else:
-        print(f'collision identical (solid space matches voxel for voxel, step={step:g}, {len(roi_specs)} ROI(s) {shapes})')
+        return False
+    print(f'{label} identical ({space} matches voxel for voxel, step={step:g}, '
+          f'{len(roi_specs)} ROI(s) {shapes})')
+    return False
+
+
+def main():
+    args = sys.argv[1:]
+    step = 8.0
+    if '--step' in args:
+        idx = args.index('--step')
+        if idx + 1 >= len(args):
+            print('usage: collide_cmp.py old.map new.map [--step N]', file=sys.stderr)
+            sys.exit(2)
+        try:
+            step = float(args[idx + 1])
+        except ValueError:
+            print(f'invalid --step value: {args[idx + 1]}', file=sys.stderr)
+            sys.exit(2)
+        if not math.isfinite(step) or step <= 0:
+            print(f'--step must be positive, got {step}', file=sys.stderr)
+            sys.exit(2)
+        args = args[:idx] + args[idx + 2:]
+    if len(args) != 2:
+        print('usage: collide_cmp.py old.map new.map [--step N]', file=sys.stderr)
+        sys.exit(2)
+
+    pA, pB = args[0], args[1]
+    A, B = brushes(pA), brushes(pB)
+    na = sum(not b[3] for b in A['solid'])
+    nb = sum(not b[3] for b in B['solid'])
+    print(f'{pA}: {len(A["solid"])} solid brushes ({na} non-axis), '
+          f'{pB}: {len(B["solid"])} solid brushes ({nb} non-axis)', flush=True)
+    liq = [f'{k} {len(A[k])} -> {len(B[k])}' for k in LIQUIDS if A[k] or B[k]]
+    if liq:
+        print('liquid brushes (not solid, each class compared separately): ' + ', '.join(liq), flush=True)
+
+    differed = False
+    for kind, label, banner, space in CLASSES:
+        if kind != 'solid' and not A[kind] and not B[kind]:
+            continue
+        differed |= compare(A[kind], B[kind], step, kind, label, banner, space)
+    if differed:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

@@ -23,6 +23,31 @@
   Submodel brush entities (`func_wall`, `func_illusionary`, `trigger_*`) remain out of scope:
   each becomes its own BSP model with its own hull, so comparing them means per-model comparison
   rather than an allowlist entry.
+* `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
+  counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
+  `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
+  (retexturing a solid wall `*lava` turned a wall into a lava volume and still reported "collision
+  identical") and a false negative (a `liquid()` pool counted as solid both masked real solid
+  changes inside it and reported `COLLISION DIFFERS` for a pool added to open air). The rules,
+  measured the same way as above rather than read off the source:
+  - `*water` / `*slime` / `*lava` (any `*` name) are liquid, not solid. `!`-prefixed names are
+    Half-Life only and are solid here. `clip`, `skip`, `sky*` and `trigger` are all solid — none
+    of them may be excluded on the strength of the name. `hint` / `hintskip` and `origin` are not.
+  - **Mixed-face brushes follow qbsp exactly: the first face in file order decides.** One `*lava`
+    face in slot 1 makes a whole wall a pool; the same face in slot 6 leaves it solid. Such
+    brushes also get a loud stderr warning, since a `*` texture in a wall or floor theme slot is
+    almost always a mistake.
+  - The one rule that source-reading gets backwards: **a single `hint` face anywhere** drops the
+    whole brush from the collision hulls, whatever the other faces say. `face_get_contents()`
+    returns *empty* for `hint`, which the first-face rule skips over, predicting solid;
+    `MapBrush_IsHint()` tests *any* face and wins. Only a compile shows this.
+
+  Water, slime and lava are then compared as three separate content classes alongside the solid
+  space, each with its own ROI set, reporting e.g. `WATER CONTENTS DIFFER` / `LAVA CONTENTS
+  DIFFER` and exiting 1. Separate classes rather than one "non-solid" space on purpose: a `*water`
+  pool retextured `*lava` fills exactly the same volume, so a combined pass would report nothing
+  while the room became lethal. The solid pass's wording and exit codes are unchanged, so
+  "collision identical" still means what GUIDE section 5 says it means.
 
 # v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
 
