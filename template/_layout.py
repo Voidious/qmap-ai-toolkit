@@ -55,7 +55,9 @@ room_lamps((-384, 704, 384, 1088), 224, step=256, value=420, sym=False)
 panel((-64, 1080, 64, 1088), 64, 192, 'bk_panel', tex_px=256, sym=False)  # placeholder picture, 128 wide, thin in y
 fill((-384, 960, 384, 1088), BOT, 0, None, sym=False)                  # v3: a ledge along the north wall (0)
 strip_ramp((-384, 960, 384, 1088), 128, 128, 128, sym=False)          # the ledge's strip 128 above it
-ramp((-384, 736, -256, 960), 'y', -96, 0, sym=False)                   # v3: ramp up to it along the west wall (foot clear)
+ramp((-384, 768, -256, 960), 'y', -96, 0, sym=False)                   # v3: ramp up to it along the west wall (foot clear)
+carve((-512, 704, -384, 960), -96, 160, 'alcove', strip=-48, sym=False) # v3.5: alcove beside ramp (exercises veneer + architrave)
+room_lamps((-512, 704, -384, 960), 160, step=256, value=340, sym=False)
 _oct = [(192 + 40 * math.cos(math.radians(22.5 + 45 * k)), 832 + 40 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
 prism([(round(x), round(y)) for x, y in _oct], -96, 224, 'pillar', sym=False)   # v3: octagonal pillar
 label(0, 900, 'LOW -96', -96), label(0, 1024, 'ledge 0', 0)
