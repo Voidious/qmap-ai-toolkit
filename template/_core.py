@@ -168,9 +168,10 @@ STEP_KICK = set()   # themes whose kickplate steps up and down beside stairs (us
 ZONE_FLOOR = {}     # theme -> its main floor z (wall textures are anchored to it); set by carve()
 STRIPE_Z = {}       # theme -> z of its light strip; default floor + 128; 10**6 = no strip
 NOCAP = set()       # (i, j, ceiling z): openings whose low ceiling gets no cornice (arcades)
+NOARCH = set()      # (i, j, bottom z): overhangs whose bottom edge gets no architrave lintel
 
 
-def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, strip=None):
+def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, noarch=False, strip=None):
     """Hollow out a room: air from floor z0 to ceiling z1 over rect r, theme th.
     door=True: a passage (framed, takes the colour of the rooms around it, no bands of its own).
     The first carve of a theme sets its main floor (ZONE_FLOOR) and light-strip height (strip=,
@@ -182,6 +183,8 @@ def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, strip=Non
     for rr in _both(r, sym):
         if nocap:
             NOCAP.update((i, j, z1) for i, j in cells(rr))
+        if noarch:
+            NOARCH.update((i, j, z1) for i, j in cells(rr))
         if door:
             doors.append((rr, z0, z1))
         for i, j in cells(rr):
@@ -267,6 +270,7 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
     x0, y0, x1, y1 = r
     nx = max(1, round((x1 - x0) / step))
     ny = max(1, round((y1 - y0) / step))
+    placed = 0
     for a in range(nx):
         for b in range(ny):
             x = x0 + (x1 - x0) * (2 * a + 1) // (2 * nx)
@@ -274,6 +278,9 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
             p = _lamp_spot(r, x // 16 * 16, y // 16 * 16, ceil)
             if p:
                 lamp(p[0], p[1], ceil, value, sym)
+                placed += 1
+    if not placed:
+        print(f'note: room_lamps({r}, ceil={ceil}) placed 0 lamps (no non-sky ceiling spot found)', file=sys.stderr)
 
 
 def _lamp_spot(r, x, y, ceil, reach=160):
@@ -286,6 +293,10 @@ def _lamp_spot(r, x, y, ceil, reach=160):
             for qy in (py - 16, py):
                 i, j = (qx - XMIN) // C, (qy - YMIN) // C
                 if any(a < ceil and b > ceil - 48 for a, b, m in cols[i][j]):
+                    return False
+                # Require an actual non-sky solid ceiling right at z == ceil (rejects both flush
+                # and recessed sky oculi / taller openings).
+                if not any(a == ceil and m != 'sky' for a, b, m in cols[i][j]):
                     return False
         return True
     for d in range(0, reach + 1, 16):

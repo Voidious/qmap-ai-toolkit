@@ -84,7 +84,8 @@ def band_role(n, mid):
     tz = n['tz']
     if tz is not None and tz <= mid < tz + TRIM_H and tz + TRIM_H < c - 16:
         return 'band', tz + TRIM_H
-    anc = STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32
+    nsz = STRIPE_Z.get(th, sz)
+    anc = nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32
     return ('wall_lo' if mid < SPLIT_Z.get(th, -10 ** 6) else 'wall'), anc
 
 
@@ -131,7 +132,12 @@ def detail_pieces():
         th = room_theme(p, q, f, zmap)
         cm = next((m2 for (a2, b2), m2 in mats.items() if a2 == c), None)
         fm = next((m2 for (a2, b2), m2 in mats.items() if b2 == f), None)
-        if fm == 'ramp':
+        cx_, cy_ = XMIN + p * C + C / 2, YMIN + q * C + C / 2
+        # Catch the first 16u cell (d=0) of every ramp, where ramp() writes no 'ramp' stand-in
+        # because h == z0; require exact f == rz0 so a stacked mezzanine above rz0 never matches.
+        in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and f == rz0
+                      for r, _, _, rz0, _, _ in RAMPS)
+        if fm == 'ramp' or in_ramp:
             return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
                         door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
         if fm == 'bridge':
@@ -224,8 +230,31 @@ def detail_pieces():
                         cuts |= band_cuts(n)
                     elif n.get('proxy'):
                         cuts |= {z for z in band_cuts(n['proxy']) if n['f'] < z < n['c']}
+                # Mirrors the face role chain below (step-edge, cornice, sill, base, strp, architrave)
+                # so a + 16 is only cut when at least one face will render as architrave.
+                def wants_arch(n):
+                    if n['door']:
+                        n = n.get('proxy')
+                        if not n:
+                            return False
+                    mid_ = a + 8
+                    if not (n['f'] < mid_ < n['c']):
+                        return False
+                    if ztop is not None and ztop == n['th'] and b - max(n['f'], a) <= 16:
+                        return False
+                    if mid_ >= n['c'] - 16 and not n['nocap']:
+                        return False
+                    if ztop is not None and b - 16 <= mid_ < b and n['f'] < b and (n['f'] < b - 16 or ztop != n['th']):
+                        return False
+                    if n['foot'] is not None and mid_ < n['foot']:
+                        return False
+                    if n['sz'] <= mid_ < n['sz'] + 16:
+                        return False
+                    return n['c'] > a + 16 or zbot != n['th']
                 if ztop is not None and a < b - 16:
                     cuts.add(b - 16)                      # sill band under a raised opening
+                if zbot is not None and a < b - 16 and (i, j, a) not in NOARCH and any(wants_arch(n) for n in allair):
+                    cuts.add(a + 16)                      # architrave lintel at bottom of an overhang
                 cuts = sorted(z for z in cuts if a <= z <= b)
                 for p, q in zip(cuts, cuts[1:]):
                     mid = (p + q) / 2
@@ -258,7 +287,9 @@ def detail_pieces():
                         elif n['foot'] is not None and mid < n['foot']:
                             role, anc = 'base', n['foot']
                         elif sz <= mid < sz + 16:
-                            role, anc = 'strp', sz + 16      # (before the band: a strip climbing a stair crosses the seam)
+                            role, anc = 'strp', sz + 16      # (before band/architrave: never clobber a light strip)
+                        elif zbot is not None and (i, j, a) not in NOARCH and a <= mid < a + 16 and p == a and (c > a + 16 or zbot != n['th']):
+                            role, anc = 'trim', a + 16       # architrave lintel framing overhang/doorway bottoms
                         elif n['tz'] is not None and n['tz'] <= mid < n['tz'] + TRIM_H and n['tz'] + TRIM_H < c - 16:
                             role, anc = 'band', n['tz'] + TRIM_H     # string course / seam (TRIM_H tall)
                         elif (gz is not None and f + 32 <= gz and gz + 96 <= c - 16 and gz <= mid < gz + 96
@@ -267,9 +298,10 @@ def detail_pieces():
                             role, anc = 'glass', gz + 96   # only on straight runs wide enough for a window
                         else:
                             # stone sits on the band below it: the kickplate top, or the strip top above the strip
-                            # stone is anchored to the room's NOMINAL strip, not a strip that climbs a stair:
-                            # anchoring to the climbing strip shifted the courses 16 per step (b3 base stairs)
-                            role, anc = 'wall', (STRIPE_Z.get(th, sz) + 16 if mid > sz + 16 else ZONE_FLOOR.get(th, 0) + 32)
+                            # anchor to the room's NOMINAL strip (and compare mid against it too) so walls beside
+                            # stairs or above/beside ramps (where sz=10**6) stay aligned with the rest of the room
+                            nsz = STRIPE_Z.get(th, sz)
+                            role, anc = 'wall', (nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32)
                             if mid < SPLIT_Z.get(th, -10 ** 6):
                                 role = 'wall_lo'           # stratified rooms: a different stone below the split
                         per = WALL_PERIOD.get(zone(th), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
@@ -307,9 +339,91 @@ def detail_pieces():
         hi_p = ((x1 if sg > 0 else x0), y0, z0) if axis == 'x' else (x0, (y1 if sg > 0 else y0), z0)
         lat = [((0, -1, 0), (x0, y0, z0)), ((0, 1, 0), (x0, y1, z0))] if axis == 'x' else \
               [((-1, 0, 0), (x0, y0, z0)), ((1, 0, 0), (x1, y0, z0))]
-        fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
-              sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
-        EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+        # Probe adjacent air outside each lateral face: if a side is exposed to a differently-themed
+        # room, slice off a 1-unit worldspawn veneer partitioned by contiguous adjacent rooms and their
+        # wall bands (base/wall_lo/strp/wall/trim). The main ramp stays in EXTRA['skin'] so the walking
+        # surface preserves FLOOR_MINLIGHT while exposed lateral walls match the neighbouring room's
+        # bands and worldspawn lightmap with zero collision change.
+        n_cells = int(run // C)
+        side_runs = []
+        any_exposed = False
+        for n_, p_ in lat:
+            ox_, oy_ = n_[0] * 8, n_[1] * 8
+            cell_adj = []
+            for k_ in range(n_cells):
+                sx = (x0 + C / 2 + k_ * C) if axis == 'x' else (x0 if n_[0] < 0 else x1)
+                sy = (y0 if n_[1] < 0 else y1) if axis == 'x' else (y0 + C / 2 + k_ * C)
+                ai_ = air_info(sx + ox_, sy + oy_, z0, z1)
+                if ai_ and ai_['th'] != th and not ai_['door']:
+                    key_ = (ai_['th'], ai_['f'], ai_['c'], ai_['sz'], ai_['foot'], ai_['tz'], ai_['nocap'])
+                    cell_adj.append((key_, ai_))
+                else:
+                    cell_adj.append((None, None))
+            runs_ = []
+            for k_, (key_, ai_) in enumerate(cell_adj):
+                if runs_ and runs_[-1][2] == key_:
+                    runs_[-1][1] = k_ + 1
+                else:
+                    runs_.append([k_, k_ + 1, key_, ai_])
+            exp = any(r_[2] is not None for r_ in runs_)
+            any_exposed |= exp
+            side_runs.append((n_, p_, exp, runs_))
+        if not any_exposed:
+            fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
+                  sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
+            EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+        else:
+            # Main walking wedge shrunk VENEER_THICK inward on exposed lateral side(s); stays in EXTRA['skin']!
+            VENEER_THICK = 1
+            lat_main = []
+            for n_, p_, exp, _ in side_runs:
+                mp = (p_[0] - n_[0] * (VENEER_THICK if exp else 0), p_[1] - n_[1] * (VENEER_THICK if exp else 0), p_[2])
+                lat_main.append(sface(n_, mp, side, 0, z1 % 128))
+            fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
+                  sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_main
+            EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
+            # VENEER_THICK outer veneer(s) on each exposed lateral side (exact union == original wedge!)
+            for n_, p_, exp, runs_ in side_runs:
+                if not exp:
+                    continue
+                in_p = (p_[0] - n_[0] * VENEER_THICK, p_[1] - n_[1] * VENEER_THICK, p_[2])
+                in_n = (-n_[0], -n_[1], 0)
+                for k_lo, k_hi, key_, adj in runs_:
+                    r0 = (x0 if axis == 'x' else y0) + k_lo * C
+                    r1 = (x0 if axis == 'x' else y0) + k_hi * C
+                    zs0 = z0 + rise * ((r0 - (x0 if axis == 'x' else y0)) / run if sg > 0 else ((x1 if axis == 'x' else y1) - r0) / run)
+                    zs1 = z0 + rise * ((r1 - (x0 if axis == 'x' else y0)) / run if sg > 0 else ((x1 if axis == 'x' else y1) - r1) / run)
+                    z_lo_r, z_hi_r = min(zs0, zs1), max(zs0, zs1)
+                    if z_hi_r <= z0 + 0.01:
+                        continue
+                    vcuts = [z0, z_hi_r] if adj is None else sorted({z0, z_hi_r} | {z for z in band_cuts(adj) if z0 < z < z_hi_r})
+                    for za, zb in zip(vcuts, vcuts[1:]):
+                        if zb <= za + 0.01:
+                            continue
+                        mid = (za + zb) / 2
+                        if adj is None:
+                            l_tex, l_yo = side, z1 % 128
+                        elif adj['f'] <= mid < adj['c']:
+                            role, anc = band_role(adj, mid)
+                            per = WALL_PERIOD.get(zone(adj['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
+                            l_tex, l_yo = textures('wall', adj['th'], role)[2], anc % per
+                        else:
+                            l_tex = textures('wall', adj['th'], 'wall')[2]
+                            l_yo = (ZONE_FLOOR.get(adj['th'], 0) + 32) % WALL_PERIOD.get(zone(adj['th']), 128)
+                        vfs = [sface((0, 0, -1), (p_[0], p_[1], za), flr, 0, 0),
+                               sface(n_, p_, l_tex, 0, l_yo),
+                               sface(in_n, in_p, side, 0, z1 % 128)]
+                        if zb > z_lo_r - 0.01:
+                            vfs.append(sface(top_n, lo, flr, 0, 0))
+                        if zb < z_hi_r - 0.01:
+                            vfs.append(sface((0, 0, 1), (p_[0], p_[1], zb), flr, 0, 0))
+                        p_r0 = (r0, p_[1], za) if axis == 'x' else (p_[0], r0, za)
+                        p_r1 = (r1, p_[1], za) if axis == 'x' else (p_[0], r1, za)
+                        if zs0 > za + 0.01:
+                            vfs.append(sface((-h[0], -h[1], 0), p_r0, side, 0, z1 % 128))
+                        if zs1 > za + 0.01:
+                            vfs.append(sface((h[0], h[1], 0), p_r1, side, 0, z1 % 128))
+                        EXTRA['skin' if adj is None else 'world'].append('{\n' + '\n'.join(vfs) + '\n}')
         if not bands:
             continue
         # the rooms at the foot and at the head: the sloped strip runs from one's strip to the other's
@@ -337,7 +451,7 @@ def detail_pieces():
                        for sx, sy in samples for zz in (z0 + 8, top_band - 8)):
                 continue
             inward = (-wn[0], -wn[1], 0)
-            fr = (wp[0] + inward[0] * 2, wp[1] + inward[1] * 2, 0)
+            fr = (wp[0] + inward[0] * 1, wp[1] + inward[1] * 1, 0)
             ends = [((-h[0], -h[1], 0), (x0, y0, 0)), ((h[0], h[1], 0), (x1, y1, 0))]
             for alo, ahi, hgt, role in bands_:
                 R = ahi - alo
@@ -363,7 +477,20 @@ def detail_pieces():
             (ax, ay), (bx, by) = P[k], P[(k + 1) % k_]
             L = math.hypot(bx - ax, by - ay)
             n_ = ((by - ay) / L, -(bx - ax) / L, 0)
-            ni = air_info((ax + bx) / 2 + n_[0] * 10, (ay + by) / 2 + n_[1] * 10, z0, z1)
+            mx_, my_ = (ax + bx) / 2, (ay + by) / 2
+            # March outward in 8-unit steps past the prism's own 'diag' stand-in cells, stopping
+            # immediately if we hit real solid so a chamfer never reads through a thin wall.
+            ni = None
+            for _d in (8, 16, 24, 32, 40):
+                px_, py_ = mx_ + n_[0] * _d, my_ + n_[1] * _d
+                pi_, pj_ = int((px_ - XMIN) // C), int((py_ - YMIN) // C)
+                if not (0 <= pi_ < NX and 0 <= pj_ < NY):
+                    break
+                ni = air_info(px_, py_, z0, z1)
+                if ni is not None:
+                    break
+                if not any(m2 == 'diag' and a2 < z1 and b2 > z0 for a2, b2, m2 in cols[pi_][pj_]):
+                    break
             faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni))
         cuts = {z0, z1}
         for _, _, _, ni in faces_:
@@ -485,8 +612,8 @@ def brush_text(x1, y1, z1, x2, y2, z2, m):
         sx_y, sx_x = -y1, -x1
     elif kind not in ('pillar', 'pbase', 'pcap'):
         sx_y = sx_x = 0
-    for d in FLOOR_DECALS + CEIL_DECALS:       # inlays textured from their own corner
-        if d[5] in (top, bot):
+    for d in FLOOR_DECALS + CEIL_DECALS:       # inlays textured from their own rect's corner
+        if d[5] in (top, bot) and d[0] <= x1 < d[2] and d[1] <= y1 < d[3] and d[4] in (z1, z2):
             fx, fy = -d[0], d[3]
 
 

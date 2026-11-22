@@ -1,4 +1,4 @@
-# qmap-toolkit v3.4 - procedural Quake 1 / QuakeWorld map building with an AI model
+# qmap-toolkit v3.5 - procedural Quake 1 / QuakeWorld map building with an AI model
 
 Read GUIDE.md first - especially section 3 (design: fresh takes on classics, and *Design for
 height*) before designing, and section 9 (gotchas) before texturing.

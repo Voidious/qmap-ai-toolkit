@@ -518,6 +518,39 @@ Measure our new maps the same way once the group has played them.
     can't step down. The player-hull check (section 5) catches both; read it every build.
     Stairs that run down under a ceiling need ceiling ≥ (second step's top + 56) at the edge, or
     the tunnel's ceiling raised over the bottom steps.
+24. **`trigger_teleport` brushes are invisible in-client** (`ca_saddle`): a bare `teleporter()`
+    leaves players walking into unmarked wall patches. Pair each teleporter with a non-solid
+    framed archway (`func_detail_illusionary`, locally anchored per face — not world-aligned
+    `0 0`), an animated `*` warp curtain (`func_illusionary`), a threshold floor inlay pulled
+    cleanly in front of the frame depth (not buried under the threshold), a beacon light, and an
+    exit landing pad. Exclude teleporter gates in `torches()` so wall lamps never clip behind the
+    lintel.
+25. **ezQuake ignores `texinfo` translation offsets on `*` turbulent liquids** (`ca_saddle`):
+    `render.py` honors texture offsets on `*` surfaces, so a teleporter swirl can look centered in
+    offline renders while rendering shifted in ezQuake (`EmitWaterPolys` computes UVs from world
+    coordinates). Align 64-wide teleporter portals so `(cx - 32) % 64 == 0` and verify in-client.
+26. **Multi-tier wings with ramps need per-level sub-themes** (`ca_saddle`): the first `carve()`
+    of a theme pins `STRIPE_Z` to that floor, so a climbing flank sharing one theme drops its
+    light strip into upper floors and breaks sloped ramp strips. Split tiers into sub-themes
+    (`wing_lo/mid/hi`) so every tier's strip sits at `floor + 128` and sloped ramp strips connect
+    corner-to-corner. Avoid baking continuous horizontal straps into wall textures on multi-tier
+    or ramped hallways, and cover horizontal-to-slope light-strip bends with non-solid junction
+    collars (`func_detail_illusionary`) so the 1–2u overlay parallax step never shows as a notch.
+27. **Size crate/object textures to exact height and width GCD** (`ca_saddle`): a 48-tall crate
+    using a 32×32 side tile shows 1.5 squares vertically (merging into the floor with no base
+    rail) and 2.5 squares on an 80-wide side. Quake WAD2 allows any multiple of 16 (`64×48`,
+    `96×64`, `16×64`, `64×16`) — make crate sides exact crate height with a bottom foot rail and a
+    horizontal bay period that divides every crate width (16 divides both 64 and 80).
+28. **Wood palette trap (olive end of the 80–95 ramp)**: in `qmap/quake_palette.lmp`, indices
+    **80–85** are olive/dark-khaki (`(19,19,0)` to `(67,55,0)`), while 90–95 are warm mid-browns.
+    Exclude 80–85 from error-diffusion wood palettes (`fsq.py`) or warm timber picks up a
+    greenish cast under lamplight while keeping 90–95 for rich wood tones.
+29. **Redundant overlapping `carve()` calls overwrite room themes**: carving a connecting stair
+    rect with the adjacent room's theme inside an already-carved room carves zero new space while
+    overwriting `theme`, bleeding the neighbour's ceiling and overhang textures into the main room.
+30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` automatically
+    writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
+    copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
 
 ---
 

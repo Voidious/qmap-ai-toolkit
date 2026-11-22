@@ -1,3 +1,48 @@
+# v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
+
+Fixes and lessons found while building `ca_saddle`:
+
+* `qmap/collide_cmp.py`: fixed float coordinate parsing (`%.3f` on `sface`/`vface` brushes was
+  previously split at the decimal point and silently dropped), extended voxelization from
+  axis-aligned boxes to general convex half-space brushes (ramps, prisms, chamfers, veneers),
+  and added exact differing-brush ROI prefiltering so sub-unit `--step` (e.g. `--step 0.5`)
+  runs in megabytes instead of gigabytes, with CLI/memory guards and stderr warnings on
+  degenerate/skipped brushes.
+* `template/_core.py`: `_lamp_spot()` requires a non-sky solid ceiling at `z == ceil`, preventing
+  `room_lamps()` from mounting ceiling lamp boxes on flush or recessed sky oculi, and logs a
+  stderr note if `room_lamps()` finds zero valid ceiling spots.
+* `template/_out.py`: `brush_text()` checks rect bounds and surface height when matching
+  `FLOOR_DECALS` / `CEIL_DECALS` so multiple inlays sharing a texture each anchor to their own
+  rect instead of the last decal's corner.
+* `template/_out.py`: prism outward air probes march in 8-unit steps (`8..40`) and stop at the
+  first non-`'diag'` solid cell so chamfered corners pick up room bands (`base`, `strp`, `trim`,
+  `SPLIT_Z`, `TRIM_Z`) without ever reading through a thin wall.
+* `template/_out.py`: ramp texturing and alignment fixes (verified voxel-identical with the fixed
+  `qmap/collide_cmp.py` down to `--step 0.5` against single-wedge ramps):
+  - `info()` detects the first 16-unit cell (`d = 0`, exact `f == rz0`) of every ramp (including
+    `bands=False`), eliminating horizontal wall light-strip bleed at ramp feet without matching
+    stacked mezzanines above `rz0`.
+  - Wall courses above/beside ramps compare `mid` against nominal `STRIPE_Z[th]` so stone stays
+    vertically aligned with the main room.
+  - When a ramp's lateral face borders a differently-themed room, the main walking wedge stays in
+    `EXTRA['skin']` (preserving `FLOOR_MINLIGHT` across the walkable slope except the 1-unit wall
+    sliver) while a 1-unit outer veneer is partitioned by contiguous adjacent rooms and
+    `band_cuts(adj)` in `worldspawn` (matching lower/upper wall courses, strips, and worldspawn
+    lightmaps seamlessly).
+* `template/_out.py`: sloped ramp band overlays thinned from 2 units to 1 unit proud to reduce
+  visual parallax at horizontal-to-slope bends.
+* `template/_core.py` & `template/_out.py`: structural walls over open air (`zbot is not None`)
+  get a gated bottom 16-unit architrave `'trim'` band (only cutting brushes where a face actually
+  takes the architrave role, preserving intersecting light strips, with `NOARCH` /
+  `carve(..., noarch=False)` opt-out mirroring `NOCAP`).
+* `template/_layout.py`: added a small side alcove beside the demo's ramp so both the exposed-ramp
+  1-unit veneer and the gated overhang architrave paths are exercised in-repo.
+* `GUIDE.md`: added Gotchas 24–30 (visible slipgate teleporter framing and torch clearance,
+  ezQuake's world-UV liquid rendering requiring 64-unit alignment on `*` teleporter portals,
+  per-level sub-themes and bend junction collars on ramped wings, exact-height multiple-of-16
+  crate/object textures, excluding olive-green indices 80–85 from wood palettes, redundant
+  overlapping `carve()` theme pollution, and shipping `.lit` alongside `.bsp`).
+
 # v3.4 (item economy and relative placement)
 
 * `qmap/itemprofile.py`: BSP29 inventories, standard loose quantities, distinct
