@@ -3,9 +3,11 @@
 Fixes and lessons found while building `ca_saddle`:
 
 * `qmap/collide_cmp.py`: fixed float coordinate parsing (`%.3f` on `sface`/`vface` brushes was
-  previously split at the decimal point and silently dropped) and extended voxelization from
+  previously split at the decimal point and silently dropped), extended voxelization from
   axis-aligned boxes to general convex half-space brushes (ramps, prisms, chamfers, veneers),
-  with optional `--step N` (default `8`) and a stderr warning if any brush is degenerate/skipped.
+  and added exact differing-brush ROI prefiltering so sub-unit `--step` (e.g. `--step 0.5`)
+  runs in megabytes instead of gigabytes, with CLI/memory guards and stderr warnings on
+  degenerate/skipped brushes.
 * `template/_core.py`: `_lamp_spot()` requires a non-sky solid ceiling at `z == ceil`, preventing
   `room_lamps()` from mounting ceiling lamp boxes on flush or recessed sky oculi, and logs a
   stderr note if `room_lamps()` finds zero valid ceiling spots.
@@ -16,7 +18,7 @@ Fixes and lessons found while building `ca_saddle`:
   first non-`'diag'` solid cell so chamfered corners pick up room bands (`base`, `strp`, `trim`,
   `SPLIT_Z`, `TRIM_Z`) without ever reading through a thin wall.
 * `template/_out.py`: ramp texturing and alignment fixes (verified voxel-identical with the fixed
-  `qmap/collide_cmp.py` at `step=8` and `step=2` against single-wedge ramps):
+  `qmap/collide_cmp.py` down to `--step 0.5` against single-wedge ramps):
   - `info()` detects the first 16-unit cell (`d = 0`, exact `f == rz0`) of every ramp (including
     `bands=False`), eliminating horizontal wall light-strip bleed at ramp feet without matching
     stacked mezzanines above `rz0`.
