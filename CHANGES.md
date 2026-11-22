@@ -1,28 +1,39 @@
 # v3.5 (template texture & alignment fixes, GUIDE gotchas)
 
-Fixes and lessons found while building `ca_saddle`:
+Fixes and lessons found while building `ca_saddle` (all template code fixes verified
+voxel-identical on solid collision via `qmap/collide_cmp.py` on the stock demo before the
+demo-layout coverage addition):
 
-* `template/_core.py`: `_lamp_spot()` rejects `'sky'` ceiling cells so `room_lamps()` never mounts
-  ceiling lamp boxes on sky oculi.
+* `template/_core.py`: `_lamp_spot()` requires a non-sky solid ceiling at `z == ceil`, preventing
+  `room_lamps()` from mounting ceiling lamp boxes on flush or recessed sky oculi.
 * `template/_out.py`: `brush_text()` checks rect bounds and surface height when matching
   `FLOOR_DECALS` / `CEIL_DECALS` so multiple inlays sharing a texture each anchor to their own
   rect instead of the last decal's corner.
-* `template/_out.py`: prism outward air probes step past 16-unit `'diag'` stand-in cells
-  (`d = 24, 32, 40, 12`), restoring kickplates, light strips, cornices, `SPLIT_Z`, and `TRIM_Z`
-  on chamfered corners.
-* `template/_out.py`: ramp texturing and alignment fixes (zero collision change) — `info()`
-  detects the first 16-unit ramp cell (`d = 0`) via `RAMPS` bounds so horizontal strips no longer
-  bleed at ramp feet; wall courses above/beside ramps compare `mid` against nominal `STRIPE_Z` so
-  stone stays aligned with the main room; exposed lateral ramp faces bordering another room take
-  that room's wall texture, carry its light strip across backed cells, and emit in `worldspawn`
-  for a seamless lightmap match; sloped ramp band overlays thinned to 1 unit proud.
-* `template/_out.py`: structural walls over open air (`zbot is not None`) get a bottom 16-unit
-  architrave `'trim'` band (preserving intersecting light strips), eliminating half-sliced courses
-  on hanging overhangs and framing doorway lintels class-wide.
+* `template/_out.py`: prism outward air probes march in 8-unit steps (`8..40`) and stop at the
+  first non-`'diag'` solid cell so chamfered corners pick up room bands (`base`, `strp`, `trim`,
+  `SPLIT_Z`, `TRIM_Z`) without ever reading through a thin wall.
+* `template/_out.py`: ramp texturing and alignment fixes:
+  - `info()` detects the first 16-unit cell (`d = 0`, exact `f == rz0`) of every ramp (including
+    `bands=False`), eliminating horizontal wall light-strip bleed at ramp feet without matching
+    stacked mezzanines above `rz0`.
+  - Wall courses above/beside ramps compare `mid` against nominal `STRIPE_Z[th]` so stone stays
+    vertically aligned with the main room.
+  - When a ramp's lateral face borders a differently-themed room, the main walking wedge stays in
+    `EXTRA['skin']` (preserving `FLOOR_MINLIGHT` on the walkable slope) while a 1-unit outer
+    veneer is partitioned by contiguous adjacent rooms and `band_cuts(adj)` in `worldspawn`
+    (matching lower/upper wall courses, strips, and worldspawn lightmaps seamlessly).
+* `template/_out.py`: sloped ramp band overlays thinned from 2 units to 1 unit proud to reduce
+  visual parallax at horizontal-to-slope bends.
+* `template/_core.py` & `template/_out.py`: structural walls over open air (`zbot is not None`)
+  get a gated bottom 16-unit architrave `'trim'` band (only cutting brushes where a face actually
+  takes the architrave role, preserving intersecting light strips, with `NOARCH` /
+  `carve(..., noarch=False)` opt-out mirroring `NOCAP`).
+* `template/_layout.py`: added a small side alcove beside the demo's ramp so both the exposed-ramp
+  1-unit veneer and the gated overhang architrave paths are exercised in-repo.
 * `GUIDE.md`: added Gotchas 24–30 (visible slipgate teleporter framing and torch clearance,
   ezQuake's world-UV liquid rendering requiring 64-unit alignment on `*` teleporter portals,
   per-level sub-themes and bend junction collars on ramped wings, exact-height multiple-of-16
-  crate/object textures, excluding olive-green indices 80–95 from wood palettes, redundant
+  crate/object textures, excluding olive-green indices 80–85 from wood palettes, redundant
   overlapping `carve()` theme pollution, and shipping `.lit` alongside `.bsp`).
 
 # v3.4 (item economy and relative placement)
