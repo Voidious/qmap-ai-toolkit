@@ -3,11 +3,16 @@
 * `GUIDE.md`: new gotcha 31, **what is solid to a player is not what you would guess** — the full
   measured solidity table `collide_cmp.py` now implements: which brush entities are in the player
   collision hull, that `*`-prefixed faces make a liquid rather than a solid, that `clip` / `skip` /
-  `sky*` / `trigger` are all solid despite their names, and the two rules reading the qbsp source
-  gets wrong (one `hint` / `hintskip` face anywhere drops a whole brush; otherwise the first face
-  in file order decides). Section 5 points at it and now states the pass criterion as **exit 0**
-  rather than the words "collision identical", because with four content classes the solid pass
-  can print "collision identical" while a later class takes the exit code to 1.
+  `sky*` / `trigger` are all solid despite their names, and that a mixed-texture brush is decided
+  by its first face in file order except for `hint` / `hintskip`, one of which anywhere drops the
+  whole brush. It also names the two reasons reading the qbsp source is not enough on its own, so
+  that the next person extending the tool starts from a compile: `face_get_contents()` states the
+  `hint` rule in a way that reads backwards (it returns *empty* contents, which the first-face
+  rule skips over, predicting solid), and the liquid rules live in hull 0 while the solid ones live
+  in hulls 1/2, so the two need different instruments — clipnode counts cannot see a liquid at
+  all. Section 5 points at it and now states the pass criterion as **exit 0** rather than the
+  words "collision identical", because with four content classes the solid pass can print
+  "collision identical" while a later class takes the exit code to 1.
 * `qmap/collide_cmp.py`: count solid brushes in every entity qbsp merges into the world collision
   hull, not just `worldspawn`/`func_group`. `func_detail`, `func_detail_wall` and
   `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
@@ -30,13 +35,13 @@
 
   Submodel brush entities (`func_wall`, `func_illusionary`, `trigger_*`) remain out of scope:
   each becomes its own BSP model with its own hull, so comparing them means per-model comparison
-  rather than an allowlist entry.
+  rather than a table entry.
 * `qmap/collide_cmp.py`: **`func_detail_illusionary` is only non-solid, not contentless** — its
   liquids are now compared. qbsp converts a brush there to illusionary mist behind
   `if (contents.is_any_solid())` (`qbsp/brush.cc`), so a `*water`/`*slime`/`*lava` brush is never
   converted and keeps real `CONTENTS_LAVA`/`WATER`/`SLIME` in hull 0 — the hull `SV_PointContents`
-  reads. Skipping the whole entity before looking at face textures therefore reported a lava pool
-  dropped into a decal entity as `ignored ... in entities with no player collision` and exited 0.
+  reads. Skipping the whole entity before looking at face textures therefore tallied a lava pool
+  dropped into a decal entity as just another ignored brush and exited 0.
   It adds no clipnodes, so the clipnode probe behind the rest of these rules could not see it;
   measured instead by counting hull-0 leaf contents, where a `*lava` cube in
   `func_detail_illusionary` yields a `CONTENTS_LAVA` leaf exactly as it does in `worldspawn`.
