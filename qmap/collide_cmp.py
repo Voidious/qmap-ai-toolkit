@@ -31,9 +31,13 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-# Comments inside a brush block: '//' or ';' at start of line or after <= 0x20 whitespace
-# (matching parse_token()'s comment check; never consumes '\n' or mid-token '//' / ';').
-BRUSH_COMMENT_RE = re.compile(r'(?:^|(?<=[\x00-\x20]))(?://|;)[^\n]*', re.M)
+# Comments inside a brush block: '//' or ';' at start of line or after <= 0x20 whitespace, outside
+# quoted strings (matching parse_token()'s comment/quote precedence; never consumes '\n' or
+# mid-token '//' / ';').
+BRUSH_COMMENT_RE = re.compile(
+    r'"(?:[^"\\]|\\(?="[\r\n])|\\(?!"[\r\n])[\s\S])*"|((?:^|(?<=[\x00-\x20]))(?://|;)[^\n]*)',
+    re.M,
+)
 # Brush-primitives texture matrix `( ( a b c ) ( d e f ) )` sitting between the 3rd plane point
 # and the texture name (parse_texture_def, common/mapfile.cc).
 BP_MAT_RE = re.compile(r'\s*\(\s*\([^)]*\)\s*\([^)]*\)\s*\)')
@@ -264,16 +268,69 @@ def entities(txt):
         the callers, which is where qbsp uses Q_strcasecmp.
     """
     depth, brs, bstart, key, key_end, cls, refused = 0, [], 0, None, 0, None, False
+    bstate, bp, fskip, after_skip, ext_left, prev_end = 0, False, 0, 0, 0, 0
     for m in TOKEN_RE.finditer(txt):
         kind = m.lastindex                  # None for a comment, which is not a token at all
         if depth >= 2:
-            # inside a brush, whose faces parse_brush() reads. Only its nesting matters here --
-            # and it does nest, because the brush-primitives format wraps its faces in a second
-            # brace pair -- so skip bare tokens (kind == 3) without paying to extract them;
-            # rare quoted tokens (kind == 1) are checked so a quoted '{'/' }' still balances.
-            if kind == BRACE or (kind == 1 and m.group(1) in ('{', '}')):
-                depth += 1 if m.group(kind) == '{' else -1
-                if depth == 1:
+            # Inside a brush: follow map_entity_t::parse_brush() / parse_brush_face() structure
+            # (common/mapfile.cc) so '{' / '}' (quoted or unquoted) are structural only at brush
+            # header and between-face positions -- never in a face's texture-name slot, where
+            # qbsp accepts them as ordinary texture names. Bare face-data tokens (plane coords,
+            # texdef numbers) are counted down without extracting match strings.
+            if kind is None:
+                if bstate == 5:             # a comment ends the line, terminating optional Q2 ints
+                    bstate = 2
+                continue
+            if bstate == 3:                 # skipping fixed face tokens (planes + tex, or texdef)
+                fskip -= 1
+                if fskip == 0:
+                    bstate = after_skip
+                    if bstate == 5:
+                        ext_left, prev_end = 3, m.end()
+                continue
+            if bstate == 4:                 # first token after texture in quaked: '[' -> Valve 220
+                if (kind == 3 and txt[m.start():m.end()] == '[') or (kind == 1 and m.group(1) == '['):
+                    fskip = 14
+                else:
+                    fskip = 4
+                bstate, after_skip = 3, 5
+                continue
+            if bstate == 5:                 # up to 3 optional same-line Q2 extended-texinfo ints
+                if ext_left > 0 and '\n' not in txt[prev_end:m.start()]:
+                    ext_left -= 1
+                    prev_end = m.end()
+                    continue
+                bstate = 2                  # face finished; handle this token as structural
+            if bstate == 2:                 # between faces: '}' closes block, else '(' starts face
+                if kind == BRACE or (kind == 1 and m.group(1) in ('{', '}')):
+                    if m.group(kind) == '}':
+                        depth -= 1
+                        if depth == 1:
+                            brs.append(txt[bstart:m.end()])
+                        else:
+                            bstate = 6
+                        continue
+                bstate, fskip, after_skip = (3, 27, 5) if bp else (3, 15, 4)
+                continue
+            tok = m.group(kind)
+            if bstate == 0:                 # brush header right after opening '{'
+                if tok == '}':
+                    depth = 1
+                    brs.append(txt[bstart:m.end()])
+                elif tok == '{':
+                    depth, bp, bstate = 3, True, 2
+                elif tok == 'brushDef':
+                    bstate = 1
+                else:
+                    bp, bstate, fskip, after_skip = False, 3, 15, 4
+            elif bstate == 1:               # after 'brushDef', expecting inner '{'
+                if tok == '{':
+                    depth, bp, bstate = 3, True, 2
+                else:
+                    bstate = 2
+            elif bstate == 6:               # after inner '}' of brushDef, expecting outer '}'
+                if tok == '}':
+                    depth = 1
                     brs.append(txt[bstart:m.end()])
             continue
         if kind is None:
@@ -291,7 +348,7 @@ def entities(txt):
             if depth == 0:
                 brs, cls, refused = [], None, False
             else:
-                bstart = m.start()      # a '{' in an entity's key slot opens a brush
+                bstart, bstate, bp = m.start(), 0, False  # a '{' in an entity's key slot opens a brush
             depth += 1
         elif tok == '}':
             if depth == 1:
@@ -299,6 +356,12 @@ def entities(txt):
             depth = max(depth - 1, 0)
         elif depth == 1 and not refused:
             key, key_end = tok, m.end()
+
+
+def _strip_brush_comments(br):
+    if '//' not in br and ';' not in br:
+        return br
+    return BRUSH_COMMENT_RE.sub(lambda m: '' if m.group(1) is not None else m.group(0), br)
 
 
 def parse_brush(br):
@@ -316,7 +379,7 @@ def parse_brush(br):
     and a degenerate 'hint' face in slot 1 does not drop the brush. Recording its texture anyway
     would let a face qbsp discarded decide the brush's contents, in either direction."""
     planes, texes, no_normal = [], [], 0
-    for line in BRUSH_COMMENT_RE.sub('', br).split('\n'):
+    for line in _strip_brush_comments(br).split('\n'):
         pts = list(PT_RE.finditer(line))
         if len(pts) < 3:
             continue
@@ -334,8 +397,12 @@ def parse_brush(br):
         bm = BP_MAT_RE.match(tail)
         if bm:
             tail = tail[bm.end():]
-        rest = tail.split()
-        texes.append(rest[0] if rest else '')
+        if '"' in tail:
+            tm = TOKEN_RE.search(tail)
+            texes.append(tm.group(tm.lastindex) if (tm and tm.lastindex is not None) else '')
+        else:
+            rest = tail.split()
+            texes.append(rest[0] if rest else '')
     if len(planes) < 4:
         return None
     N = np.array([p[0] for p in planes])
@@ -410,7 +477,7 @@ def brushes(path):
                 # parse_brush() (common/mapfile.cc) pushes one only `if (brush.faces.size())`,
                 # so qbsp drops '{ }' without comment. Measured: a sealed room plus a wall cube
                 # plus an empty brush block compiles to the same clipnode count as without it.
-                skipped += PT_RE.search(BRUSH_COMMENT_RE.sub('', br)) is not None
+                skipped += PT_RE.search(_strip_brush_comments(br)) is not None
                 continue
             *geom, texes, dropped = pb
             no_normal += dropped

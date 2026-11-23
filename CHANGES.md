@@ -46,18 +46,22 @@
     `17.75G -> 5.11G` (**3.5×**, back inside the 10G budget). Across 25 sequential pairs of
     `ca_saddle`, `ca_crosscut`, and `ca_offset` at `--step 8`, 25/25 match v3.6 verdicts and voxel
     counts exactly at equal or faster wall-clock time.
-* `qmap/collide_cmp.py`: **brush-block parser hardening** (`CDEFG-17`, 12/12 verified against
-  live `qbsp`):
-  - Strip `//` and `;` comments (at start of line or after `<= 0x20` whitespace, preserving
-    newlines and mid-token `//`) before `PT_RE` in `parse_brush()` and the empty-block `skipped`
-    check, so a commented-out face line (`// ( ... ) *lava ...` or `; ( ... ) hint ...`) cannot
-    spoof brush contents or trigger a spurious degenerate-brush warning on an empty block.
+* `qmap/collide_cmp.py`: **brush-block parser hardening** (`CDEFG-17`, verified against live `qbsp`):
+  - Strip `//` and `;` comments outside quoted strings (at start of line or after `<= 0x20`
+    whitespace, preserving newlines, mid-token `//`, and `//` inside quoted texture names) before
+    `PT_RE` in `parse_brush()` and the empty-block `skipped` check, so a commented-out face line
+    (`// ( ... ) *lava ...` or `; ( ... ) hint ...`) cannot spoof brush contents or trigger a
+    spurious degenerate-brush warning on an empty block.
   - Skip the brush-primitives `( ( a b c ) ( d e f ) )` texture matrix after the third plane point
-    in `parse_brush()` so `brushDef` `*lava`, `hint`, `clip`, and `sky*` brushes classify
-    accurately instead of reading `'('` as `'solid'`.
-  - Check rare quoted tokens (`kind == 1`) inside `depth >= 2` in `entities()` so quoted brush
-    braces (`"{" ... "}"`) balance with zero overhead on bare brush tokens (`kind == 3`).
-  - Zero new warnings and 0 count/note diffs across all 42 real `.map` files in the tree (73,025
+    in `parse_brush()`, and unquote quoted face texture tokens (`"*lava"`, `"hint"`, `"clip"`,
+    `"sky1"`, `"*lava //x"`) using `TOKEN_RE` so both `brushDef` and quoted special textures
+    classify identically to `qbsp`.
+  - Follow `map_entity_t::parse_brush()` / `parse_brush_face()` structure inside `depth >= 2` in
+    `entities()` so `{` / `}` (quoted or unquoted) are structural only at brush-header and
+    between-face positions — supporting quoted brush delimiters (`"{" ... "}"`,
+    `"{" "brushDef" "{" ... "}" "}"`) while never letting a `{` / `}` / `"{"` / `"}"` face texture
+    name alter brush nesting depth and hide collision.
+  - Zero new warnings and 0 count/note diffs across all real `.map` files in the tree (73,025
     solid brushes, 22 sky brushes).
 
 # v3.6 (collide_cmp solidity rules)
