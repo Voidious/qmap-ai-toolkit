@@ -109,10 +109,16 @@
     * **A quoted token runs to its closing quote across newlines**, which is a different thing
       from a value sitting on another line than its key: `"message" "line1⏎line2"` is one value
       (180), where ending the token at the newline produced two half-tokens.
-    * **A `\` takes the next character into the token**, so an escaped quote does not end it —
-      `"message" "say \"hi\" now"` is one value (180). The exception is `\"` at end of line, which
-      qbsp warns about and treats as the terminator; that is the `"wad" "c:\foo\"` shape some
-      editors emit, and it reads at 180 as well.
+    * **A `\` takes the next character into the token**, whatever it is, so an escaped quote does
+      not end it — `"message" "say \"hi\" now"` is one value (180). What it takes may be a second
+      `\`, which then escapes nothing, so the *parity* of a run of backslashes decides: an odd run
+      before the closing quote escapes it, an even run leaves it as the terminator. Measured
+      across runs 1–5 long in four trailing contexts, a value ending `\\"` is closed (180) where
+      one ending `\"` is not (24, a submodel). Enumerating the two-character escapes instead of
+      applying that one rule read every even run one short — the last backslash paired with the
+      terminator, the value ran on, and the entity reported no classname. The exception is `\"` at
+      end of line, which qbsp warns about and treats as the terminator; that is the
+      `"wad" "c:\foo\"` shape some editors emit, and it reads at 180 as well.
     * **A token need not be quoted.** `parse_token()`'s other branch takes any run of characters
       above ASCII 32, so `classname func_detail` is a valid epair (180) — and a quote-only scan
       did not merely miss one, since `message "hi"` leaves an odd number of quoted tokens and
