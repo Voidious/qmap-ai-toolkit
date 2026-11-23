@@ -384,7 +384,11 @@ def brushes(path):
         for br in brs:
             pb = parse_brush(br)
             if pb is None:
-                skipped += 1
+                # a block holding no face at all is not a brush and is not worth a warning:
+                # parse_brush() (common/mapfile.cc) pushes one only `if (brush.faces.size())`,
+                # so qbsp drops '{ }' without comment. Measured: a sealed room plus a wall cube
+                # plus an empty brush block compiles to the same clipnode count as without it.
+                skipped += PT_RE.search(br) is not None
                 continue
             *geom, texes, dropped = pb
             no_normal += dropped
