@@ -159,6 +159,36 @@ For TDM and FFA maps, `qmap/itemprofile.py` computes embedded inventories, direc
 
 ---
 
+## Doing Your Own Map & Demo Analysis
+
+The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorld group's 29 MVD demos and five classic reference maps (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`). If your group plays different maps, player counts, or mods (like CTF classics, 2v2/4v4 TDM, or FFA), you can run the same analysis on **your own `.bsp` maps and `.mvd` match demos** — both to calibrate design targets before building and to evaluate real playtests afterward.
+
+### Profiling Your Favourite Maps (`.bsp`)
+
+Both [`qmap/vprofile.py`](qmap/vprofile.py) and [`qmap/itemprofile.py`](qmap/itemprofile.py) work directly on any compiled Quake 1 / QuakeWorld **BSP29** file — you don't need `.map` source. Point your agent at your local copies of the maps your group loves (or hates):
+
+- **Verticality & travel sizing (`vprofile.py`)** — Measure `travel_median`, `travel_p90`, effective levels, overlooks, route height change, and angled walls on your reference pool to calibrate sizing and verticality targets for your mode (especially useful for CTF, since the bundled five classics are deathmatch maps).
+- **Item economy (`itemprofile.py`)** — Inspect embedded inventories, directed RL/LG/armor/MH route matrices, and pickup layouts across your favourite TDM/FFA maps, or test hypothetical moves on your own builds with `--move` (see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md)).
+
+### Analyzing Your Group's Match Demos (`.mvd`)
+
+The [`demos/`](demos) folder provides a minimal QuakeWorld MVD parser ([`demos/mvd.py`](demos/mvd.py)) plus working analyzers for Clan Arena ([`demos/ca_run.py`](demos/ca_run.py)), CTF ([`demos/ctf_run.py`](demos/ctf_run.py)), and in-play movement verticality ([`demos/vert.py`](demos/vert.py)):
+
+- **What you get**: top-down heatmaps of player positions, kill lines by weapon, round lengths, time to first contact, 1vX endgame share, flag-carry paths, carrier pace and capture conversion, death zones, and in-play floor height change per 1,000 units (`floor_change_per_1000` and `airborne` share).
+- **Best way to use them**: `ca_run.py` and `ctf_run.py` are **reference scripts** written around the original group's KTX demo filenames and directory layout rather than turn-key CLIs (and `mvd.py` expects standard short/8 coordinates). Drop a folder of your group's `.mvd` recordings into your workspace and ask your AI agent to run or adapt the scripts for your filenames, server mod, and questions — both on classic maps before designing and on your own custom maps after playtest nights.
+- **Comparing apples to apples**: In-play verticality from `demos/vert.py` (~90–165 height units per 1,000 travelled in the original demos) is naturally lower than geometric item-route verticality from `vprofile.py` (251–551) because players linger and fight on a level. Always compare demo numbers to demo numbers and BSP numbers to BSP numbers.
+
+```text
+# Example prompt for analyzing your own references and playtest demos
+I put our group's favourite CTF .bsp maps in ./ref_maps/ and ten recent KTX .mvd
+demos in ./my_demos/ (including two playtest games on our new map). Profile the
+reference maps with vprofile.py, adapt demos/ctf_run.py + vert.py to analyze our
+demos, and tell me how our new map's flag-carry pace, death zones, and in-play
+verticality compare to the classics we play.
+```
+
+---
+
 ## What's Inside the Repository
 
 ```text
