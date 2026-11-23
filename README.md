@@ -256,6 +256,24 @@ Each folder rebuilds **byte-identical** `.map` source from this repository — u
 
 ---
 
+## Expanding the Toolkit & Guide
+
+`qmap-ai-toolkit` was built iteratively: almost every primitive in [`template/`](template), check in [`qmap/`](qmap), and gotcha in [`GUIDE.md`](GUIDE.md) started as a real problem encountered while building one of the maps. You should treat your copy the same way — evolve it as your maps and your QuakeWorld group teach you new lessons.
+
+### Extending the Generator & Tools
+
+- **Let the map design lead**: Don't reshape a layout just to fit what `template/_core.py` already supports. Earlier maps added mirror symmetry, ramps, angled prisms, stair-climbing light strips, floor inlays, sky oculi, stratified walls, and team-split lighting because a specific map needed them. Known architectural frontiers listed in [`GUIDE.md` Section 3](GUIDE.md#3-design-fresh-takes-on-classics) include curved walls (beyond prism approximations), diagonal ramps, sloped ceilings, doors and lifts, and moving brushes.
+- **Prototype in one map first, then promote**: Build a new primitive or texture/analysis helper inside your current map folder while iterating. Once it survives a full compile, playtest, and check cycle, ask your agent to fold the clean, general version back into `template/` or `qmap/`.
+- **Keep reference maps reproducible & tests green**: Avoid modifying finished maps in `examples/` when evolving `template/` so they remain byte-identical build references, and run the regression suite (`tests/`) whenever you change shared tools in `qmap/` or versioning/documentation structure.
+
+### Evolving `GUIDE.md` & `gallery/` for Your Group
+
+- **Capture every real gotcha**: When a build wastes a feedback round on a subtle Quake, `ericw-tools`, ezQuake, or texture/lighting surprise, have your agent distill the root cause and fix into [`GUIDE.md`](GUIDE.md) (especially [Section 9](GUIDE.md#9-gotchas-each-cost-at-least-one-round-of-feedback)) so future map sessions don't repeat the same mistake.
+- **Tailor the guide to your group**: If you maintain a fork for your own players, update `GUIDE.md` with your group's tastes — favourite and disliked maps, server mod settings (KTX, CA, TDM/FFA item rules), preferred lighting brightness, and calibration bands from your own map/demo analysis.
+- **Log finished maps in `gallery/`**: Adding a plan, preview sheet, and one-line skeleton/look summary to [`gallery/GALLERY.md`](gallery/GALLERY.md) after each finished map gives your agent memory of what you've already built, preventing future maps from drifting into the same layout or visual theme.
+
+---
+
 ## Running Tools & Tests Locally (Optional)
 
 Normally your AI agent runs these commands directly using [`GUIDE.md`](GUIDE.md). If you'd like to verify your own environment, run the regression suite, or build the template demo by hand:

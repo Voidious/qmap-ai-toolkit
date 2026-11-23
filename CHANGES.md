@@ -19,6 +19,7 @@
   commands, SemVer policy, and licensing.
   - Added LLM compatibility guidance and evaluation criteria (`Choosing an AI Model`).
   - Added guidance for running your own BSP map and MVD demo analysis (`Doing Your Own Map & Demo Analysis`).
+  - Added guidance for extending the toolkit and evolving `GUIDE.md` (`Expanding the Toolkit & Guide`).
 
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 
