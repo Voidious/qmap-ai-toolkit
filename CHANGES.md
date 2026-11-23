@@ -1,4 +1,4 @@
-# v4.0.0 (SemVer versioning)
+# v4.0.0 (SemVer versioning, expanded README)
 
 * **Semantic Versioning (`VERSION` single source of truth)**: switched from ad-hoc 1- and 2-part
   versions (`v1`..`v3.7`) to 3-part SemVer (`MAJOR.MINOR.PATCH`, git tags `vMAJOR.MINOR.PATCH`),
@@ -8,7 +8,14 @@
     `qmap/ITEMS.md`) and `template/` file banners (`_core.py`, `_out.py`, `plan.py`,
     `texgen_blockout.py`, `views.py`), standardizing template headers on `qmap-ai-toolkit`.
   - Added `tests/test_version.py` to enforce SemVer formatting in `VERSION`, alignment with the top
-    `CHANGES.md` release heading, and no stale version headers in docs/template banners.
+    `CHANGES.md` release heading, no stale version headers in docs/template banners, and valid local
+    links/images in `README.md`.
+* `README.md` (`CDEFG-7`): expanded from a brief placeholder into a full project overview while
+  keeping a prominent pointer to `GUIDE.md` right at the top for agents building maps. Covers the
+  human + AI workflow, visual gallery previews, repository and tool reference (`template/`, `qmap/`,
+  `examples/`, `gallery/`, `demos/`, `tests/`), engineering highlights (verticality benchmarking and
+  travel-distance sizing, dual-hull voxel collision proofs, item economy diagnostics), quick start
+  commands, SemVer policy, and licensing.
 
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 

@@ -64,6 +64,41 @@ class TestVersioning(unittest.TestCase):
             )
 
 
+class TestReadmeLinks(unittest.TestCase):
+    def test_readme_references_guide_up_front(self):
+        lines = (REPO_ROOT / 'README.md').read_text(encoding='utf-8').splitlines()
+        head = '\n'.join(lines[:15])
+        self.assertIn('GUIDE.md', head, 'README.md should reference GUIDE.md up front')
+
+    def test_readme_local_links_and_images_exist(self):
+        text = (REPO_ROOT / 'README.md').read_text(encoding='utf-8')
+        # Match markdown links/images ](target) and HTML href="target" / src="target"
+        targets = re.findall(r'\]\(([^)\s]+)\)', text)
+        targets += re.findall(r'(?:href|src)="([^"]+)"', text)
+        self.assertTrue(targets, 'Expected links/images in README.md')
+        slug_cache = {}
+        for target in targets:
+            if target.startswith(('http://', 'https://', 'mailto:', '#')):
+                continue
+            rel_path, _, anchor = target.partition('#')
+            resolved = REPO_ROOT / rel_path
+            self.assertTrue(
+                resolved.exists(),
+                f'Broken relative target in README.md: {target!r} -> {resolved}',
+            )
+            if anchor and resolved.suffix.lower() == '.md':
+                if resolved not in slug_cache:
+                    md = resolved.read_text(encoding='utf-8')
+                    slug_cache[resolved] = {
+                        re.sub(r'\s+', '-', re.sub(r'[^\w\s-]', '', m.group(1).strip().lower()))
+                        for m in re.finditer(r'^#{1,6}\s+(.+)$', md, re.M)
+                    }
+                self.assertIn(
+                    anchor,
+                    slug_cache[resolved],
+                    f'Broken markdown anchor in README.md: {target!r}',
+                )
+
 
 if __name__ == '__main__':
     unittest.main()
