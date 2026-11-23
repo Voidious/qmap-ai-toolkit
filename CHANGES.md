@@ -85,32 +85,65 @@
   which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
   does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
   contain a mixed-contents brush, so this adds no noise to existing builds.
-* `qmap/collide_cmp.py`: **read the classname by pairing entity tokens the way qbsp does**, rather
-  than searching the entity text for the key. A key and a value are the same kind of token and
-  only position tells them apart, so `"classname"` appearing as somebody else's *value* used to be
-  mistaken for a key and paired with whatever quoted token came next. Measured, that was wrong in
-  both directions: `"target" "classname"` ahead of a real `"classname" "func_detail"` compiles
-  solid (180 clipnodes) but read as `origin`, excluding a solid entity from the comparison
-  entirely; the same decoy ahead of `"func_detail" "1"` and no real classname is a submodel (24
-  clipnodes) but read as `func_detail` and counted as world geometry. Pairing matches
-  `map_entity_t::parse()` (`common/mapfile.cc`), which takes any non-`{` token as a key and the
-  next token on the same line as its value; a face line contains no quotes, so brushes contribute
-  no tokens and the alternation survives them. Comments are skipped the way `parse_token()` skips
-  them, which pairing makes load-bearing: it tests for `//` or `;` before it tests for a quote, so
-  a double quote inside a comment is not a token — but it would shift the pairing by one for the
-  rest of the entity. `// a "comment"` above a classname compiles at 180 clipnodes and now reads
-  as `func_detail`, and `"wad" "a//b.wad"` still reads as an ordinary epair, because whichever
-  marker comes first on the line wins. The reading keeps the tab and multi-space tolerance of the
-  previous pattern, accepts several epairs on one line and an entity header sharing the line with
-  its opening brace (measured at 180 clipnodes, so a line-anchored pattern would have missed a
-  solid entity), and holds the value to the key's line, which is `PARSE_SAMELINE` — a newline
-  between the two makes qbsp refuse the map outright (`parse_token: line is incomplete`), so there
-  is no such map to be compatible with. The key stays **case-sensitive** on purpose:
-  `entdict_t::find()` compares keys with `key == it->first`, so qbsp does not read `"CLASSNAME"`
-  as a classname either, and that entity measures as a submodel (24 clipnodes, not 180). Only the
-  classname *value* is case-insensitive, which is where qbsp uses `Q_strcasecmp`. Checked against
-  every entity of all 22 real maps in the tree (4,449 of them): the new reading agrees with the old
-  one on every single one, so nothing in anyone's build moves.
+* `qmap/collide_cmp.py`: **split entities and read classnames by walking .map tokens**, instead of
+  counting brace characters and searching the text for a key. Both of those guessed at where the
+  tokens were, and each wrong guess had the same consequence — a solid entity dropped from the
+  comparison, or a submodel counted as world geometry, reported as `collision identical` with exit
+  0 on the geometry-key fast path. One regex now spells out the whole lexical grammar in
+  `parse_token()`'s precedence order (`common/parser.cc`) and one walk consumes it in
+  `map_entity_t::parse()`'s (`common/mapfile.cc`), doing the split and the classname read in a
+  single pass. Everything below is measured by compiling a 128-unit cube in a sealed room — 180
+  clipnodes means the entity merged into the world as `func_detail` and the cube is solid, 24 means
+  it became its own BSP model, 12 means the cube reached no hull — and every one of them was a
+  wrong answer first:
+    * **A key and a value are the same kind of token**, so only position tells them apart.
+      `"target" "classname"` ahead of a real `"classname" "func_detail"` compiles solid (180) but
+      a key search read the classname as `origin`; the same decoy ahead of `"func_detail" "1"`
+      and no real classname is a submodel (24) but read as `func_detail`.
+    * **A comment is not a token at all**, so it has to be consumed rather than ignored:
+      `parse_token()` tests for `//` or `;` before it tests for a quote, so a double quote in a
+      comment would shift the pairing for the rest of the entity. Scanning the alternatives in
+      its order gets both directions right — `// a "comment"` above a classname reads correctly
+      (180), and `"wad" "a//b.wad"` is still an ordinary epair, because a quote swallows the `//`
+      after it just as a comment marker swallows the quotes after it.
+    * **A quoted token runs to its closing quote across newlines**, which is a different thing
+      from a value sitting on another line than its key: `"message" "line1⏎line2"` is one value
+      (180), where ending the token at the newline produced two half-tokens.
+    * **A `\` takes the next character into the token**, so an escaped quote does not end it —
+      `"message" "say \"hi\" now"` is one value (180). The exception is `\"` at end of line, which
+      qbsp warns about and treats as the terminator; that is the `"wad" "c:\foo\"` shape some
+      editors emit, and it reads at 180 as well.
+    * **A token need not be quoted.** `parse_token()`'s other branch takes any run of characters
+      above ASCII 32, so `classname func_detail` is a valid epair (180) — and a quote-only scan
+      did not merely miss one, since `message "hi"` leaves an odd number of quoted tokens and
+      mis-pairs everything after it.
+    * **`{` and `}` are structural by position, not spelling.** `map_entity_t::parse()` compares
+      the token text in a key slot without asking whether it was quoted, and a value slot takes a
+      brace like any other token. So a brace inside a quoted value is text: `"message" "a{b"`
+      compiles at 180, where counting brace characters collapsed the whole file into one entity
+      block.
+    * **A key is whitespace-trimmed, a value is not.** `parse_entity_dict()` erases leading and
+      trailing `std::isspace` from the key before storing it, so `" classname "` and a
+      tab-padded key both mean classname (180). Internal whitespace is untouched, so
+      `"class name"` is a different key (24).
+    * **A repeated key keeps its last value.** `parse_entity_dict()` stores pairs with
+      `entdict_t::set()` (`common/entdata.cc`), which overwrites `it->second` in place rather than
+      appending, so `find()` returning the first match returns the overwritten one. `"classname"
+      "func_illusionary"` then `"classname" "func_detail"` is merged into the world (180) and the
+      same two reversed is a submodel (24): stopping at the first match is wrong both ways.
+    * **The key stays case-sensitive**, because `entdict_t::find()` compares with
+      `key == it->first`. qbsp does not read `"CLASSNAME"` as a classname at all (24, not 180),
+      and a `"CLASSNAME"` repeat does not overwrite a real one (180). Only the classname *value*
+      is case-insensitive, which is where qbsp uses `Q_strcasecmp`.
+    * **`PARSE_SAMELINE` still holds the value to the key's line.** A newline between the two
+      makes qbsp refuse the map outright (`parse_token: line is incomplete`), as does a comment
+      there, so reading across one would describe maps that cannot compile. Tabs, runs of spaces,
+      several epairs on one line and an entity header sharing the line with its opening brace are
+      all fine (180), so a line-anchored pattern would have missed a solid entity.
+  Checked against every entity of all 22 real maps in the tree (4,449 of them): the walk splits
+  every file into the same blocks as before and reads the same classname for every entity, so
+  nothing in anyone's build moves. One pass now does the work of two, so parsing costs 1.47× the
+  old split-plus-search and a full run on the heaviest real pair goes 2.0s → 2.28s.
 * `qmap/collide_cmp.py` module docstring and `GUIDE.md` gotcha 31: state the two things the tool
   does **not** claim, so "exit 0" cannot be read as more than it means. It compares the player
   collision hull and liquid contents — not projectile collision, where `clip` and `sky*` diverge
