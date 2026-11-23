@@ -32,9 +32,14 @@ PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+
 # A quoted .map token, or a comment to skip. One pattern with the comment first so that scanning
 # left to right reaches a '//' or ';' before any quote on the same line, exactly as parse_token()
 # (common/parser.cc) does -- it tests for a comment before it tests for a quote, so a quote inside
-# a comment is not a token, while '//' inside a quoted value is just text. classname() explains
-# why the tokens are paired by position rather than searched for.
-TOKEN_RE = re.compile(r'(?://|;)[^\n]*|"([^"\n]*)"')
+# a comment is not a token, while '//' inside a quoted value is just text. A quoted token runs to
+# its closing quote across newlines too: parse_token's copy loop is `while (*pos != '"')` with no
+# newline case at all, so a value may span lines and a key may be padded with them.
+# classname() explains why the tokens are paired by position rather than searched for.
+TOKEN_RE = re.compile(r'(?://|;)[^\n]*|"([^"]*)"')
+# the whitespace parse_entity_dict() trims off a key, spelled out rather than left to str.strip():
+# it tests std::isspace, which in qbsp's locale is exactly these six ASCII characters
+KEY_WS = ' \t\n\r\v\f'
 MAX_SLICE = 50_000_000        # ~50 MB per 2D bool slice
 MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse legibly instead of hanging
 
@@ -172,7 +177,7 @@ def classname(e):
     key whose value is the next token, read with PARSE_SAMELINE. A face line contains no quotes,
     so brushes contribute no quoted tokens and the alternation holds across them.
 
-    Three things that follow from pairing instead of searching, all measured against qbsp with a
+    What follows from pairing instead of searching, every point measured against qbsp with a
     128-unit cube in a sealed room (12 clipnodes empty, 180 merged into the world as func_detail,
     24 as its own submodel):
       - An epair whose *value* is the word classname does not make the next epair's key a
@@ -192,6 +197,16 @@ def classname(e):
         shift a naive pairing by one for the rest of the entity. Measured: '// a "comment"' above
         a real classname still compiles at 180, as does a ';' comment, a trailing comment, and
         '"wad" "a//b.wad"' (the '//' there is inside a quoted value, where the quote comes first).
+      - A quoted token may span lines, which is not the same thing as a value being on another
+        line than its key. parse_token() copies to the closing quote with no newline case, so
+        '"message" "line1<newline>line2"' is one value and compiles at 180 -- while a pattern
+        that stopped a token at the newline read two half-tokens and shifted the pairing, losing
+        a solid entity. PARSE_SAMELINE is still enforced, between the key and its own value.
+      - A key is whitespace-trimmed, a value is not. parse_entity_dict() (common/mapfile.cc)
+        erases leading and trailing std::isspace characters from the key token before storing it,
+        so '" classname "', '"<tab>classname<tab>"' and even a newline-padded key all compile at
+        180 and all mean classname. Internal whitespace is untouched, so '"class name"' is a
+        different key -- measured at 24, a submodel.
 
     A repeated key keeps its *last* value, so the scan cannot stop at the first match.
     parse_entity_dict() stores every pair with entdict_t::set() (common/entdata.cc), which
@@ -212,7 +227,7 @@ def classname(e):
     for (key, _, key_end), (val, val_start, _) in zip(toks[::2], toks[1::2]):
         if '\n' in e[key_end:val_start]:
             break          # not a pair qbsp would accept: it errors out on this map
-        if key == 'classname':
+        if key.strip(KEY_WS) == 'classname':
             cls = val      # keep going: a repeat overwrites in place, so the last one wins
     return cls
 
