@@ -109,8 +109,9 @@ LIQUID_TYPES = frozenset(LIQUIDS)
 # qbsp's Q_strcasecmp does.
 #
 # Measured by compiling a 128-unit cube in a sealed room per entity/texture pair and reading the
-# BSP, never inferred: clipnodes for the player hull, hull-0 leaf contents for the liquids. Three
-# of the five rows exist only because a measurement contradicted a reading of the source.
+# BSP, never inferred: clipnodes for the player hull, hull-0 leaf contents for the liquids. Five
+# of the seven rows below are new in v3.6, and each one is here because a measurement contradicted
+# a reading of the source. Only worldspawn and func_group were ever counted before.
 #   - The whole detail family is solid. func_detail / func_detail_wall / func_detail_fence all
 #     raise the clipnode count, so reaching for func_detail to cut vis cost still blocks players.
 #   - func_detail_illusionary keeps real liquids. qbsp converts a brush there to illusionary mist
