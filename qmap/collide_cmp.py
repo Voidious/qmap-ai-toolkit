@@ -193,18 +193,28 @@ def classname(e):
         a real classname still compiles at 180, as does a ';' comment, a trailing comment, and
         '"wad" "a//b.wad"' (the '//' there is inside a quoted value, where the quote comes first).
 
-    The key is compared case-sensitively: entdict_t::find() (common/entdata.cc) compares with
-    `key == it->first` and returns the first match, so qbsp does not recognise '"CLASSNAME"' as a
-    classname at all and that entity measures as a submodel (24, not 180). Only the classname
-    *value* is matched case-insensitively, by the callers, which is where qbsp uses Q_strcasecmp.
+    A repeated key keeps its *last* value, so the scan cannot stop at the first match.
+    parse_entity_dict() stores every pair with entdict_t::set() (common/entdata.cc), which
+    overwrites `it->second` in place when the key is already present rather than appending a
+    second entry -- find() returning the first match then finds the overwritten one. Measured:
+    '"classname" "func_illusionary"' followed by '"classname" "func_detail"' compiles merged into
+    the world (180 clipnodes), and the same two reversed is a submodel (24), so taking the first
+    value is wrong in both directions.
+
+    The key is compared case-sensitively: entdict_t::find() compares with `key == it->first`, so
+    qbsp does not recognise '"CLASSNAME"' as a classname at all and that entity measures as a
+    submodel (24, not 180) -- nor does a '"CLASSNAME"' pair overwrite a real one, measured at 180.
+    Only the classname *value* is matched case-insensitively, by the callers, which is where qbsp
+    uses Q_strcasecmp.
     """
     toks = [(m.group(1), m.start(), m.end()) for m in TOKEN_RE.finditer(e) if m.group(1) is not None]
+    cls = None
     for (key, _, key_end), (val, val_start, _) in zip(toks[::2], toks[1::2]):
         if '\n' in e[key_end:val_start]:
             break          # not a pair qbsp would accept: it errors out on this map
         if key == 'classname':
-            return val
-    return None
+            cls = val      # keep going: a repeat overwrites in place, so the last one wins
+    return cls
 
 
 def parse_brush(br):
