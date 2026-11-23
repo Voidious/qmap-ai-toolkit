@@ -63,6 +63,13 @@
     name alter brush nesting depth and hide collision.
   - Zero new warnings and 0 count/note diffs across all real `.map` files in the tree (73,025
     solid brushes, 22 sky brushes).
+* `tests/test_collide_cmp.py`: **checked-in regression test suite** (`python3 -m unittest discover
+  -s tests`, stdlib + numpy only, no `qbsp` required). Covers the full 7×11 `(entity × texture)`
+  hull-0 / player-hull matrix, 15 CLI hull-0 scenarios, randomized `proj`-reuse equivalence,
+  L-shaped ROI non-inflation + 500 bounded-bloat configs + 60 randomized overlap-masking
+  comparisons against brute-force occupancy, and parser hardening (comments, `brushDef`, quoted
+  delimiters, quoted/unquoted `{` / `}` face texture names, quoted special textures, and core
+  token-walk rules).
 
 # v3.6 (collide_cmp solidity rules)
 

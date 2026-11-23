@@ -462,7 +462,9 @@ def brushes(path):
     out = {k: [] for k, _, _, _ in CLASSES}
     skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
-    for brs, found in entities(open(path).read()):
+    with open(path) as f:
+        txt = f.read()
+    for brs, found in entities(txt):
         cls = found or '(no classname)'
         kept = WORLD_ENTITY_TYPES.get(cls.lower())
         if kept is None:
