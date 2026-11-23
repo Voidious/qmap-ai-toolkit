@@ -1,3 +1,203 @@
+# v3.6 (collide_cmp solidity rules)
+
+* `GUIDE.md`: new gotcha 31, **what is solid to a player is not what you would guess** — the full
+  measured solidity table `collide_cmp.py` now implements: which brush entities are in the player
+  collision hull, that `*`-prefixed faces make a liquid rather than a solid, that `clip` / `skip` /
+  `sky*` / `trigger` are all solid despite their names, and that a mixed-texture brush is decided
+  by its first face in file order except for `hint` / `hintskip`, one of which anywhere drops the
+  whole brush. It also names the two reasons reading the qbsp source is not enough on its own, so
+  that the next person extending the tool starts from a compile: `face_get_contents()` states the
+  `hint` rule in a way that reads backwards (it returns *empty* contents, which the first-face
+  rule skips over, predicting solid), and the liquid rules live in hull 0 while the solid ones live
+  in hulls 1/2, so the two need different instruments — clipnode counts cannot see a liquid at
+  all. Section 5 points at it and now states the pass criterion as **exit 0** rather than the
+  words "collision identical", because with four content classes the solid pass can print
+  "collision identical" while a later class takes the exit code to 1.
+* `qmap/collide_cmp.py`: count solid brushes in every entity qbsp merges into the world collision
+  hull, not just `worldspawn`/`func_group`. `func_detail`, `func_detail_wall` and
+  `func_detail_fence` are all solid to players (measured: one 128-unit cube per entity flavour in
+  a sealed room, compared by clipnode count against an empty control), so a solid brush added in
+  any of them used to land on the identical-geometry fast path and report "collision identical"
+  at every `--step`. An ordinary wall brush in either illusionary entity is excluded from the
+  *solid* space — `func_illusionary_visblocker` explicitly, because it passes qbsp's
+  `IsWorldBrushEntity()` but has its visible contents replaced with `ILLUSIONARY_VISBLOCKER`, so
+  deriving the set from that predicate would wrongly add it. Neither exclusion is unconditional:
+  `func_detail_illusionary` still contributes its *liquids* and `func_illusionary_visblocker` its
+  `clip` brushes, both below — so what the tool carries is a per-entity table of which content
+  types survive, not an allowlist of classnames. Classname values are matched case-insensitively,
+  as qbsp does. Every ignored brush is accounted for in a stderr `note:` line, split by reason,
+  which is what stops the blind spot returning:
+
+      note: ca_saddle_b7.map: ignored 123 brush(es) whose entity drops them from every
+            collision hull: func_detail_illusionary x123
+      note: ca_saddle_b7.map: ignored 8 brush(es) in submodel entities (own collision hull,
+            solidity set at runtime): func_illusionary x3, trigger_teleport x3, trigger_push x2
+
+  Submodel brush entities (`func_wall`, `func_illusionary`, `trigger_*`) remain out of scope:
+  each becomes its own BSP model with its own hull, so comparing them means per-model comparison
+  rather than a table entry.
+* `qmap/collide_cmp.py`: **`func_detail_illusionary` is only non-solid, not contentless** — its
+  liquids are now compared. qbsp converts a brush there to illusionary mist behind
+  `if (contents.is_any_solid())` (`qbsp/brush.cc`), so a `*water`/`*slime`/`*lava` brush is never
+  converted and keeps real `CONTENTS_LAVA`/`WATER`/`SLIME` in hull 0 — the hull `SV_PointContents`
+  reads. Skipping the whole entity before looking at face textures therefore tallied a lava pool
+  dropped into a decal entity as just another ignored brush and exited 0.
+  It adds no clipnodes, so the clipnode probe behind the rest of these rules could not see it;
+  measured instead by counting hull-0 leaf contents, where a `*lava` cube in
+  `func_detail_illusionary` yields a `CONTENTS_LAVA` leaf exactly as it does in `worldspawn`.
+  `func_illusionary_visblocker` is the contrast that makes this a per-entity rule:
+  `Brush_GetContents()` strips every visible content there and substitutes
+  `ILLUSIONARY_VISBLOCKER` whatever the textures say, so a liquid really does vanish (measured:
+  no liquid leaf, no clipnodes). A `hint` face still wins over a liquid in either entity — hull 0
+  forces hint brushes to empty contents too, not just the clip hulls.
+* `qmap/collide_cmp.py`: **a `clip` brush in a `func_illusionary_visblocker` is as solid to a
+  player as a wall**, and was being ignored along with the rest of that entity. The substitution
+  above masks off `EWT_ALL_VISIBLE_CONTENTS` only, and `PLAYERCLIP` is an *invisible* content, so
+  it survives — and unlike `func_detail_illusionary`, a visblocker is not `continue`d out of hulls
+  1/2 before `qbsp/brush.cc` converts `clip` to `CONTENTS_SOLID` there. Measured: a `clip` cube in
+  a `func_illusionary_visblocker` gives a full clipnode count, identical to the same cube in
+  `worldspawn`, while the same entity holding a plain, `*lava` or `sky1` cube measures at the empty
+  control. The two illusionary entities therefore need opposite rules — `func_detail_illusionary`
+  keeps its liquids and drops its `clip`, `func_illusionary_visblocker` the reverse — which is why
+  the classname sets became one table of per-entity content types. The first-face and any-`hint`
+  rules apply inside a visblocker as everywhere else (measured: `clip` in slot 1 of 6 is solid,
+  `clip` in slots 2–6 behind a wall face is not, and a `hint` face anywhere drops it).
+* `qmap/collide_cmp.py`: **only read contents off the faces qbsp keeps.** `parse_brush()` recorded
+  every face's texture before checking whether its three plane points gave a normal, on the stated
+  belief that "qbsp reads the contents of every face regardless". It does not:
+  `ParseBrushFace()` returns `std::nullopt` for a face with no normal and `ParseBrush()` skips it,
+  so the face never reaches `brush.faces` and neither `MapBrush_IsHint()` nor `Brush_GetContents()`
+  can see it. Measured with a 7-face brush whose face 1 has three collinear points — a degenerate
+  `*lava` face ahead of six wall faces compiles **solid** (180 clipnodes, no lava leaf), and a
+  degenerate `hint` face does **not** drop the brush — so the old order got it wrong in both
+  directions at once: it would call that brush a pool, and drop a solid brush that qbsp keeps.
+  A face with no normal is now counted and reported on stderr rather than silently ignored, since
+  a generator emitting one is a bug even though it changes nothing downstream.
+* `qmap/collide_cmp.py`: **the mixed-contents warning now fires exactly where qbsp's does.**
+  `face_class()` returns qbsp's content *type* rather than this tool's comparison class, so `clip`
+  and `sky*` are distinct from ordinary solid (a new `SOLID_TYPES` folds all three into the solid
+  space, which is still exactly right for the player hull). They had been lumped together, so a
+  `clip` or `sky*` face landing in a wall or floor theme slot — the same theme-slot mistake the
+  warning exists to catch — passed silently while qbsp warned. Measured against qbsp on the whole
+  cross product: `clip`, `sky*`, `*lava` and `origin` mixed with solid all warn; `skip` and
+  `trigger` do not, because they genuinely *are* `CONTENTS_SOLID`. The warning is also now
+  computed over the faces `Brush_GetContents()` weighs — every face except `hint`/`hintskip`,
+  which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
+  does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
+  contain a mixed-contents brush, so this adds no noise to existing builds.
+* `qmap/collide_cmp.py`: **split entities, find brushes and read classnames by walking .map
+  tokens**, instead of counting brace characters, matching brushes with `\{\n(\(.*?)\n\}` and
+  searching the text for a key. All three guessed at where the tokens were, and each wrong guess
+  had the same consequence — a solid entity or brush dropped from the comparison, or a submodel
+  counted as world geometry, reported as `collision identical` with exit 0 on the geometry-key
+  fast path. One regex now spells out the whole lexical grammar in `parse_token()`'s precedence
+  order (`common/parser.cc`) and one walk consumes it in `map_entity_t::parse()`'s
+  (`common/mapfile.cc`), doing the entity split, the brush find and the classname read in a
+  single pass. Everything below is measured by compiling a 128-unit cube in a sealed room — 180
+  clipnodes means the entity merged into the world as `func_detail` and the cube is solid, 24 means
+  it became its own BSP model, 12 means the cube reached no hull — and every one of them was a
+  wrong answer first:
+    * **A key and a value are the same kind of token**, so only position tells them apart.
+      `"target" "classname"` ahead of a real `"classname" "func_detail"` compiles solid (180) but
+      a key search read the classname as `origin`; the same decoy ahead of `"func_detail" "1"`
+      and no real classname is a submodel (24) but read as `func_detail`.
+    * **A comment is not a token at all**, so it has to be consumed rather than ignored:
+      `parse_token()` tests for `//` or `;` before it tests for a quote, so a double quote in a
+      comment would shift the pairing for the rest of the entity. Scanning the alternatives in
+      its order gets both directions right — `// a "comment"` above a classname reads correctly
+      (180), and `"wad" "a//b.wad"` is still an ordinary epair, because a quote swallows the `//`
+      after it just as a comment marker swallows the quotes after it.
+    * **A quoted token runs to its closing quote across newlines**, which is a different thing
+      from a value sitting on another line than its key: `"message" "line1⏎line2"` is one value
+      (180), where ending the token at the newline produced two half-tokens.
+    * **A `\` takes the next character into the token**, whatever it is, so an escaped quote does
+      not end it — `"message" "say \"hi\" now"` is one value (180). What it takes may be a second
+      `\`, which then escapes nothing, so the *parity* of a run of backslashes decides: an odd run
+      before the closing quote escapes it, an even run leaves it as the terminator. Measured
+      across runs 1–5 long in four trailing contexts: with anything following on the line, a value
+      ending `\\"` is closed (180) where one ending `\"` runs on and loses the classname (24, a
+      submodel). Enumerating the two-character escapes instead of
+      applying that one rule read every even run one short — the last backslash paired with the
+      terminator, the value ran on, and the entity reported no classname. The exception is `\"` at
+      end of line, which qbsp warns about and treats as the terminator; that is the
+      `"wad" "c:\foo\"` shape some editors emit, and it reads at 180 as well.
+    * **A token need not be quoted.** `parse_token()`'s other branch takes any run of characters
+      above ASCII 32, so `classname func_detail` is a valid epair (180) — and a quote-only scan
+      did not merely miss one, since `message "hi"` leaves an odd number of quoted tokens and
+      mis-pairs everything after it.
+    * **`{` and `}` are structural by position, not spelling.** `map_entity_t::parse()` compares
+      the token text in a key slot without asking whether it was quoted, and a value slot takes a
+      brace like any other token. So a brace inside a quoted value is text: `"message" "a{b"`
+      compiles at 180, where counting brace characters collapsed the whole file into one entity
+      block.
+    * **A brush is a `{` in that same key slot, and its layout marks nothing.** `parse_brush()`
+      opens with `parse_token(PARSE_PEEK)`, which skips whitespace and comments before deciding
+      anything, so qbsp keeps a brush whose `{` is followed by a comment, a blank line, a trailing
+      space, or its own first face on the same line (measured: 180 clipnodes for all four, as for
+      the plain layout). The old `\{\n(\(.*?)\n\}` found no brush at all in those, so the tool
+      reported `collision identical` and exit 0 with the same brush count on both sides — and,
+      unlike every other way a brush can leave this comparison, no `note:` naming it. A blank line
+      or a trailing space after `{` is not an exotic thing to find in a hand-edited `.map`.
+    * **A key is whitespace-trimmed, a value is not.** `parse_entity_dict()` erases leading and
+      trailing `std::isspace` from the key before storing it, so `" classname "` and a
+      tab-padded key both mean classname (180). Internal whitespace is untouched, so
+      `"class name"` is a different key (24).
+    * **A repeated key keeps its last value.** `parse_entity_dict()` stores pairs with
+      `entdict_t::set()` (`common/entdata.cc`), which overwrites `it->second` in place rather than
+      appending, so `find()` returning the first match returns the overwritten one. `"classname"
+      "func_illusionary"` then `"classname" "func_detail"` is merged into the world (180) and the
+      same two reversed is a submodel (24): stopping at the first match is wrong both ways.
+    * **The key stays case-sensitive**, because `entdict_t::find()` compares with
+      `key == it->first`. qbsp does not read `"CLASSNAME"` as a classname at all (24, not 180),
+      and a `"CLASSNAME"` repeat does not overwrite a real one (180). Only the classname *value*
+      is case-insensitive, which is where qbsp uses `Q_strcasecmp`.
+    * **`PARSE_SAMELINE` still holds the value to the key's line.** A newline between the two
+      makes qbsp refuse the map outright (`parse_token: line is incomplete`), as does a comment
+      there, so reading across one would describe maps that cannot compile. Tabs, runs of spaces,
+      several epairs on one line and an entity header sharing the line with its opening brace are
+      all fine (180), so a line-anchored pattern would have missed a solid entity.
+  Checked against every entity of all 22 real maps in the tree (4,449 of them): the walk splits
+  every file into the same blocks as before, finds the same 50,136 brushes with the same face
+  lines in each, and reads the same classname for every entity, so nothing in anyone's build
+  moves. One pass now does the work of three, so parsing costs 1.59× the old scan-plus-search and
+  a full run on the heaviest real pair goes 2.11s → 2.42s. Voxelization still dominates.
+* `qmap/collide_cmp.py` module docstring and `GUIDE.md` gotcha 31: state the two things the tool
+  does **not** claim, so "exit 0" cannot be read as more than it means. It compares the player
+  collision hull and liquid contents — not projectile collision, where `clip` and `sky*` diverge
+  from a wall even though all three are identically solid to a player (a `clip` brush is absent
+  from hull 0, so rockets pass through; `sky*` makes a SKY leaf that swallows them). Covering that
+  needs a second hull-0 pass and is its own ticket. The other gap is a false positive rather than
+  a false negative: because each liquid class is compared independently, reshaping a liquid brush
+  buried inside an unchanged solid wall reports a difference that solid CSG makes unreachable.
+  That direction is the safe one for a tool whose job is to refuse to certify.
+* `qmap/collide_cmp.py`: read face textures for contents, so `*`-prefixed liquids are no longer
+  counted as solid. `parse_brush()` now returns each brush's face texture names in file order and
+  `brush_contents()` classifies the brush the way qbsp does. This fixes a false positive
+  (retexturing a solid wall `*lava` turned a wall into a lava volume and still reported "collision
+  identical") and a false negative (a `liquid()` pool counted as solid both masked real solid
+  changes inside it and reported `COLLISION DIFFERS` for a pool added to open air). The rules,
+  measured the same way as above rather than read off the source:
+  - `*water` / `*slime` / `*lava` (any `*` name) are liquid, not solid. `!`-prefixed names are
+    Half-Life only and are solid here. `clip`, `skip`, `sky*` and `trigger` are all solid — none
+    of them may be excluded on the strength of the name. `hint` / `hintskip` and `origin` are not.
+  - **Mixed-face brushes follow qbsp exactly: the first face in file order decides.** One `*lava`
+    face in slot 1 makes a whole wall a pool; the same face in slot 6 leaves it solid. Such
+    brushes also get a loud stderr warning, since a `*` texture in a wall or floor theme slot is
+    almost always a mistake.
+  - The one rule that source-reading gets backwards: **a single `hint` or `hintskip` face
+    anywhere** drops the whole brush from the collision hulls, whatever the other faces say.
+    `face_get_contents()` returns *empty* for both names, which the first-face rule skips over,
+    predicting solid; `MapBrush_IsHint()` tests *any* face and wins. Only a compile shows this.
+
+  Water, slime and lava are then compared as three separate content classes alongside the solid
+  space, each with its own ROI set, reporting e.g. `WATER CONTENTS DIFFER` / `LAVA CONTENTS
+  DIFFER` and exiting 1. Separate classes rather than one "non-solid" space on purpose: a `*water`
+  pool retextured `*lava` fills exactly the same volume, so a combined pass would report nothing
+  while the room became lethal. The solid pass's own wording is unchanged, but **the pass
+  criterion is the exit code, not the string** — on a `*water` → `*lava` swap stdout prints
+  `collision identical` for the solid pass and `WATER`/`LAVA CONTENTS DIFFER` after it, and the
+  process exits 1. GUIDE section 5 says so explicitly now.
+
 # v3.5 (template texture & alignment fixes, collide_cmp half-space support, GUIDE gotchas)
 
 Fixes and lessons found while building `ca_saddle`:
