@@ -10,7 +10,7 @@
   - Added `tests/test_version.py` to enforce SemVer formatting in `VERSION`, alignment with the top
     `CHANGES.md` release heading, no stale version headers in docs/template banners, and valid local
     links/images in `README.md`.
-* `README.md` (`CDEFG-7`): expanded from a brief placeholder into a full human-oriented project
+* `README.md`: expanded from a brief placeholder into a full human-oriented project
   overview while keeping a prominent top callout directing AI map-building agents to `GUIDE.md`.
   Covers visual gallery previews, getting started with basic/medium/complex example prompts, the
   human + AI workflow, engineering highlights (verticality benchmarking and travel-distance sizing,
