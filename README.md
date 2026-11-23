@@ -3,7 +3,7 @@
 **Procedural Quake 1 / QuakeWorld multiplayer map generation, texture synthesis, BSP verification, and demo analysis — built for human + AI map-making workflows.**
 
 > [!IMPORTANT]
-> **Using this toolkit with an AI agent to build a Quake map? Start with [`GUIDE.md`](GUIDE.md).**
+> **AI agents building a Quake map with this toolkit: read [`GUIDE.md`](GUIDE.md) first.**
 > Read **Section 3** (designing fresh skeletons, *Design for height*, sizing by travel distance, and item economy) before designing anything, and **Section 9** (31 hard-won gotchas) before texturing or running a visual pass.
 
 ---
@@ -34,37 +34,123 @@ The toolkit and [`GUIDE.md`](GUIDE.md) grew out of building **nine multiplayer m
 
 ---
 
-## How the Workflow Works
+## Getting Started
 
-The codebase is a **starting point, not a framework and not a cage**. Each map starts fresh from `template/` rather than copying the previous map (copying anchored three early maps onto the same layout skeleton), and maps extend the core whenever a design needs a new primitive.
+You don't need to write map generators or run BSP compilers by hand — your AI coding agent handles the Python code, compilation, geometry checks, and renders by following [`GUIDE.md`](GUIDE.md). Your job is directing the design, running around in each build, and giving playtest and visual feedback.
 
-The iterative human + AI loop documented in [`GUIDE.md` Section 2](GUIDE.md#2-working-with-the-human-the-process-that-worked):
+### What You Need
 
-1. **Spec** — Mode (CA / FFA / TDM / CTF), player count, symmetry, favourite/disliked references. Size the map by **travel distance**, not floor area.
-2. **Concept in plan *and* section** — Sketch 2–3 structurally distinct skeletons (checked against [`gallery/GALLERY.md`](gallery/GALLERY.md)) showing vertical levels, overlooks, and climbing routes before writing a single brush.
-3. **Layout blockout** — Build with neutral height-marked zone textures (`template/texgen_blockout.py`), run every automated geometry/hull check, and ship `.bsp` + `.map` + `.wad` alongside a plan, vertical sections, an isometric cutaway, and software-rendered views.
-4. **Layout fix rounds** — Settle structure and verticality before texturing; structural edits after a visual pass force texture rework. Every build gets a new filename (`name_bN`) because QuakeWorld clients cache maps by name.
-5. **Visual pass** — Generate an original procedural texture set and lighting pass, then prove with `qmap/collide_cmp.py` that both player and projectile/liquid collision stayed identical.
-6. **In-client screenshot & demo rounds** — Fix whole classes of visual issues spotted in ezQuake screenshots (mocking up 2–3 rendered options from the player's camera angle when feedback is subjective), and analyze real match MVD demos with `demos/` once the group plays the map.
+- An **AI coding agent** with shell and file access (e.g., Claude Code, Codex, or similar) running in an environment with **Python 3** (`numpy`, `pillow`, `scipy`, `matplotlib`, `numba`) and **[`ericw-tools`](https://github.com/ericwa/ericw-tools)** (`qbsp`, `vis`, `light`).
+- A **QuakeWorld client** (such as [ezQuake](https://ezquake.com/)) to load the generated `.bsp` builds, explore the map, and grab screenshots for feedback.
+
+### Example Prompts
+
+Point your agent at this repository (the GitHub URL or a local clone) and tell it what kind of map you want to make. You can start with a single sentence or give detailed design goals up front:
+
+#### Basic — mode, player count, and the repo link
+
+```text
+I'm looking to make a Clan Arena 8-12 player map that also supports TDM and FFA.
+https://github.com/Voidious/qmap-ai-toolkit
+```
+
+That's enough for the agent to read `GUIDE.md`, ask any quick clarifying questions (like favourite or disliked maps), and pitch 2–3 distinct layout concepts in plan and section before building anything.
+
+#### Medium — adding symmetry, pacing references, and a visual direction
+
+```text
+Let's build a mirror-symmetric CTF map for 8-12 players using
+https://github.com/Voidious/qmap-ai-toolkit. I'd like fast flag runs
+(~10-12 seconds walking, with clean hook lines) and real vertical fights in mid
+rather than flat corridors — closer to aerowalk or dapak12's height play than
+stacked slabs. Keep the first builds in blockout textures until we're happy with
+the layout, and aim for a volcanic basalt-and-copper look when we get to the
+visual pass.
+```
+
+#### Complex — competitive layout, item economy, and review constraints
+
+```text
+Using https://github.com/Voidious/qmap-ai-toolkit, let's design an asymmetric
+4v4 TDM map (also playable for 2v2 and 6-8 player FFA) sized around ztndm3 /
+aerowalk travel times. Give it three distinct elevation tiers with strong
+overlooks between a sunken red-armor pit, a high quad/mega balcony, and separate
+RL and LG control routes — check the resource spacing with itemprofile.py and
+keep straight sightlines under ~1200 units. Pitch 3 structurally different
+concepts in both plan and section (distinct from gallery/GALLERY.md) before
+building the first blockout.
+```
 
 ---
 
-## Repository Layout
+## How the Workflow Works
+
+The codebase is a **starting point, not a framework and not a cage**. Each new map starts fresh from `template/` rather than copying the previous map (copying anchored three early maps onto the same layout skeleton), and the agent extends the core whenever a design calls for a new architectural primitive.
+
+The iterative human + AI loop (detailed in [`GUIDE.md` Section 2](GUIDE.md#2-working-with-the-human-the-process-that-worked)):
+
+1. **Spec** — You share the mode (CA / FFA / TDM / CTF), player count, symmetry, and favourite or disliked maps. The agent sizes the map by **travel distance**, not floor area.
+2. **Concept in plan *and* section** — Before writing any geometry, the agent sketches 2–3 structurally distinct skeletons (checked against [`gallery/GALLERY.md`](gallery/GALLERY.md)) showing vertical levels, overlooks, and climbing routes so you can pick the best direction up front.
+3. **Layout blockout** — The agent generates a playable `.bsp` with neutral height-marked zone textures (`template/texgen_blockout.py`), runs automated geometry and player-hull checks, and delivers the build alongside a floor plan, vertical sections, an isometric cutaway, and software-rendered preview shots.
+4. **Layout fix rounds** — You run around in-client and give layout feedback; the agent iterates on structure and verticality until the layout feels settled (structural edits after a visual pass force texture rework). Every build gets a new filename (`name_bN`) because QuakeWorld clients cache maps by name.
+5. **Visual pass** — Once the layout is locked, you pick a visual theme from concrete proposals. The agent synthesizes an original procedural texture set and lighting pass, then verifies with `qmap/collide_cmp.py` that both player and projectile/liquid collision stayed identical.
+6. **In-client screenshot & demo rounds** — You send ezQuake screenshots of anything that looks off — the agent fixes whole classes of visual issues at once, and mocks up 2–3 rendered options from your camera angle when a choice is subjective. Once your group plays real matches on the map, the `demos/` tools can analyze MVD recordings for pacing and movement verticality.
+
+---
+
+## Engineering Highlights
+
+### 1. Quantitative Verticality & Sizing by Travel (`vprofile.py`, `section.py`, `iso.py`)
+
+After nine maps, playtesters felt the layouts still played too flat. Profiling all nine compiled BSPs against five beloved QuakeWorld classics (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`) revealed why: in the classics, **item-to-item routes change height 251–551 units per 1,000 units travelled**, versus **61–229** in our nine maps.
+
+Crucially, **stacked is not vertical**: `ctf_strata` stacks 32% of its footprint (more than any classic), yet scored just **61** on route height change because players mostly ran flat along two stacked slabs. Inspecting maps in section and isometric cutaway exposed the slab structure immediately — and measuring **travel distance** (`travel_median`, `travel_p90`) replaced floor area for sizing maps after stacked/teleporter-rich layouts proved far quicker to traverse than their square footage implied.
+
+<p align="center">
+  <a href="gallery/profiles/verticality_compare.jpg"><img src="gallery/profiles/verticality_compare.jpg" alt="Verticality metrics of our nine maps compared against five classic QuakeWorld maps" width="100%"></a><br>
+  <sub><code>vprofile.py</code> benchmark comparing nine toolkit maps against five classic QW maps across stacking, effective levels, dominant-level share, overlooks, route height change, and angled walls.</sub>
+</p>
+
+<p align="center">
+  <a href="gallery/profiles/ctf_strata_iso.png"><img src="gallery/profiles/ctf_strata_iso.png" alt="Isometric cutaways of ctf_strata at two cut heights showing stacked lower and upper levels" width="100%"></a><br>
+  <sub><code>qmap/iso.py</code> cutaways of <code>ctf_strata</code> at two cut heights, illustrating its two stacked slabs and central open-sky atrium.</sub>
+</p>
+
+### 2. Dual-Hull Collision Proofs for Visual Passes (`collide_cmp.py`)
+
+When an agent retextures a settled layout, proving that zero gameplay collision changed is subtler than comparing axis-aligned walls. `qmap/collide_cmp.py` models `ericw-tools qbsp`'s actual measured rules (verified by compiling a full entity × texture test matrix against live `qbsp`):
+
+- **Player hull (hulls 1 & 2)** vs **projectile / point-trace hull (hull 0)** are checked independently across six classes (`solid`, `proj`, `sky`, `water`, `slime`, `lava`) — catching bugs like retexturing a wall to `clip` (identical to players, transparent to rockets), `sky*` (identical to players, deletes rockets), or swapping `*water` to `*lava` (same volume, lethal).
+- **Exact convex half-space voxelization** handles ramps, chamfered prisms, and 1-unit wall veneers down to sub-unit steps (`--step 0.5`), using non-inflating ROI merging and exact lattice overlap masking so large maps stay fast and within memory bounds.
+- Every ignored brush (such as `func_detail_illusionary` fixtures or runtime submodels like `trigger_teleport`) is explicitly accounted for on `stderr`, and the tool exits `0` only when every compared hull matches.
+
+### 3. Item Economy Diagnostics (`itemprofile.py`, `itemcheck.py`)
+
+For TDM and FFA maps, `qmap/itemprofile.py` computes embedded inventories, directed RL/LG/armor/MH route matrices on the compiled player-hull graph, world eye-ray checks, and hypothetical `--move` comparisons without editing a BSP. These outputs are **design diagnostics, not mandatory balance scores** — see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md) for the five-classic study and model caveats.
+
+<p align="center">
+  <a href="gallery/items/aerowalk.items.png"><img src="gallery/items/aerowalk.items.png" alt="aerowalk pickup locations and directed model-cost matrix from itemprofile.py" width="100%"></a><br>
+  <sub><code>qmap/itemprofile.py</code> output on <code>aerowalk</code>: pickup locations over reachable floor and the directed movement-cost matrix between key resources.</sub>
+</p>
+
+---
+
+## What's Inside the Repository
 
 ```text
 qmap-ai-toolkit/
-├── GUIDE.md          Field guide for designing, building, verifying, and texturing maps (read first)
+├── GUIDE.md          Field guide for AI agents designing, building, verifying, and texturing maps
 ├── VERSION           Single source of truth for the toolkit version (SemVer)
 ├── CHANGES.md        Release history
-├── template/         Clean starting point for a new map (builds as-is into a demo map)
+├── template/         Clean starting point for a new map (builds as-is into a small demo map)
 ├── qmap/             Shared checks, spatial/verticality/item analytics, renderer, texture & WAD tools
-├── examples/         Four finished maps that rebuild byte-identical from source (use for techniques)
+├── examples/         Four finished maps that rebuild byte-identical from source
 ├── gallery/          Plans, preview renders, height benchmark, and item-placement reference study
 ├── demos/            QuakeWorld MVD demo parser and match / movement-verticality analysis
 └── tests/            Self-contained regression test suite (stdlib + NumPy, no qbsp required)
 ```
 
-### `template/` — Start a New Map Here
+### `template/` — Clean Starting Point for Each Map
 
 A plain-Python map generator split into small composable files that `build.sh` concatenates and runs:
 
@@ -102,7 +188,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 
 ### `examples/` — Four Reproducible Reference Maps
 
-Each folder rebuilds **byte-identical** `.map` source from this repository. Use them as a reference cookbook for techniques — not as layout templates:
+Each folder rebuilds **byte-identical** `.map` source from this repository — useful as a cookbook for architectural and texturing techniques, rather than as layout templates:
 
 - **`examples/ca_lyceum`** — Asymmetric Clan Arena / TDM (8–12); hub + three distinct satellites; error-diffused marble, sky oculus, columns with bases and capitals, close-up detail cameras (`details_lyceum.py`).
 - **`examples/ctf_circuit`** — Mirror-symmetric CTF (8–12); "theta" racetrack around a solid core; sandstone + masked glazed team tile, light strips climbing stairs (`strip_ramp_pos`), banners, floor inlays, gilded cupola, route-timing figures (`routes_fig.py`).
@@ -116,62 +202,17 @@ Each folder rebuilds **byte-identical** `.map` source from this repository. Use 
 
 ---
 
-## Engineering Highlights
+## Running Tools & Tests Locally (Optional)
 
-### 1. Quantitative Verticality & Sizing by Travel (`vprofile.py`, `section.py`, `iso.py`)
+Normally your AI agent runs these commands directly using [`GUIDE.md`](GUIDE.md). If you'd like to verify your own environment, run the regression suite, or build the template demo by hand:
 
-After nine maps, playtesters felt the layouts still played too flat. Profiling all nine compiled BSPs against five beloved QuakeWorld classics (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`) revealed why: in the classics, **item-to-item routes change height 251–551 units per 1,000 units travelled**, versus **61–229** in our nine maps.
-
-Crucially, **stacked is not vertical**: `ctf_strata` stacks 32% of its footprint (more than any classic), yet scored just **61** on route height change because players mostly ran flat along two stacked slabs. Looking at maps in section and isometric cutaway exposed the slab structure immediately — and measuring **travel distance** (`travel_median`, `travel_p90`) replaced floor area for sizing maps after stacked/teleporter-rich layouts proved far quicker to traverse than their square footage implied.
-
-<p align="center">
-  <a href="gallery/profiles/verticality_compare.jpg"><img src="gallery/profiles/verticality_compare.jpg" alt="Verticality metrics of our nine maps compared against five classic QuakeWorld maps" width="100%"></a><br>
-  <sub><code>vprofile.py</code> benchmark comparing nine toolkit maps against five classic QW maps across stacking, effective levels, dominant-level share, overlooks, route height change, and angled walls.</sub>
-</p>
-
-<p align="center">
-  <a href="gallery/profiles/ctf_strata_iso.png"><img src="gallery/profiles/ctf_strata_iso.png" alt="Isometric cutaways of ctf_strata at two cut heights showing stacked lower and upper levels" width="100%"></a><br>
-  <sub><code>qmap/iso.py</code> cutaways of <code>ctf_strata</code> at two cut heights, illustrating its two stacked slabs and central open-sky atrium.</sub>
-</p>
-
-### 2. Dual-Hull Collision Proofs for Visual Passes (`collide_cmp.py`)
-
-When an AI retextures a settled layout, proving that zero gameplay collision changed is subtler than comparing axis-aligned walls. `qmap/collide_cmp.py` models `ericw-tools qbsp`'s actual measured rules (verified by compiling a full entity × texture test matrix against live `qbsp`):
-
-- **Player hull (hulls 1 & 2)** vs **projectile / point-trace hull (hull 0)** are checked independently across six classes (`solid`, `proj`, `sky`, `water`, `slime`, `lava`) — catching bugs like retexturing a wall to `clip` (identical to players, transparent to rockets), `sky*` (identical to players, deletes rockets), or swapping `*water` to `*lava` (same volume, lethal).
-- **Exact convex half-space voxelization** handles ramps, chamfered prisms, and 1-unit wall veneers down to sub-unit steps (`--step 0.5`), using non-inflating ROI merging and exact lattice overlap masking so large maps stay fast and within memory bounds.
-- Every ignored brush (such as `func_detail_illusionary` fixtures or runtime submodels like `trigger_teleport`) is explicitly accounted for on `stderr`. Always check the **exit code (`0` = identical)** rather than just stdout text.
-
-### 3. Item Economy Diagnostics (`itemprofile.py`, `itemcheck.py`)
-
-For TDM and FFA maps, `qmap/itemprofile.py` computes embedded inventories, directed RL/LG/armor/MH route matrices on the compiled player-hull graph, world eye-ray checks, and hypothetical `--move` comparisons without editing a BSP. These outputs are **design diagnostics, not mandatory balance scores** — see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md) for the five-classic study and model caveats.
-
-<p align="center">
-  <a href="gallery/items/aerowalk.items.png"><img src="gallery/items/aerowalk.items.png" alt="aerowalk pickup locations and directed model-cost matrix from itemprofile.py" width="100%"></a><br>
-  <sub><code>qmap/itemprofile.py</code> output on <code>aerowalk</code>: pickup locations over reachable floor and the directed movement-cost matrix between key resources.</sub>
-</p>
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- **Python 3** with `numpy`, `pillow`, `scipy`, `matplotlib`, and `numba`
-- **[`ericw-tools`](https://github.com/ericwa/ericw-tools)** (`qbsp`, `vis`, `light`) built from source
-- A **QuakeWorld client** (e.g. [ezQuake](https://ezquake.com/)) for playtesting and screenshot review
-
-### 1. Run the Regression Test Suite
-
-Requires only Python 3 + NumPy (no `ericw-tools` needed):
+**Run the regression tests** (Python 3 + NumPy only — no `ericw-tools` required):
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-### 2. Build the Template Demo Map
-
-Verify your compiler and Python environment end to end using `template/` (which builds into `mymap_b1` as-is):
+**Build the `template/` demo map and its figures** (requires Python dependencies + `ericw-tools`):
 
 ```bash
 export ERICW=/path/to/ericw-tools/build
@@ -185,24 +226,7 @@ python3 ../qmap/iso.py mymap_b1.json iso.png cut=100 cut=300
 python3 views.py mymap_b1.bsp views.png
 ```
 
-`build.sh` compiles the map, checks for leaks, runs `check.py`, and finishes with `vprofile.py --check --targets` (set `VPROFILE=0` to skip `vprofile.py`).
-
-### 3. Rebuild a Finished Example
-
-Verify byte-identical reproducibility on `ca_lyceum` (see [`GUIDE.md` Section 1](GUIDE.md#1-whats-in-the-box) and [Section 13](GUIDE.md#13-example-notes) for the other three examples):
-
-```bash
-export ERICW=/path/to/ericw-tools/build
-cd examples/ca_lyceum
-python3 texgen_lyceum.py ltex
-python3 ../../qmap/makewad.py ca_lyceum_b5.wad $(sed 's/.*/&=ltex\/&.png/' ltex_names.txt)
-bash build.sh
-python3 views_lyceum.py ca_lyceum_b5.bsp views.png
-```
-
-### 4. Start Your Own Map
-
-Copy `template/` to a new folder, then follow [`GUIDE.md`](GUIDE.md) — start with **Sections 2–3** (spec, concept sketches in plan and section, verticality and travel targets) and **Section 12** (step-by-step build checklist).
+See [`GUIDE.md` Section 1](GUIDE.md#1-whats-in-the-box) and [Section 13](GUIDE.md#13-example-notes) for the commands to rebuild each finished map in `examples/` byte-for-byte.
 
 ---
 
