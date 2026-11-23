@@ -89,10 +89,10 @@
   tokens**, instead of counting brace characters, matching brushes with `\{\n(\(.*?)\n\}` and
   searching the text for a key. All three guessed at where the tokens were, and each wrong guess
   had the same consequence — a solid entity or brush dropped from the comparison, or a submodel
-  counted as world geometry, reported as `collision identical` with exit
-  0 on the geometry-key fast path. One regex now spells out the whole lexical grammar in
-  `parse_token()`'s precedence order (`common/parser.cc`) and one walk consumes it in
-  `map_entity_t::parse()`'s (`common/mapfile.cc`), doing the split and the classname read in a
+  counted as world geometry, reported as `collision identical` with exit 0 on the geometry-key
+  fast path. One regex now spells out the whole lexical grammar in `parse_token()`'s precedence
+  order (`common/parser.cc`) and one walk consumes it in `map_entity_t::parse()`'s
+  (`common/mapfile.cc`), doing the entity split, the brush find and the classname read in a
   single pass. Everything below is measured by compiling a 128-unit cube in a sealed room — 180
   clipnodes means the entity merged into the world as `func_detail` and the cube is solid, 24 means
   it became its own BSP model, 12 means the cube reached no hull — and every one of them was a
@@ -114,8 +114,9 @@
       not end it — `"message" "say \"hi\" now"` is one value (180). What it takes may be a second
       `\`, which then escapes nothing, so the *parity* of a run of backslashes decides: an odd run
       before the closing quote escapes it, an even run leaves it as the terminator. Measured
-      across runs 1–5 long in four trailing contexts, a value ending `\\"` is closed (180) where
-      one ending `\"` is not (24, a submodel). Enumerating the two-character escapes instead of
+      across runs 1–5 long in four trailing contexts: with anything following on the line, a value
+      ending `\\"` is closed (180) where one ending `\"` runs on and loses the classname (24, a
+      submodel). Enumerating the two-character escapes instead of
       applying that one rule read every even run one short — the last backslash paired with the
       terminator, the value ran on, and the entity reported no classname. The exception is `\"` at
       end of line, which qbsp warns about and treats as the terminator; that is the
