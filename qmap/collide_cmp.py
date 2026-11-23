@@ -29,14 +29,27 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-# A quoted .map token, or a comment to skip. One pattern with the comment first so that scanning
-# left to right reaches a '//' or ';' before any quote on the same line, exactly as parse_token()
-# (common/parser.cc) does -- it tests for a comment before it tests for a quote, so a quote inside
-# a comment is not a token, while '//' inside a quoted value is just text. A quoted token runs to
-# its closing quote across newlines too: parse_token's copy loop is `while (*pos != '"')` with no
-# newline case at all, so a value may span lines and a key may be padded with them.
-# classname() explains why the tokens are paired by position rather than searched for.
-TOKEN_RE = re.compile(r'(?://|;)[^\n]*|"([^"]*)"')
+# The whole .map lexical grammar, in parse_token()'s own precedence order (common/parser.cc), so
+# that one left-to-right scan reproduces it. The order is the point: parse_token() tests for a
+# comment before a quote and for a quote before a bare run, so a comment marker swallows the
+# quotes after it while a quote swallows the '//' after it.
+TOKEN_RE = re.compile(r'''
+      (?://|;)[^\n]*                 # a comment, to end of line. Matched so it is consumed, then
+                                     # dropped -- parse_token() does not return it as a token.
+    | "( (?: [^"\\]                  # 1: a quoted token, to its closing quote. No newline case in
+           | \\"(?![\r\n])           # parse_token()'s copy loop, so it may span lines. A '\'
+           | \\(?!"(?![\r\n]))       # takes the next character with it, so an escaped quote does
+         )* )"                       # not end the token -- unless it sits at end of line, which
+                                     # qbsp warns about and treats as the terminator ("c:\foo\").
+    | ([{}])(?![^\x00-\x20])         # 2: a brace on its own. Split out of the next alternative
+                                     # only so a walk can skip a brush's faces without building a
+                                     # string for each; it changes no token, because where the
+                                     # lookahead fails the next alternative matches the same run.
+                                     # '{foo' really is one token, which is how parse_token()
+                                     # reads it too -- its bare branch does not stop at a brace.
+    | ([^\x00-\x20]+)                # 3: any other token: parse_token()'s `while (*pos > 32)`
+''', re.X)
+BRACE = 2                            # the one group a brush-interior walk has to look at
 # the whitespace parse_entity_dict() trims off a key, spelled out rather than left to str.strip():
 # it tests std::isspace, which in qbsp's locale is exactly these six ASCII characters
 KEY_WS = ' \t\n\r\v\f'
@@ -155,81 +168,96 @@ def brush_contents(texes):
 
 
 def entities(txt):
-    out, depth, start = [], 0, 0
-    for k, ch in enumerate(txt):
-        if ch == '{':
-            if depth == 0:
-                start = k
-            depth += 1
-        elif ch == '}':
-            depth -= 1
-            if depth == 0:
-                out.append(txt[start:k + 1])
-    return out
+    """Yield (entity text, classname or None) for every entity block in a .map file.
 
+    Walks tokens the way map_file_t::parse / map_entity_t::parse / parse_entity_dict do
+    (common/mapfile.cc), because nothing about .map structure is decided by anything else. Every
+    rule below was measured against qbsp with a 128-unit cube in a sealed room -- 12 clipnodes if
+    the cube reached no hull, 180 if its entity merged into the world as func_detail, 24 if the
+    entity became its own submodel -- and every one of them was a wrong answer first.
 
-def classname(e):
-    """The classname qbsp reads out of one entity block, or None if it has none.
+    What a token is, which is the whole reason this is a token walk and not a search:
+      - A key and a value are the same kind of token, so only position tells them apart. An epair
+        whose *value* is the word classname does not make the next epair's key a classname:
+        '"target" "classname"' then '"origin" "0 0 0"' then a real '"classname" "func_detail"'
+        compiles solid (180), where searching for the key matched the decoy and read the classname
+        as 'origin', dropping a solid entity. The same decoy followed by '"func_detail" "1"' and
+        no real classname is a submodel (24), where searching read 'func_detail' and counted it as
+        world geometry. Wrong in both directions.
+      - A comment is not a token at all, so it cannot be ignored -- it has to be consumed.
+        parse_token() tests for '//' or ';' before it tests for a quote, so one double quote in a
+        comment would shift a naive pairing by one for the rest of the entity. Scanning for the
+        alternatives in parse_token()'s order reproduces its precedence in both directions: a
+        comment marker swallows the quotes after it, and a quote swallows the '//' after it, so
+        '// a "comment"', a ';' comment, a trailing comment and '"wad" "a//b.wad"' all read
+        correctly (180). A '}' inside a comment is not a brace either.
+      - A quoted token runs to its closing quote across newlines, which is not the same thing as
+        a value sitting on another line than its key. '"message" "line1<newline>line2"' is one
+        value (180); a pattern that ended the token at the newline read two half-tokens.
+      - A '\\' takes the next character into the token with it, so an escaped quote does not end
+        it: '"message" "say \\"hi\\" now"' is one value (180). The exception is '\\"' at end of
+        line, which qbsp warns about and treats as the terminator -- that is the '"wad" "c:\\foo\\"'
+        shape certain editors emit, and it also reads at 180.
+      - A token need not be quoted. parse_token()'s other branch takes any run of characters above
+        ASCII 32, so 'classname func_detail' is a valid epair and compiles solid (180) -- and a
+        quote-only scan did not merely miss it, it mis-paired every quoted token after it, because
+        'message "hi"' puts an odd number of quoted tokens ahead of the rest of the entity.
+      - '{' and '}' are ordinary tokens to parse_token(); map_entity_t::parse() makes them
+        structural by comparing the token text in a key slot, without asking whether it was
+        quoted. So a brace inside a quoted *value* is text -- '"message" "a{b"' compiles at 180,
+        while counting brace characters merged the whole file into one entity block.
 
-    Pairs the quoted tokens the way qbsp's parser does rather than searching for the key, because
-    a key and a value are the same kind of token and only their position tells them apart.
-    map_entity_t::parse() (common/mapfile.cc) walks tokens: '{' opens a brush, anything else is a
-    key whose value is the next token, read with PARSE_SAMELINE. A face line contains no quotes,
-    so brushes contribute no quoted tokens and the alternation holds across them.
-
-    What follows from pairing instead of searching, every point measured against qbsp with a
-    128-unit cube in a sealed room (12 clipnodes empty, 180 merged into the world as func_detail,
-    24 as its own submodel):
-      - An epair whose *value* is the word classname does not make the next epair's key a
-        classname. '"target" "classname"' followed by '"origin" "0 0 0"' and then a real
-        '"classname" "func_detail"' compiles solid (180); searching for the key matched the decoy
-        and read the classname as 'origin', excluding a solid entity entirely. The same decoy
-        followed by '"func_detail" "1"' and no real classname is a submodel (24), where searching
-        read 'func_detail' and counted it as world geometry -- wrong in both directions.
-      - The value must be on the key's line. PARSE_SAMELINE is why: a newline between the two
-        makes qbsp refuse the map outright ("parse_token: line is incomplete"), so a pattern that
-        allowed one there was describing maps that cannot compile.
-      - Tabs, runs of spaces and several epairs on one line are all fine, including the whole
-        entity header on the line with its opening brace -- measured at 180 clipnodes, so an
-        anchored line-start pattern would have missed a solid entity.
-      - Comments have to be skipped, not just ignored. parse_token() tests for '//' or ';' before
-        it tests for a quote, so one double quote in a comment is not a token -- but it would
-        shift a naive pairing by one for the rest of the entity. Measured: '// a "comment"' above
-        a real classname still compiles at 180, as does a ';' comment, a trailing comment, and
-        '"wad" "a//b.wad"' (the '//' there is inside a quoted value, where the quote comes first).
-      - A quoted token may span lines, which is not the same thing as a value being on another
-        line than its key. parse_token() copies to the closing quote with no newline case, so
-        '"message" "line1<newline>line2"' is one value and compiles at 180 -- while a pattern
-        that stopped a token at the newline read two half-tokens and shifted the pairing, losing
-        a solid entity. PARSE_SAMELINE is still enforced, between the key and its own value.
-      - A key is whitespace-trimmed, a value is not. parse_entity_dict() (common/mapfile.cc)
-        erases leading and trailing std::isspace characters from the key token before storing it,
-        so '" classname "', '"<tab>classname<tab>"' and even a newline-padded key all compile at
-        180 and all mean classname. Internal whitespace is untouched, so '"class name"' is a
-        different key -- measured at 24, a submodel.
-
-    A repeated key keeps its *last* value, so the scan cannot stop at the first match.
-    parse_entity_dict() stores every pair with entdict_t::set() (common/entdata.cc), which
-    overwrites `it->second` in place when the key is already present rather than appending a
-    second entry -- find() returning the first match then finds the overwritten one. Measured:
-    '"classname" "func_illusionary"' followed by '"classname" "func_detail"' compiles merged into
-    the world (180 clipnodes), and the same two reversed is a submodel (24), so taking the first
-    value is wrong in both directions.
-
-    The key is compared case-sensitively: entdict_t::find() compares with `key == it->first`, so
-    qbsp does not recognise '"CLASSNAME"' as a classname at all and that entity measures as a
-    submodel (24, not 180) -- nor does a '"CLASSNAME"' pair overwrite a real one, measured at 180.
-    Only the classname *value* is matched case-insensitively, by the callers, which is where qbsp
-    uses Q_strcasecmp.
+    What qbsp then does with the pairs:
+      - The value must be on the key's line, read with PARSE_SAMELINE. A newline between the two
+        makes qbsp refuse the map outright ("parse_token: line is incomplete"), as does a comment
+        there, so reading across one would be describing maps that cannot compile. Tabs, runs of
+        spaces and several epairs on one line are all fine, as is the entity header on the line
+        with its opening brace (180) -- an anchored line-start pattern missed a solid entity.
+      - A key is whitespace-trimmed, a value is not. parse_entity_dict() erases leading and
+        trailing std::isspace from the key token before storing it, so '" classname "',
+        '"<tab>classname<tab>"' and a newline-padded key all mean classname (180). Internal
+        whitespace is untouched, so '"class name"' is a different key (24).
+      - A repeated key keeps its *last* value. parse_entity_dict() stores pairs with
+        entdict_t::set() (common/entdata.cc), which overwrites `it->second` in place rather than
+        appending, so find() returning the first match finds the overwritten one. '"classname"
+        "func_illusionary"' then '"classname" "func_detail"' is merged into the world (180) and
+        the same two reversed is a submodel (24): stopping at the first is wrong both ways.
+      - The key is compared case-sensitively, with `key == it->first`, so qbsp does not recognise
+        '"CLASSNAME"' as a classname at all (24, not 180) and a '"CLASSNAME"' pair does not
+        overwrite a real one (180). Only the classname *value* is matched case-insensitively, by
+        the callers, which is where qbsp uses Q_strcasecmp.
     """
-    toks = [(m.group(1), m.start(), m.end()) for m in TOKEN_RE.finditer(e) if m.group(1) is not None]
-    cls = None
-    for (key, _, key_end), (val, val_start, _) in zip(toks[::2], toks[1::2]):
-        if '\n' in e[key_end:val_start]:
-            break          # not a pair qbsp would accept: it errors out on this map
-        if key.strip(KEY_WS) == 'classname':
-            cls = val      # keep going: a repeat overwrites in place, so the last one wins
-    return cls
+    start, depth, key, key_end, cls, refused = None, 0, None, 0, None, False
+    for m in TOKEN_RE.finditer(txt):
+        kind = m.lastindex                  # None for a comment, which is not a token at all
+        if depth >= 2:
+            # inside a brush, which parse_brush() consumes. Only its nesting matters here -- and
+            # it does nest, because the brush-primitives format wraps its faces in a second brace
+            # pair -- so skip every other token without paying to extract it.
+            if kind == BRACE:
+                depth += 1 if m.group(BRACE) == '{' else -1
+            continue
+        if kind is None:
+            continue
+        tok = m.group(kind)
+        if key is not None:
+            # a value slot takes any token at all, '{' and '}' included: they are only structural
+            # where map_entity_t::parse() looks at them, which is the key slot
+            if '\n' in txt[key_end:m.start()]:
+                refused = True          # PARSE_SAMELINE: qbsp refuses this map, so stop reading
+            elif key.strip(KEY_WS) == 'classname':
+                cls = tok
+            key = None
+        elif tok == '{':
+            if depth == 0:
+                start, cls, refused = m.start(), None, False
+            depth += 1
+        elif tok == '}':
+            if depth == 1:
+                yield txt[start:m.end()], cls
+            depth = max(depth - 1, 0)
+        elif depth == 1 and not refused:
+            key, key_end = tok, m.end()
 
 
 def parse_brush(br):
@@ -316,8 +344,8 @@ def brushes(path):
     out = {k: [] for k, _, _, _ in CLASSES}
     skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
-    for e in entities(open(path).read()):
-        cls = classname(e) or '(no classname)'
+    for e, found in entities(open(path).read()):
+        cls = found or '(no classname)'
         brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
         kept = WORLD_ENTITY_TYPES.get(cls.lower())
         if kept is None:
