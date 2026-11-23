@@ -1,23 +1,25 @@
-"""Prove a visual-only build did not change collision: compare the SOLID space of two generated
-.map files on a voxel grid (default 8-unit, supports sub-unit floats e.g. --step 0.5). Counts every
-brush qbsp puts in the player collision hull -- both axis-aligned boxes and general convex brushes
-(ramps, prisms, chamfers, veneers) via half-space planes -- and reports on stderr what it ignored,
-so a brush flavour the rules below do not know about is named rather than silently dropped.
-Water, slime and lava volumes are not solid, so they are excluded from the solid space and each
-compared as its own class: a *water pool retextured *lava occupies the same volume but is a very
-different room, and that shows up as a lava/water difference rather than vanishing.
+"""Prove a visual-only build did not change collision: compare both the player collision hull
+(qbsp hulls 1 and 2) and the projectile / point-trace hull (hull 0: solid, sky, and water/slime/lava
+contents) of two generated .map files on a voxel grid (default 8-unit, supports sub-unit floats
+e.g. --step 0.5). Counts every brush qbsp merges into the world hulls -- both axis-aligned boxes
+and general convex brushes (ramps, prisms, chamfers, veneers) via half-space planes -- and reports
+on stderr what it ignored, so a brush flavour the rules below do not know about is named rather than
+silently dropped.
 
-Scope: the player collision hull (qbsp hulls 1 and 2) plus liquid contents. Two things it does
-not claim, both measured rather than assumed:
-  - Projectile collision. 'clip' and 'sky*' are exactly as solid as a wall to a player, so
-    retexturing a wall to either is reported identical -- correctly for this scope -- but hull 0
-    differs: a 'clip' brush is absent from hull 0 entirely, so rockets and hitscan pass through,
-    and 'sky*' makes a SKY leaf that swallows them. Covering that means a second hull-0 pass, not
-    a wider allowlist.
-  - Solid/liquid overlap. The classes are compared independently, so reshaping a liquid brush
-    buried inside an unchanged solid wall reports a liquid difference even though solid wins the
-    BSP CSG and a player can reach neither. That is a false positive, not a false negative, which
-    is the safe direction for a tool whose job is to refuse to certify.
+Classes compared (each independently, so retexturing a brush across classes always reports a
+difference):
+  - Player collision (hulls 1 & 2): ordinary solid, 'skip', 'trigger', 'clip', and 'sky*'.
+  - Projectile collision (hull 0 SOLID): ordinary solid, 'skip', and 'trigger' -- excludes 'clip'
+    (absent from hull 0, so rockets and hitscan pass through) and 'sky*' (hull-0 SKY leaf).
+  - Sky contents (hull 0 SKY): blocks and deletes projectiles; includes 'sky*' in
+    func_detail_illusionary, which drops player collision yet still writes a SKY leaf in hull 0.
+  - Liquid contents (hull 0 WATER / SLIME / LAVA): each compared on its own, so a *water -> *lava
+    swap shows up as both a water and a lava difference.
+
+Known conservatism (false positive, not false negative):
+  - Classes are compared independently, so reshaping a liquid (or sky/clip) brush buried inside an
+    unchanged solid wall reports a difference even though solid wins the BSP CSG and nothing can
+    reach it. That is the safe direction for a tool whose job is to refuse to certify.
 
 Usage: python3 collide_cmp.py old.map new.map [--step 8]"""
 from collections import Counter
@@ -70,14 +72,16 @@ MAX_TOTAL_VOXELS = 10_000_000_000  # ~10G voxel evaluations (~25-35s); refuse le
 
 HINT_TEX = frozenset(('hint', 'hintskip'))
 # Content classes, each compared independently: (class, label, DIFFERS banner, space noun).
-# Independently, because a brush that changes class -- a wall retextured '*lava', a '*water' pool
-# retextured '*lava' -- leaves one set and joins another, so both report a difference. Lumping the
-# liquids together as one "non-solid" space would miss a water->lava swap, which fills exactly the
-# same volume. 'solid' is always compared; a liquid class absent from both maps is skipped.
-CLASSES = (('solid', 'collision', 'COLLISION DIFFERS', 'solid space'),
-           ('water', 'water contents', 'WATER CONTENTS DIFFER', 'water volume'),
-           ('slime', 'slime contents', 'SLIME CONTENTS DIFFER', 'slime volume'),
-           ('lava', 'lava contents', 'LAVA CONTENTS DIFFER', 'lava volume'))
+# Independently, because a brush that changes class -- a wall retextured 'clip', 'sky1' or '*lava',
+# or a '*water' pool retextured '*lava' -- leaves one set and joins another, so the affected passes
+# report a difference. 'solid' (player hull) and 'proj' (hull-0 solid) are always compared; sky and
+# liquid classes absent from both maps are skipped.
+CLASSES = (('solid', 'collision',            'COLLISION DIFFERS',            'solid space'),
+           ('proj',  'projectile collision', 'PROJECTILE COLLISION DIFFERS', 'projectile solid space'),
+           ('sky',   'sky contents',         'SKY CONTENTS DIFFER',          'sky volume'),
+           ('water', 'water contents',       'WATER CONTENTS DIFFER',        'water volume'),
+           ('slime', 'slime contents',       'SLIME CONTENTS DIFFER',        'slime volume'),
+           ('lava',  'lava contents',        'LAVA CONTENTS DIFFER',         'lava volume'))
 LIQUIDS = ('water', 'slime', 'lava')
 
 
@@ -87,10 +91,10 @@ def face_class(tex):
     contents at all, which is why the first-face rule skips over them -- and 'origin' brushes are
     discarded before the hulls are built.
 
-    These are qbsp's types, not this tool's comparison classes: 'clip' and 'sky' are separate
-    types that both measure solid in the player hull, and SOLID_TYPES folds them in. Keeping them
-    distinct here is what lets the mixed-contents warning fire where qbsp's does. 'skip' and
-    'trigger' really are EWT_VISCONTENTS_SOLID -- the names mean nothing to qbsp -- as are
+    These are qbsp's types, not this tool's comparison classes: 'clip' and 'sky' are kept distinct
+    from 'solid' so the mixed-contents warning fires where qbsp's does, the entity table can apply
+    per-hull rules, and the hull-0 pass can separate SOLID, SKY and EMPTY. 'skip' and 'trigger'
+    really are EWT_VISCONTENTS_SOLID in every hull -- the names mean nothing to qbsp -- as are
     '!'-prefixed names, which are liquid only in Half-Life."""
     t = tex.lower()
     if t in HINT_TEX:
@@ -107,45 +111,41 @@ def face_class(tex):
     return 'solid'
 
 
-# Content types that are indistinguishable in the player collision hull: measured at 180 clipnodes
-# each against a 12-clipnode control. They differ in hull 0 -- a 'clip' brush is absent from it
-# entirely, so projectiles pass through, and 'sky*' makes a SKY leaf that swallows them -- which is
-# outside this tool's stated scope (see the module docstring).
-SOLID_TYPES = frozenset(('solid', 'clip', 'sky'))
+# Content types that are indistinguishable in the player collision hull (hulls 1 & 2): measured at
+# 24 clipnodes each against a 12-clipnode empty room control. They diverge in hull 0 (point traces /
+# projectiles), where 'solid' ('wall1'/'skip'/'trigger') writes CONTENTS_SOLID, 'sky' writes
+# CONTENTS_SKY (blocks and removes missiles), and 'clip' writes EMPTY (projectiles pass through).
+PLAYER_SOLID_TYPES = frozenset(('solid', 'clip', 'sky'))
 LIQUID_TYPES = frozenset(LIQUIDS)
+HULL0_TYPES = frozenset(('solid', 'sky')) | LIQUID_TYPES
+TRACKED_TYPES = PLAYER_SOLID_TYPES | HULL0_TYPES
 
 # Brush entities ericw-tools qbsp merges into the world model (IsWorldBrushEntity, qbsp/map.cc),
-# each mapped to the content types a brush there still contributes to a hull after the
-# entity-level rules in Brush_GetContents() and BrushFromContents() have run. Everything else
-# becomes its own BSP model and is out of scope. Classnames are compared case-insensitively, as
-# qbsp's Q_strcasecmp does.
+# each mapped to (player_hull_types, hull0_types): which qbsp content types survive into hulls 1/2
+# and hull 0 after Brush_GetContents() and BrushFromContents() have run. Everything else becomes
+# its own BSP model and is out of scope. Classnames are matched case-insensitively (Q_strcasecmp).
 #
-# Measured by compiling a 128-unit cube in a sealed room per entity/texture pair and reading the
-# BSP, never inferred: clipnodes for the player hull, hull-0 leaf contents for the liquids. Five
-# of the seven rows below are new in v3.6, and each one is here because a measurement contradicted
-# a reading of the source. Only worldspawn and func_group were ever counted before.
-#   - The whole detail family is solid. func_detail / func_detail_wall / func_detail_fence all
-#     raise the clipnode count, so reaching for func_detail to cut vis cost still blocks players.
-#   - func_detail_illusionary keeps real liquids. qbsp converts a brush there to illusionary mist
-#     behind `if (contents.is_any_solid())` (qbsp/brush.cc), so a '*lava' face is never converted
-#     and keeps CONTENTS_LAVA in hull 0 -- the hull SV_PointContents reads -- while adding zero
-#     clipnodes. A clipnode probe cannot see that at all; it took the leafs lump.
-#   - func_illusionary_visblocker is the trap in both directions. It passes IsWorldBrushEntity(),
-#     so "count everything that predicate accepts" would wrongly make its walls solid: qbsp
-#     replaces its contents with ILLUSIONARY_VISBLOCKER (qbsp/map.cc, string_iequals branch) and
-#     a plain or '*lava' brush there measures at the control. But that replacement masks off
-#     EWT_ALL_VISIBLE_CONTENTS only, and PLAYERCLIP is an *invisible* content, so a 'clip' brush
-#     keeps it -- and unlike func_detail_illusionary, visblocker is not `continue`d out of hulls
-#     1/2 before qbsp/brush.cc converts clip to CONTENTS_SOLID there. Measured: a 'clip' cube in
-#     func_illusionary_visblocker is 180 clipnodes, exactly as solid to a player as a wall.
+# Measured across the full 7x10 (entity x texture) matrix by compiling a 128-unit cube in a sealed
+# room and reading both clipnode counts (hulls 1/2) and the hull-0 leaf at the cube's centre:
+#   - worldspawn, func_group, func_detail, func_detail_wall, func_detail_fence: identical in both
+#     hulls -- solid/clip/sky block players; solid blocks projectiles (SOLID); sky swallows them
+#     (SKY); liquids produce hull-0 liquid leaves; clip is hull-0 EMPTY.
+#   - func_detail_illusionary: qbsp converts a brush to illusionary mist behind
+#     `if (contents.is_any_solid())` (qbsp/brush.cc) and skips hulls 1/2 entirely. So solid and
+#     clip vanish from every hull, while liquids AND 'sky*' (neither is `is_any_solid()`) survive
+#     in hull 0 -- a 'sky1' cube in func_detail_illusionary adds 0 clipnodes yet writes a SKY leaf.
+#   - func_illusionary_visblocker: Brush_GetContents() masks off EWT_ALL_VISIBLE_CONTENTS and
+#     substitutes ILLUSIONARY_VISBLOCKER, stripping walls, sky and liquids from every hull. Because
+#     PLAYERCLIP is an *invisible* content and visblocker is not skipped in hulls 1/2, 'clip' stays
+#     solid to players (24 clipnodes) while remaining hull-0 EMPTY.
 WORLD_ENTITY_TYPES = {
-    'worldspawn':                  SOLID_TYPES | LIQUID_TYPES,
-    'func_group':                  SOLID_TYPES | LIQUID_TYPES,
-    'func_detail':                 SOLID_TYPES | LIQUID_TYPES,
-    'func_detail_wall':            SOLID_TYPES | LIQUID_TYPES,
-    'func_detail_fence':           SOLID_TYPES | LIQUID_TYPES,
-    'func_detail_illusionary':     LIQUID_TYPES,
-    'func_illusionary_visblocker': frozenset(('clip',)),
+    'worldspawn':                  (PLAYER_SOLID_TYPES,   HULL0_TYPES),
+    'func_group':                  (PLAYER_SOLID_TYPES,   HULL0_TYPES),
+    'func_detail':                 (PLAYER_SOLID_TYPES,   HULL0_TYPES),
+    'func_detail_wall':            (PLAYER_SOLID_TYPES,   HULL0_TYPES),
+    'func_detail_fence':           (PLAYER_SOLID_TYPES,   HULL0_TYPES),
+    'func_detail_illusionary':     (frozenset(),          LIQUID_TYPES | frozenset(('sky',))),
+    'func_illusionary_visblocker': (frozenset(('clip',)), frozenset()),
 }
 
 
@@ -168,10 +168,9 @@ def brush_contents(texes):
         player -- and it fires on a hint brush too, over its non-hint faces. 'skip' and 'trigger'
         do not warn, because they are plain solid.
 
-    The type comes back unfolded -- 'clip' and 'sky' separate from 'solid' -- because the entity
-    the brush sits in can care about the difference even though a player cannot: see
-    WORLD_ENTITY_TYPES on func_illusionary_visblocker. brushes() folds SOLID_TYPES into the one
-    'solid' comparison class afterwards."""
+    The type comes back unfolded -- 'clip' and 'sky' separate from 'solid' -- because both the
+    entity table (WORLD_ENTITY_TYPES) and the hull-0 projectile pass care about the difference even
+    though the player hull folds all three into 'solid'."""
     fcs = [face_class(t) for t in texes]
     typed = [f for f in fcs if f != 'hint']       # the faces Brush_GetContents() actually weighs
     mixed = len(set(typed)) > 1
@@ -391,6 +390,7 @@ def brushes(path):
             if brs:                    # lights, spawns and items have no brushes: nothing ignored
                 submodel[cls] += len(brs)
             continue
+        p_kept, h0_kept = kept
         for br in brs:
             pb = parse_brush(br)
             if pb is None:
@@ -404,16 +404,23 @@ def brushes(path):
             no_normal += dropped
             typ, is_mixed = brush_contents(texes)
             mixed += is_mixed
-            cmp_class = 'solid' if typ in SOLID_TYPES else typ
-            if cmp_class not in out:   # 'hint'/'origin' -- or a type no class covers yet
+            if typ not in TRACKED_TYPES:   # 'hint'/'origin' -- or a type no class covers yet
                 # name the face that decided it, not texes[0]: a hint face in slot 3 drops the
                 # brush, and reporting the slot-1 wall texture there would be actively misleading
                 no_contents[next((t.lower() for t in texes if face_class(t) == typ), typ)] += 1
                 continue
-            if typ not in kept:
+            g = tuple(geom)
+            added = False
+            if typ in p_kept:
+                out['solid'].append(g)
+                added = True
+            if typ in h0_kept:
+                h0_cls = 'proj' if typ == 'solid' else typ
+                if h0_cls in out:
+                    out[h0_cls].append(g)
+                    added = True
+            if not added:
                 no_collision[cls] += 1   # e.g. solid in func_detail_illusionary: mist, in no hull
-                continue
-            out[cmp_class].append(tuple(geom))
     if skipped:
         print(f'WARNING: {path}: skipped {skipped} degenerate/unbounded brush(es)', file=sys.stderr)
     if no_normal:
@@ -476,7 +483,8 @@ def roi_grid(comps, s):
 
 
 def compare(A, B, step, kind, label, differs, space):
-    """Voxel-compare one content class's space between the two maps. True if they differ.
+    """Voxel-compare one content class's space between the two maps.
+    Returns (differed, status, message) where status is 'exact', 'voxel', 'differ', or 'unresolved'.
     Exits 2 if --step cannot be resolved within the memory/time budget."""
     # Exact prefilter: any symmetric difference must lie inside the bbox of brushes whose geometry
     # is not present in both maps. Cluster differing brushes into overlapping AABB components so
@@ -485,8 +493,8 @@ def compare(A, B, step, kind, label, differs, space):
     common = cA & cB
     remA, remB = cA - common, cB - common
     if not remA and not remB:
-        print(f'{label} identical (all {len(A)} {kind} brush geometries identical)')
-        return False
+        noun = 'projectile-solid' if kind == 'proj' else kind
+        return False, 'exact', f'{label} identical (all {len(A)} {noun} brush geometries identical)'
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
     comps = merge_boxes([(b[0], b[1]) for b in diff_brushes])
@@ -598,16 +606,16 @@ def compare(A, B, step, kind, label, differs, space):
 
     if total_diff:
         caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
-        print(f'{differs}: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g.', sample_pts)
-        return True
+        return (True, 'differ',
+                f'{differs}: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g. {sample_pts}')
     if under_resolved:
         out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
-        print(f'{label}: no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
-              f'(features down to {gap_s} {unit} unresolved; {out_tail})')
-        return False
-    print(f'{label} identical ({space} matches voxel for voxel, step={step:g}, '
-          f'{len(roi_specs)} ROI(s) {shapes})')
-    return False
+        return (False, 'unresolved',
+                f'{label}: no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
+                f'(features down to {gap_s} {unit} unresolved; {out_tail})')
+    return (False, 'voxel',
+            f'{label} identical ({space} matches voxel for voxel, step={step:g}, '
+            f'{len(roi_specs)} ROI(s) {shapes})')
 
 
 def main():
@@ -637,15 +645,31 @@ def main():
     nb = sum(not b[3] for b in B['solid'])
     print(f'{pA}: {len(A["solid"])} solid brushes ({na} non-axis), '
           f'{pB}: {len(B["solid"])} solid brushes ({nb} non-axis)', flush=True)
+    h0 = []
+    if len(A['proj']) != len(A['solid']) or len(B['proj']) != len(B['solid']):
+        h0.append(f'projectile-solid {len(A["proj"])} -> {len(B["proj"])}')
+    if A['sky'] or B['sky']:
+        h0.append(f'sky {len(A["sky"])} -> {len(B["sky"])}')
+    if h0:
+        print('hull-0 brushes: ' + ', '.join(h0), flush=True)
     liq = [f'{k} {len(A[k])} -> {len(B[k])}' for k in LIQUIDS if A[k] or B[k]]
     if liq:
         print('liquid brushes (not solid, each class compared separately): ' + ', '.join(liq), flush=True)
 
     differed = False
+    ok_extra = []
     for kind, label, banner, space in CLASSES:
-        if kind != 'solid' and not A[kind] and not B[kind]:
+        if kind not in ('solid', 'proj') and not A[kind] and not B[kind]:
             continue
-        differed |= compare(A[kind], B[kind], step, kind, label, banner, space)
+        diff, status, line = compare(A[kind], B[kind], step, kind, label, banner, space)
+        differed |= diff
+        if kind == 'solid' or status in ('differ', 'unresolved'):
+            print(line, flush=True)
+        else:
+            tag = 'voxel-identical' if status == 'voxel' else f'{len(A[kind])} identical'
+            ok_extra.append(f'{label} ({tag})')
+    if ok_extra:
+        print('hull-0/contents identical: ' + ', '.join(ok_extra), flush=True)
     if differed:
         sys.exit(1)
 
