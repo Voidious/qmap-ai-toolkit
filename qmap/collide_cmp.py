@@ -459,38 +459,45 @@ def _box_vol(lo, hi):
     return (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
 
 
-def merge_boxes(boxes, tol=1e-6, max_area=None):
-    """Merge overlapping/touching AABBs when doing so does not inflate total volume.
+def merge_boxes(boxes, tol=1e-6, max_area=None, max_bloat=1.5):
+    """Merge overlapping/touching AABBs when doing so does not substantially inflate volume.
 
-    Two boxes merge only when their enclosing box has volume <= the sum of their volumes (and,
-    when max_area is set, XY slice area <= max_area). Containments and coplanar split walls still
-    collapse into one ROI, while L-shaped / corner-overlapping boxes stay separate instead of
-    inflating across the empty corner between them. Any remaining overlaps between ROIs are masked
-    out on the integer voxel lattice at count time in compare()."""
-    comps = []
+    Each component tracks its non-compounding original input volume (orig_vol). Two boxes merge
+    when one contains the other, or when their enclosing box has volume <= max_bloat * (orig_a +
+    orig_b) (and, when max_area is set, XY slice area <= max_area). Containments, coplanar split
+    walls, and slightly staggered adjacent brushes collapse cleanly into compact ROIs, while
+    L-shaped / corner-overlapping boxes stay separate instead of inflating across empty space.
+    Any remaining overlaps between ROIs are masked out on the integer voxel lattice in compare()."""
+    comps = []  # (lo, hi, orig_vol)
     for blo, bhi in boxes:
-        mlo, mhi = list(blo), list(bhi)
+        # Unwrap NumPy scalars to native Python numbers so inner-loop comparisons stay fast.
+        mlo = [v.item() if hasattr(v, 'item') else v for v in blo]
+        mhi = [v.item() if hasattr(v, 'item') else v for v in bhi]
+        morig = _box_vol(mlo, mhi)
         while True:
             keep, grew = [], False
             mvol = _box_vol(mlo, mhi)
-            for clo, chi in comps:
+            for clo, chi, corig in comps:
                 if (chi[0] >= mlo[0] - tol and chi[1] >= mlo[1] - tol and chi[2] >= mlo[2] - tol and
                         clo[0] <= mhi[0] + tol and clo[1] <= mhi[1] + tol and clo[2] <= mhi[2] + tol):
                     ulo = [min(mlo[0], clo[0]), min(mlo[1], clo[1]), min(mlo[2], clo[2])]
                     uhi = [max(mhi[0], chi[0]), max(mhi[1], chi[1]), max(mhi[2], chi[2])]
                     uvol = _box_vol(ulo, uhi)
                     uarea = (uhi[0] - ulo[0]) * (uhi[1] - ulo[1])
-                    if (uvol <= (mvol + _box_vol(clo, chi)) * (1.0 + 1e-9) and
+                    cvol = _box_vol(clo, chi)
+                    contained = uvol <= max(mvol, cvol) * (1.0 + 1e-9)
+                    if ((contained or uvol <= max_bloat * (morig + corig) * (1.0 + 1e-9)) and
                             (max_area is None or uarea <= max_area)):
                         mlo, mhi, mvol = ulo, uhi, uvol
+                        morig = max(morig, corig) if contained else (morig + corig)
                         grew = True
                         continue
-                keep.append((clo, chi))
+                keep.append((clo, chi, corig))
             comps = keep
             if not grew:
                 break
-        comps.append((mlo, mhi))
-    return comps
+        comps.append((mlo, mhi, morig))
+    return [(lo, hi) for lo, hi, _ in comps]
 
 
 def roi_grid(comps, s):
@@ -500,7 +507,7 @@ def roi_grid(comps, s):
         ihi = [max(lo_i + 1, math.ceil(float(v) / s)) for lo_i, v in zip(ilo, roi_hi)]
         snapped.append((ilo, ihi))
     specs, total, max_sl = [], 0, 0
-    for ilo, ihi in merge_boxes(snapped, tol=0, max_area=MAX_SLICE):
+    for ilo, ihi in merge_boxes(snapped, tol=0, max_area=MAX_SLICE, max_bloat=1.0):
         nx, ny, nz = ihi[0] - ilo[0], ihi[1] - ilo[1], ihi[2] - ilo[2]
         sl = nx * ny
         max_sl = max(max_sl, sl)
@@ -514,8 +521,8 @@ def roi_grid(comps, s):
 
 def compare(A, B, step, kind, label, differs, space):
     """Voxel-compare one content class's space between the two maps.
-    Returns (differed, status, message) where status is 'exact', 'voxel', 'differ', or 'unresolved'.
-    Exits 2 if --step cannot be resolved within the memory/time budget."""
+    Returns (differed, status, message, roi_specs) where status is 'exact', 'voxel', 'differ',
+    or 'unresolved'. Exits 2 if --step cannot be resolved within the memory/time budget."""
     # Exact prefilter: any symmetric difference must lie inside the bbox of brushes whose geometry
     # is not present in both maps. Cluster differing brushes into overlapping AABB components so
     # distant changed corners don't inflate one giant ROI box across empty space between them.
@@ -524,7 +531,7 @@ def compare(A, B, step, kind, label, differs, space):
     remA, remB = cA - common, cB - common
     if not remA and not remB:
         noun = 'projectile-solid' if kind == 'proj' else kind
-        return False, 'exact', f'{label} identical (all {len(A)} {noun} brush geometries identical)'
+        return False, 'exact', f'{label} identical (all {len(A)} {noun} brush geometries identical)', []
 
     diff_brushes = [b for b in A if b[4] in remA] + [b for b in B if b[4] in remB]
     comps = merge_boxes([(b[0], b[1]) for b in diff_brushes])
@@ -620,6 +627,11 @@ def compare(A, B, step, kind, label, differs, space):
                 g[ix0:ix1, iy0:iy1] |= inside
         return g
 
+    loA = np.array([b[0] for b in A]) if A else np.empty((0, 3))
+    hiA = np.array([b[1] for b in A]) if A else np.empty((0, 3))
+    loB = np.array([b[0] for b in B]) if B else np.empty((0, 3))
+    hiB = np.array([b[1] for b in B]) if B else np.empty((0, 3))
+
     total_diff, sample_pts, shapes, seen_boxes = 0, [], [], []
     for ilo, ihi, lo, hi, nx, ny, nz in roi_specs:
         shapes.append((nx, ny, nz))
@@ -635,8 +647,8 @@ def compare(A, B, step, kind, label, differs, space):
                                  oy0 - ilo[1], oy1 - ilo[1],
                                  oz0 - ilo[2], oz1 - ilo[2]))
         seen_boxes.append((ilo, ihi))
-        subA = [b for b in A if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
-        subB = [b for b in B if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
+        subA = [A[i] for i in np.flatnonzero(np.all((hiA > lo - 1e-6) & (loA < hi + 1e-6), axis=1))] if A else []
+        subB = [B[i] for i in np.flatnonzero(np.all((hiB > lo - 1e-6) & (loB < hi + 1e-6), axis=1))] if B else []
         for iz in range(nz):
             zc = lo[2] + (iz + 0.5) * step
             diff = vox_slice(subA, lo, nx, ny, zc) ^ vox_slice(subB, lo, nx, ny, zc)
@@ -653,15 +665,18 @@ def compare(A, B, step, kind, label, differs, space):
     if total_diff:
         caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
         return (True, 'differ',
-                f'{differs}: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g. {sample_pts}')
+                f'{differs}: {total_diff} voxels (step={step:g}, {len(roi_specs)} ROI(s){caveat}), e.g. {sample_pts}',
+                roi_specs)
     if under_resolved:
         out_tail = f'rerun with --step {rec:g}' if rec_fits else f'resolving at --step {rec:g} exceeds budget, compare a narrower pair'
         return (False, 'unresolved',
                 f'{label}: no difference found at step={step:g}, {len(roi_specs)} ROI(s) {shapes} '
-                f'(features down to {gap_s} {unit} unresolved; {out_tail})')
+                f'(features down to {gap_s} {unit} unresolved; {out_tail})',
+                roi_specs)
     return (False, 'voxel',
             f'{label} identical ({space} matches voxel for voxel, step={step:g}, '
-            f'{len(roi_specs)} ROI(s) {shapes})')
+            f'{len(roi_specs)} ROI(s) {shapes})',
+            roi_specs)
 
 
 def main():
@@ -704,10 +719,34 @@ def main():
 
     differed = False
     ok_extra = []
+    solid_res = None
     for kind, label, banner, space in CLASSES:
         if kind not in ('solid', 'proj') and not A[kind] and not B[kind]:
             continue
-        diff, status, line = compare(A[kind], B[kind], step, kind, label, banner, space)
+        # proj is always a subset of solid (WORLD_ENTITY_TYPES). When the clip/sky brushes excluded
+        # from proj are geometry-identical between both maps and never intersect solid's diff ROIs,
+        # proj's voxel comparison is mathematically identical to solid's -- skip re-voxelizing.
+        if kind == 'proj' and solid_res is not None:
+            pA_ids, pB_ids = {id(b) for b in A['proj']}, {id(b) for b in B['proj']}
+            exA = [b for b in A['solid'] if id(b) not in pA_ids]
+            exB = [b for b in B['solid'] if id(b) not in pB_ids]
+            s_diff, s_status, s_line, s_rois = solid_res
+            if (Counter(b[4] for b in exA) == Counter(b[4] for b in exB) and
+                    not any(bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))
+                            for b in exA + exB for _, _, lo, hi, *_ in s_rois)):
+                diff, status = s_diff, s_status
+                line = (s_line.replace('COLLISION DIFFERS', banner, 1) if status == 'differ' else
+                        s_line.replace('collision:', f'{label}:', 1) if status == 'unresolved' else s_line)
+                differed |= diff
+                if status in ('differ', 'unresolved'):
+                    print(line, flush=True)
+                else:
+                    tag = 'voxel-identical' if status == 'voxel' else f'{len(A[kind])} identical'
+                    ok_extra.append(f'{label} ({tag})')
+                continue
+        diff, status, line, rois = compare(A[kind], B[kind], step, kind, label, banner, space)
+        if kind == 'solid':
+            solid_res = (diff, status, line, rois)
         differed |= diff
         if kind == 'solid' or status in ('differ', 'unresolved'):
             print(line, flush=True)
