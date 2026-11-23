@@ -37,10 +37,12 @@ TOKEN_RE = re.compile(r'''
       (?://|;)[^\n]*                 # a comment, to end of line. Matched so it is consumed, then
                                      # dropped -- parse_token() does not return it as a token.
     | "( (?: [^"\\]                  # 1: a quoted token, to its closing quote. No newline case in
-           | \\"(?![\r\n])           # parse_token()'s copy loop, so it may span lines. A '\'
-           | \\(?!"(?![\r\n]))       # takes the next character with it, so an escaped quote does
-         )* )"                       # not end the token -- unless it sits at end of line, which
-                                     # qbsp warns about and treats as the terminator ("c:\foo\").
+           | \\(?="[\r\n])           # parse_token()'s copy loop, so it may span lines. A '\' takes
+           | \\(?!"[\r\n])[\s\S]     # the next character with it -- any character, a second '\'
+         )* )"                       # included, which is why '\"' does not end the token and
+                                     # '\\"' does. The one exception is the '\"' qbsp warns about
+                                     # at end of line and treats as the terminator ("c:\foo\"):
+                                     # there the '\' takes nothing and the quote closes.
     | ([{}])(?![^\x00-\x20])         # 2: a brace on its own. Split out of the next alternative
                                      # only so a walk can skip a brush's faces without building a
                                      # string for each; it changes no token, because where the
@@ -195,10 +197,17 @@ def entities(txt):
       - A quoted token runs to its closing quote across newlines, which is not the same thing as
         a value sitting on another line than its key. '"message" "line1<newline>line2"' is one
         value (180); a pattern that ended the token at the newline read two half-tokens.
-      - A '\\' takes the next character into the token with it, so an escaped quote does not end
-        it: '"message" "say \\"hi\\" now"' is one value (180). The exception is '\\"' at end of
-        line, which qbsp warns about and treats as the terminator -- that is the '"wad" "c:\\foo\\"'
-        shape certain editors emit, and it also reads at 180.
+      - A '\\' takes the next character into the token with it, whatever that character is, so an
+        escaped quote does not end the token: '"message" "say \\"hi\\" now"' is one value (180).
+        What it takes may be a second '\\', which then escapes nothing, so the parity of a run of
+        backslashes is what decides: an odd run before the closing quote escapes it, an even run
+        leaves it as the terminator. A value ending '\\\\"' therefore ends right there (180) and
+        one ending '\\"' does not. Enumerating the two-character escapes instead of applying that
+        one rule got every even run wrong, because a lone '\\' was then allowed to stand by
+        itself and the last backslash of the run paired with the terminator and swallowed it --
+        reading no classname for an entity qbsp merges into the world. The exception is '\\"' at
+        end of line, which qbsp warns about and treats as the terminator: that is the
+        '"wad" "c:\\foo\\"' shape certain editors emit, and it also reads at 180.
       - A token need not be quoted. parse_token()'s other branch takes any run of characters above
         ASCII 32, so 'classname func_detail' is a valid epair and compiles solid (180) -- and a
         quote-only scan did not merely miss it, it mis-paired every quoted token after it, because
