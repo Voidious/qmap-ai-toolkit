@@ -31,13 +31,6 @@ import sys
 import numpy as np
 
 PT_RE = re.compile(r'\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)')
-# Comments inside a brush block: '//' or ';' at start of line or after <= 0x20 whitespace, outside
-# quoted strings (matching parse_token()'s comment/quote precedence; never consumes '\n' or
-# mid-token '//' / ';').
-BRUSH_COMMENT_RE = re.compile(
-    r'"(?:[^"\\]|\\(?="[\r\n])|\\(?!"[\r\n])[\s\S])*"|((?:^|(?<=[\x00-\x20]))(?://|;)[^\n]*)',
-    re.M,
-)
 # Brush-primitives texture matrix `( ( a b c ) ( d e f ) )` sitting between the 3rd plane point
 # and the texture name (parse_texture_def, common/mapfile.cc).
 BP_MAT_RE = re.compile(r'\s*\(\s*\([^)]*\)\s*\([^)]*\)\s*\)')
@@ -359,9 +352,12 @@ def entities(txt):
 
 
 def _strip_brush_comments(br):
+    """Strip '//' and ';' comments inside a brush block using TOKEN_RE so parse_token()'s exact
+    comment / quoted-token / bare-token precedence holds (preserving newlines, mid-token '//',
+    quoted strings containing '//', and double quotes embedded in bare tokens like wall"mark)."""
     if '//' not in br and ';' not in br:
         return br
-    return BRUSH_COMMENT_RE.sub(lambda m: '' if m.group(1) is not None else m.group(0), br)
+    return TOKEN_RE.sub(lambda m: '' if m.lastindex is None else m.group(0), br)
 
 
 def parse_brush(br):

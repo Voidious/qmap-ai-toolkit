@@ -47,11 +47,12 @@
     `ca_saddle`, `ca_crosscut`, and `ca_offset` at `--step 8`, 25/25 match v3.6 verdicts and voxel
     counts exactly at equal or faster wall-clock time.
 * `qmap/collide_cmp.py`: **brush-block parser hardening** (`CDEFG-17`, verified against live `qbsp`):
-  - Strip `//` and `;` comments outside quoted strings (at start of line or after `<= 0x20`
-    whitespace, preserving newlines, mid-token `//`, and `//` inside quoted texture names) before
-    `PT_RE` in `parse_brush()` and the empty-block `skipped` check, so a commented-out face line
-    (`// ( ... ) *lava ...` or `; ( ... ) hint ...`) cannot spoof brush contents or trigger a
-    spurious degenerate-brush warning on an empty block.
+  - Strip `//` and `;` comments in `parse_brush()` and the empty-block `skipped` check by reusing
+    `TOKEN_RE` (preserving `parse_token()`'s comment / quoted-token / bare-token precedence,
+    newlines, mid-token `//`, `//` inside quoted texture names, and quotes embedded inside bare
+    tokens such as `wall"mark`), so a commented-out face line (`// ( ... ) *lava ...` or
+    `; ( ... ) hint ...`) cannot spoof brush contents or trigger a spurious degenerate-brush
+    warning on an empty block.
   - Skip the brush-primitives `( ( a b c ) ( d e f ) )` texture matrix after the third plane point
     in `parse_brush()`, and unquote quoted face texture tokens (`"*lava"`, `"hint"`, `"clip"`,
     `"sky1"`, `"*lava //x"`) using `TOKEN_RE` so both `brushDef` and quoted special textures

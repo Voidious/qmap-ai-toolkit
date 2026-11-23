@@ -473,6 +473,39 @@ class TestParserHardening(unittest.TestCase):
                 else:
                     self.assertEqual(err, '')
 
+    def test_bare_token_embedded_quote_before_commented_face(self):
+        """A quote inside a bare texture token (e.g. wall"mark) must not swallow a following comment."""
+        hint_face = self.cube[0].replace('wall1', 'hint')
+        lava_face = self.cube[0].replace('wall1', '*lava')
+        quote_wall_face = self.cube[0].replace('wall1', 'wall"mark')
+        quote_lava_cube = box_faces(-64, -64, -64, 64, 64, 64, '*lava"mark')
+        cases = [
+            ('wall"mark before // hint "removed"',
+             '{\n' + quote_wall_face + '\n// ' + hint_face + ' "removed"\n' + '\n'.join(self.cube[1:]) + '\n}',
+             {'solid': 7, 'proj': 7}, True),
+            ('wall"mark before ; hint "removed"',
+             '{\n' + quote_wall_face + '\n; ' + hint_face + ' "removed"\n' + '\n'.join(self.cube[1:]) + '\n}',
+             {'solid': 7, 'proj': 7}, True),
+            ('wall"mark before // *lava "removed"',
+             '{\n' + quote_wall_face + '\n// ' + lava_face + ' "removed"\n' + '\n'.join(self.cube[1:]) + '\n}',
+             {'solid': 7, 'proj': 7}, True),
+            ('*lava"mark before // hint "removed"',
+             '{\n' + quote_lava_cube[0] + '\n// ' + hint_face + ' "removed"\n' + '\n'.join(quote_lava_cube[1:]) + '\n}',
+             {'solid': 6, 'proj': 6, 'lava': 1}, False),
+        ]
+        for name, br, exp_counts, check_solid_cli in cases:
+            with self.subTest(name=name):
+                added = self.room + entity_block('func_detail', br)
+                counts, err = parse_map_text(added)
+                self.assertEqual(counts, exp_counts)
+                self.assertEqual(err, '')
+                if check_solid_cli:
+                    rc, out, cli_err = run_cli(self.room, added)
+                    self.assertEqual(rc, 1, f'{name}: stdout={out} stderr={cli_err}')
+                    self.assertIn('COLLISION DIFFERS', out)
+                    self.assertIn('PROJECTILE COLLISION DIFFERS', out)
+                    self.assertEqual(cli_err, '')
+
     def test_entity_token_and_face_precedence_rules(self):
         cube_br = brush_block(self.cube)
         # Value decoy '"target" "classname"' must not hijack next epair
