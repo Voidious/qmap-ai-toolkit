@@ -1,3 +1,65 @@
+# v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
+
+* `qmap/collide_cmp.py` & `GUIDE.md`: **compare hull 0 (projectile solid + sky) alongside the
+  player collision hull** (`CDEFG-5`). In hulls 1/2, `clip` and `sky*` are byte-for-byte as solid
+  as a wall, so retexturing a wall to either used to report `collision identical` and exit 0 while
+  rockets, nails and hitscan started passing through (`clip`) or vanishing (`sky*`). Verified
+  across the full 7×10 `(entity × texture)` matrix against live `qbsp` (clipnode counts for hulls
+  1/2, hull-0 node-tree walk at cube centre):
+  - `worldspawn`, `func_group`, `func_detail`, `func_detail_wall`, `func_detail_fence`: player
+    hull keeps `{solid, clip, sky}`; hull 0 keeps `{solid, sky, water, slime, lava}` (`skip` and
+    `trigger` stay `CONTENTS_SOLID` in both hulls, while `clip` is hull-0 `EMPTY`).
+  - `func_detail_illusionary`: player hull drops everything, while hull 0 keeps **both liquids
+    and `sky*`** — neither satisfies `contents.is_any_solid()` (`qbsp/brush.cc`), so a `sky1` cube
+    in `func_detail_illusionary` adds 0 clipnodes yet writes a `CONTENTS_SKY` leaf that swallows
+    projectiles.
+  - `func_illusionary_visblocker`: player hull keeps `{clip}` only; hull 0 drops everything
+    (visible contents stripped, `clip` stays hull-0 `EMPTY`).
+  - `WORLD_ENTITY_TYPES` now maps each world entity to `(player_hull_types, hull0_types)`, and
+    `compare()` checks six independent classes (`solid`, `proj`, `sky`, `water`, `slime`, `lava`).
+    Player collision (`solid`) always prints its full verdict line; other checked classes print
+    full lines on a difference or under-resolution and collapse into one `hull-0/contents
+    identical: ...` summary line when clean. A wall retextured `clip` now reports
+    `collision identical` + `PROJECTILE COLLISION DIFFERS` (exit 1); retextured `sky1`, it also
+    reports `SKY CONTENTS DIFFER` (exit 1); retextured `skip`, it stays exit 0. When excluded
+    `clip`/`sky` brushes are geometry-identical between both maps and never intersect `solid`'s
+    diff ROIs, `proj` reuses `solid`'s voxel result directly instead of sweeping the same grid
+    twice. `GUIDE.md` section 5 and gotcha 31 are updated accordingly (removing the v3.6 caveat
+    that projectile collision had to be checked by hand).
+* `qmap/collide_cmp.py`: **non-inflating ROI merge with exact lattice overlap masking**
+  (`CDEFG-6`). `merge_boxes()` previously merged overlapping AABBs unconditionally to a fixed
+  point, which could inflate L-shaped / corner-overlapping diffs across empty space and push
+  resolvable sub-unit comparisons over `MAX_TOTAL_VOXELS` (exit 2). Each component now tracks its
+  non-compounding original input volume (`orig_vol`) and merges only containments or overlaps
+  whose enclosing box is at most 1.5× the sum of the two components' original volumes (with
+  `roi_grid()` snapping at `max_bloat=1.0` so the two passes never compound, and `max_area =
+  MAX_SLICE` so merging never creates an oversized slice). Remaining ROI overlaps on the shared
+  integer lattice are masked out inside `compare()`'s Z-slice loop so every differing voxel is
+  counted at most once, and the per-ROI `subA`/`subB` AABB prefilter is vectorized in NumPy.
+  - Synthetic L-shaped corner overlap: **20.8× fewer voxels** (`65.54G -> 3.15G` at `--step 0.25`,
+    turning an exit-2 budget refusal into a clean run).
+  - 4,000 randomized overlapping box configurations: 0 volume inflations over the 1.5× bound, 0
+    regressions vs v3.6, 2,226 improved (median 3.44×, p90 11.79×, max 84.56×); 100/100 randomized
+    multi-brush overlap comparisons match a brute-force full-bbox sweep to the exact voxel.
+  - Real `ca_saddle` pairs at `--step 0.5`: `b1->b4` drops `26.36G -> 2.14G` (**12.3×**, turning
+    an exit-2 refusal into an exact 786,432-voxel diff matching `192 × 16³`), and `b5->b6` drops
+    `17.75G -> 5.11G` (**3.5×**, back inside the 10G budget). Across 25 sequential pairs of
+    `ca_saddle`, `ca_crosscut`, and `ca_offset` at `--step 8`, 25/25 match v3.6 verdicts and voxel
+    counts exactly at equal or faster wall-clock time.
+* `qmap/collide_cmp.py`: **brush-block parser hardening** (`CDEFG-17`, 12/12 verified against
+  live `qbsp`):
+  - Strip `//` and `;` comments (at start of line or after `<= 0x20` whitespace, preserving
+    newlines and mid-token `//`) before `PT_RE` in `parse_brush()` and the empty-block `skipped`
+    check, so a commented-out face line (`// ( ... ) *lava ...` or `; ( ... ) hint ...`) cannot
+    spoof brush contents or trigger a spurious degenerate-brush warning on an empty block.
+  - Skip the brush-primitives `( ( a b c ) ( d e f ) )` texture matrix after the third plane point
+    in `parse_brush()` so `brushDef` `*lava`, `hint`, `clip`, and `sky*` brushes classify
+    accurately instead of reading `'('` as `'solid'`.
+  - Check rare quoted tokens (`kind == 1`) inside `depth >= 2` in `entities()` so quoted brush
+    braces (`"{" ... "}"`) balance with zero overhead on bare brush tokens (`kind == 3`).
+  - Zero new warnings and 0 count/note diffs across all 42 real `.map` files in the tree (73,025
+    solid brushes, 22 sky brushes).
+
 # v3.6 (collide_cmp solidity rules)
 
 * `GUIDE.md`: new gotcha 31, **what is solid to a player is not what you would guess** — the full
