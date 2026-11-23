@@ -85,10 +85,11 @@
   which return empty contents — so it fires on a hint brush over its remaining faces, as qbsp's
   does, while `*lava`×5 + `hint` stays quiet because those faces agree. Zero real maps in the tree
   contain a mixed-contents brush, so this adds no noise to existing builds.
-* `qmap/collide_cmp.py`: **split entities and read classnames by walking .map tokens**, instead of
-  counting brace characters and searching the text for a key. Both of those guessed at where the
-  tokens were, and each wrong guess had the same consequence — a solid entity dropped from the
-  comparison, or a submodel counted as world geometry, reported as `collision identical` with exit
+* `qmap/collide_cmp.py`: **split entities, find brushes and read classnames by walking .map
+  tokens**, instead of counting brace characters, matching brushes with `\{\n(\(.*?)\n\}` and
+  searching the text for a key. All three guessed at where the tokens were, and each wrong guess
+  had the same consequence — a solid entity or brush dropped from the comparison, or a submodel
+  counted as world geometry, reported as `collision identical` with exit
   0 on the geometry-key fast path. One regex now spells out the whole lexical grammar in
   `parse_token()`'s precedence order (`common/parser.cc`) and one walk consumes it in
   `map_entity_t::parse()`'s (`common/mapfile.cc`), doing the split and the classname read in a
@@ -128,6 +129,14 @@
       brace like any other token. So a brace inside a quoted value is text: `"message" "a{b"`
       compiles at 180, where counting brace characters collapsed the whole file into one entity
       block.
+    * **A brush is a `{` in that same key slot, and its layout marks nothing.** `parse_brush()`
+      opens with `parse_token(PARSE_PEEK)`, which skips whitespace and comments before deciding
+      anything, so qbsp keeps a brush whose `{` is followed by a comment, a blank line, a trailing
+      space, or its own first face on the same line (measured: 180 clipnodes for all four, as for
+      the plain layout). The old `\{\n(\(.*?)\n\}` found no brush at all in those, so the tool
+      reported `collision identical` and exit 0 with the same brush count on both sides — and,
+      unlike every other way a brush can leave this comparison, no `note:` naming it. A blank line
+      or a trailing space after `{` is not an exotic thing to find in a hand-edited `.map`.
     * **A key is whitespace-trimmed, a value is not.** `parse_entity_dict()` erases leading and
       trailing `std::isspace` from the key before storing it, so `" classname "` and a
       tab-padded key both mean classname (180). Internal whitespace is untouched, so
@@ -147,9 +156,10 @@
       several epairs on one line and an entity header sharing the line with its opening brace are
       all fine (180), so a line-anchored pattern would have missed a solid entity.
   Checked against every entity of all 22 real maps in the tree (4,449 of them): the walk splits
-  every file into the same blocks as before and reads the same classname for every entity, so
-  nothing in anyone's build moves. One pass now does the work of two, so parsing costs 1.47× the
-  old split-plus-search and a full run on the heaviest real pair goes 2.0s → 2.28s.
+  every file into the same blocks as before, finds the same 50,136 brushes with the same face
+  lines in each, and reads the same classname for every entity, so nothing in anyone's build
+  moves. One pass now does the work of three, so parsing costs 1.59× the old scan-plus-search and
+  a full run on the heaviest real pair goes 2.11s → 2.42s. Voxelization still dominates.
 * `qmap/collide_cmp.py` module docstring and `GUIDE.md` gotcha 31: state the two things the tool
   does **not** claim, so "exit 0" cannot be read as more than it means. It compares the player
   collision hull and liquid contents — not projectile collision, where `clip` and `sky*` diverge
