@@ -49,7 +49,17 @@ TOKEN_RE = re.compile(r'''
                                      # lookahead fails the next alternative matches the same run.
                                      # '{foo' really is one token, which is how parse_token()
                                      # reads it too -- its bare branch does not stop at a brace.
-    | ([^\x00-\x20]+)                # 3: any other token: parse_token()'s `while (*pos > 32)`
+    | ([^\x00-\x20]+)                # 3: any other token: parse_token()'s `while (*pos > 32)`,
+                                     # which it runs on a `const char *` -- signed, so qbsp counts
+                                     # bytes 0x80-0xFF as whitespace and 0x7F as a token character.
+                                     # Measured: 'classname<0x80>func_detail' is a valid unquoted
+                                     # epair (180 clipnodes), with 0x7F it is one token and qbsp
+                                     # refuses the map. This class gets 0x7F right and 0x80-0xFF
+                                     # wrong, which needs a decided file encoding to fix rather
+                                     # than a wider class -- open() decodes before the scan, so
+                                     # on a UTF-8 locale such a byte raises UnicodeDecodeError
+                                     # here and never reaches a token at all. No generator can
+                                     # emit one and no texture name contains one.
 ''', re.X)
 BRACE = 2                            # the one group a brush-interior walk has to look at
 # the whitespace parse_entity_dict() trims off a key, spelled out rather than left to str.strip():
