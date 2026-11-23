@@ -443,20 +443,37 @@ def brushes(path):
     return out
 
 
-def merge_boxes(boxes, tol=1e-6):
+def _box_vol(lo, hi):
+    return (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2])
+
+
+def merge_boxes(boxes, tol=1e-6, max_area=None):
+    """Merge overlapping/touching AABBs when doing so does not inflate total volume.
+
+    Two boxes merge only when their enclosing box has volume <= the sum of their volumes (and,
+    when max_area is set, XY slice area <= max_area). Containments and coplanar split walls still
+    collapse into one ROI, while L-shaped / corner-overlapping boxes stay separate instead of
+    inflating across the empty corner between them. Any remaining overlaps between ROIs are masked
+    out on the integer voxel lattice at count time in compare()."""
     comps = []
     for blo, bhi in boxes:
         mlo, mhi = list(blo), list(bhi)
         while True:
             keep, grew = [], False
+            mvol = _box_vol(mlo, mhi)
             for clo, chi in comps:
                 if (chi[0] >= mlo[0] - tol and chi[1] >= mlo[1] - tol and chi[2] >= mlo[2] - tol and
                         clo[0] <= mhi[0] + tol and clo[1] <= mhi[1] + tol and clo[2] <= mhi[2] + tol):
-                    mlo = [min(mlo[0], clo[0]), min(mlo[1], clo[1]), min(mlo[2], clo[2])]
-                    mhi = [max(mhi[0], chi[0]), max(mhi[1], chi[1]), max(mhi[2], chi[2])]
-                    grew = True
-                else:
-                    keep.append((clo, chi))
+                    ulo = [min(mlo[0], clo[0]), min(mlo[1], clo[1]), min(mlo[2], clo[2])]
+                    uhi = [max(mhi[0], chi[0]), max(mhi[1], chi[1]), max(mhi[2], chi[2])]
+                    uvol = _box_vol(ulo, uhi)
+                    uarea = (uhi[0] - ulo[0]) * (uhi[1] - ulo[1])
+                    if (uvol <= (mvol + _box_vol(clo, chi)) * (1.0 + 1e-9) and
+                            (max_area is None or uarea <= max_area)):
+                        mlo, mhi, mvol = ulo, uhi, uvol
+                        grew = True
+                        continue
+                keep.append((clo, chi))
             comps = keep
             if not grew:
                 break
@@ -471,12 +488,13 @@ def roi_grid(comps, s):
         ihi = [max(lo_i + 1, math.ceil(float(v) / s)) for lo_i, v in zip(ilo, roi_hi)]
         snapped.append((ilo, ihi))
     specs, total, max_sl = [], 0, 0
-    for ilo, ihi in merge_boxes(snapped, tol=-1):
+    for ilo, ihi in merge_boxes(snapped, tol=0, max_area=MAX_SLICE):
         nx, ny, nz = ihi[0] - ilo[0], ihi[1] - ilo[1], ihi[2] - ilo[2]
         sl = nx * ny
         max_sl = max(max_sl, sl)
         total += sl * nz
-        specs.append((np.array([ilo[0] * s, ilo[1] * s, ilo[2] * s]),
+        specs.append((ilo, ihi,
+                      np.array([ilo[0] * s, ilo[1] * s, ilo[2] * s]),
                       np.array([ihi[0] * s, ihi[1] * s, ihi[2] * s]),
                       nx, ny, nz))
     return specs, total, max_sl
@@ -541,7 +559,7 @@ def compare(A, B, step, kind, label, differs, space):
         budget_tail = 'use a larger --step'
 
     roi_specs, total_voxels, _ = roi_grid(comps, step)
-    for lo, hi, nx, ny, nz in roi_specs:
+    for _, _, lo, hi, nx, ny, nz in roi_specs:
         if nx * ny > MAX_SLICE:
             mb = (nx * ny) / (1024 ** 2)
             print(f'ERROR: {label}: ROI 2D slice {(nx, ny)} ({mb:.1f} MiB per slice at step={step:g}) '
@@ -590,19 +608,35 @@ def compare(A, B, step, kind, label, differs, space):
                 g[ix0:ix1, iy0:iy1] |= inside
         return g
 
-    total_diff, sample_pts, shapes = 0, [], []
-    for lo, hi, nx, ny, nz in roi_specs:
+    total_diff, sample_pts, shapes, seen_boxes = 0, [], [], []
+    for ilo, ihi, lo, hi, nx, ny, nz in roi_specs:
         shapes.append((nx, ny, nz))
+        # Mask cells already covered by an earlier ROI on the shared integer lattice so
+        # non-inflating overlapping ROIs never double-count voxels.
+        overlaps = []
+        for pilo, pihi in seen_boxes:
+            ox0, ox1 = max(ilo[0], pilo[0]), min(ihi[0], pihi[0])
+            oy0, oy1 = max(ilo[1], pilo[1]), min(ihi[1], pihi[1])
+            oz0, oz1 = max(ilo[2], pilo[2]), min(ihi[2], pihi[2])
+            if ox0 < ox1 and oy0 < oy1 and oz0 < oz1:
+                overlaps.append((ox0 - ilo[0], ox1 - ilo[0],
+                                 oy0 - ilo[1], oy1 - ilo[1],
+                                 oz0 - ilo[2], oz1 - ilo[2]))
+        seen_boxes.append((ilo, ihi))
         subA = [b for b in A if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
         subB = [b for b in B if bool(np.all(b[1] > lo - 1e-6) and np.all(b[0] < hi + 1e-6))]
         for iz in range(nz):
             zc = lo[2] + (iz + 0.5) * step
             diff = vox_slice(subA, lo, nx, ny, zc) ^ vox_slice(subB, lo, nx, ny, zc)
             if diff.any():
-                idx = np.argwhere(diff)
-                total_diff += len(idx)
-                for ix, iy in idx[:max(0, 5 - len(sample_pts))]:
-                    sample_pts.append((float(lo[0] + (ix + 0.5) * step), float(lo[1] + (iy + 0.5) * step), float(zc)))
+                for ox0, ox1, oy0, oy1, oz0, oz1 in overlaps:
+                    if oz0 <= iz < oz1:
+                        diff[ox0:ox1, oy0:oy1] = False
+                if diff.any():
+                    idx = np.argwhere(diff)
+                    total_diff += len(idx)
+                    for ix, iy in idx[:max(0, 5 - len(sample_pts))]:
+                        sample_pts.append((float(lo[0] + (ix + 0.5) * step), float(lo[1] + (iy + 0.5) * step), float(zc)))
 
     if total_diff:
         caveat = f'; features down to {gap_s} {unit} not examined' if under_resolved else ''
