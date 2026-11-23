@@ -83,6 +83,30 @@ building the first blockout.
 
 ---
 
+## Choosing an AI Model
+
+Building a good Quake map in Python asks a lot of an LLM at once: 3D spatial reasoning in code, disciplined multi-tool verification, procedural texture synthesis, and visual self-critique across many iterative builds. Frontier reasoning/coding models handle this well; smaller, faster, or older-generation models tend to stall or produce flat, broken geometry.
+
+### Tested Models (as of November 2026)
+
+| Status | Models |
+|---|---|
+| **Working** | Opus 5.5, GPT 6.x (Sol, Astra), Gemini 4 Neon, GLM 5.4 |
+| **Not working** | GLM 5.3, GLM 5.3 Flash |
+
+Even as newer models release, the sharp split between **GLM 5.4** and **GLM 5.3 / 5.3 Flash** is a useful baseline for the capability threshold this workflow needs.
+
+### How to Evaluate a Model for Map-Making
+
+If you're trying a newer or unlisted model, test it through one full concept → blockout → visual-pass cycle and watch for four things:
+
+1. **3D spatial reasoning in code** — Can it hold multi-level coordinates, overlooks, ramps, stair headroom, and room connections in its head across Python geometry code, rather than collapsing into flat boxes or fighting recurring leaks and hull traps?
+2. **Process & tool discipline** — Does it actually follow [`GUIDE.md`](GUIDE.md): sketching genuinely distinct concepts in plan *and* section before coding, running the full build/check pipeline (`check.py`, `vprofile.py`, `collide_cmp.py`), and computing distances/sightlines instead of guessing in prose?
+3. **Visual self-critique** — Can it look at its own rendered plans, sections, preview shots (`views.py`), and your in-client ezQuake screenshots to diagnose lighting brightness, palette traps, and texture alignment bugs — fixing the whole class of bug rather than patching one wall?
+4. **Endurance across iterations** — Can it carry a map through 5–15+ playtest and visual-polish builds without breaking earlier rooms, forgetting constraints, or silently altering gameplay collision during a texture pass?
+
+---
+
 ## How the Workflow Works
 
 The codebase is a **starting point, not a framework and not a cage**. Each new map starts fresh from `template/` rather than copying the previous map (copying anchored three early maps onto the same layout skeleton), and the agent extends the core whenever a design calls for a new architectural primitive.

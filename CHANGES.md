@@ -17,6 +17,7 @@
   dual-hull voxel collision proofs, item economy diagnostics), repository and tool reference
   (`template/`, `qmap/`, `examples/`, `gallery/`, `demos/`, `tests/`), optional local build/test
   commands, SemVer policy, and licensing.
+  - Added LLM compatibility guidance and evaluation criteria (`Choosing an AI Model`).
 
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 
