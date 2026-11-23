@@ -367,16 +367,18 @@ Measure our new maps the same way once the group has played them.
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-only builds**: `collide_cmp.py old.map new.map` must **exit 0**, or explain.
-  Check the exit code, not the text: it compares four content classes, so stdout can say
-  "collision identical" on the solid pass while `LAVA CONTENTS DIFFER` on a later one takes the
-  exit code to 1. `echo $?` after it, or run it under `set -e`.
-  It counts every brush qbsp puts in the player collision hull — `worldspawn`, `func_group` and
-  the whole `func_detail` / `func_detail_wall` / `func_detail_fence` family, with face textures
-  read for contents — and compares water, slime and lava as their own classes, so retexturing a
-  wall to `*lava` or swapping a `*water` pool for `*lava` is reported instead of passing silently.
-  It prints a `note:` line accounting for every brush it ignored, so a flavour it does not know
-  about is named rather than dropped. Gotcha 31 has the full solidity rules — several are not
-  what you would guess.
+  Check the exit code, not the text: it compares both the player hull (hulls 1/2) and hull 0
+  (projectile solid, sky, and water/slime/lava contents), so stdout can say "collision identical"
+  on the player pass while `PROJECTILE COLLISION DIFFERS`, `SKY CONTENTS DIFFER`, or
+  `LAVA CONTENTS DIFFER` on a later pass takes the exit code to 1. `echo $?` after it, or run it
+  under `set -e`.
+  It counts every brush qbsp puts in the world hulls — `worldspawn`, `func_group` and the whole
+  `func_detail` / `func_detail_wall` / `func_detail_fence` family, plus `func_detail_illusionary`
+  liquids/sky and `func_illusionary_visblocker` `clip`, with face textures read for contents — so
+  retexturing a wall to `clip`, `sky*`, or `*lava`, or swapping a `*water` pool for `*lava`, is
+  reported instead of passing silently. It prints a `note:` line accounting for every brush it
+  ignored, so a flavour it does not know about is named rather than dropped. Gotcha 31 has the
+  full solidity rules — several are not what you would guess.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   traps and unreachable items on the compiled map's **real collision** with a 32×32×56 player
@@ -561,55 +563,62 @@ Measure our new maps the same way once the group has played them.
 30. **Ship `.lit` alongside `.bsp` when using colored lights**: `ericw-tools light` automatically
     writes colored lightmaps to `<map>.lit` whenever `_color` lights are present (see section 7);
     copy and package `.lit` with `.bsp` while keeping gameplay/team read clear without `.lit`.
-31. **What is solid to a player is not what you would guess.** `collide_cmp.py` follows the rules
-    below. They were measured by compiling a 128-unit cube per flavour and reading the BSP, never
-    inferred from the qbsp source — which on its own is not enough twice over: it states one rule
-    in a way that reads backwards (`hint`, below), and the liquid rules live in a different hull
-    from the solid ones, so the two need different instruments. **Player collision** is the
-    clipnode count (hulls 1/2) against an empty control; **liquid contents** are leaf contents
-    (hull 0, what the engine reads to decide whether you are swimming or burning). Hulls 1/2 drop
-    every non-solid brush, so clipnodes cannot see a liquid at all.
+31. **What is solid to a player — and to a rocket — is not what you would guess.** `collide_cmp.py`
+    follows the rules below. They were measured by compiling a 128-unit cube per flavour and
+    reading the BSP, never inferred from the qbsp source — which on its own is not enough twice
+    over: it states one rule in a way that reads backwards (`hint`, below), and projectile /
+    liquid rules live in a different hull from player collision, so the two need different
+    instruments. **Player collision** is the clipnode count (hulls 1/2) against an empty control;
+    **projectile collision, sky, and liquid contents** are leaf contents in hull 0 (what point
+    traces and `SV_PointContents` read). Hulls 1/2 drop every non-solid brush, so clipnodes cannot
+    see a liquid at all, and treat `clip` and `sky*` identically to a wall.
     * **Solid**: `worldspawn`, `func_group`, and the whole detail family — `func_detail`,
       `func_detail_wall`, `func_detail_fence`. Detail is *not* automatically non-solid; only
       `func_detail_illusionary` is. If you reach for `func_detail` to cut vis cost, it still
-      blocks players.
+      blocks players and projectiles.
     * **No player collision**: `func_detail_illusionary`, and `func_illusionary_visblocker` — a
       trap, because it passes qbsp's own `IsWorldBrushEntity()` test yet has no collision for an
       ordinary textured brush (it blocks vis only, so its face count rises while its clipnode
-      count does not). Both have an exception, immediately below.
+      count does not). Both have exceptions, immediately below.
     * **But "no player collision" is not "no contents", in both directions.**
-      `func_detail_illusionary` **still makes real lava**: qbsp converts a brush there to
-      illusionary mist only when it is already solid, so a `*lava` face is never converted — it
-      keeps `CONTENTS_LAVA` in hull 0 and will still burn you, while adding zero clipnodes. Do not
-      put a `*` texture on a decal or fixture brush. `func_illusionary_visblocker` discards every
-      *visible* content, liquids included, whatever the texture says — but `clip` is an
-      **invisible** content, so it survives, and a `clip` brush in a `func_illusionary_visblocker`
-      **is as solid to a player as a wall** (measured: a full clipnode count, not the control's).
-      Each entity therefore gets its own rule; there is no one "illusionary means non-solid".
+      `func_detail_illusionary` **still makes real lava and real sky in hull 0**: qbsp converts a
+      brush there to illusionary mist only when `contents.is_any_solid()` is true, so neither a
+      `*` liquid nor a `sky*` face is converted — a `*lava` brush keeps `CONTENTS_LAVA` (will
+      still burn you) and a `sky*` brush keeps `CONTENTS_SKY` (will still swallow rockets), while
+      adding zero clipnodes. Do not put a `*` or `sky*` texture on a decal or fixture brush.
+      `func_illusionary_visblocker` discards every *visible* content, sky and liquids included,
+      whatever the texture says — but `clip` is an **invisible** content, so it survives in hulls
+      1/2, and a `clip` brush in a `func_illusionary_visblocker` **is as solid to a player as a
+      wall** (while remaining hull-0 empty so projectiles pass through). Each entity therefore gets
+      its own per-hull rule; there is no one "illusionary means non-solid".
     * **`*`-prefixed faces make a liquid, not a solid.** `template/_out.py` writes `liquid()`
       pools as plain `worldspawn` brushes, so a pool sits in the same brush list as the walls and
-      is only distinguishable by its texture. `!water` is a Half-Life name: here it is solid.
-    * **`clip`, `skip`, `sky*` and `trigger` textures are all solid** (`clip` and `skip` draw
-      nothing but still block you); `hint`, `hintskip` and `origin` are not.
+      is only distinguishable by its texture. `!water` is a Half-Life name: here it is solid in
+      both hulls.
+    * **`clip`, `skip`, `sky*` and `trigger` are all solid to a player — but diverge for
+      projectiles.** In hulls 1/2 all four block players identically. In hull 0 (point traces:
+      rockets, nails, hitscan), `skip` and `trigger` are still `CONTENTS_SOLID`, `clip` is absent
+      (projectiles pass straight through), and `sky*` writes a `CONTENTS_SKY` leaf (blocks and
+      deletes the missile). `hint`, `hintskip` and `origin` have no contents in any hull.
     * **A mixed-texture brush is decided by its first face in file order.** One `*lava` face in
       slot 1 turns a whole wall into a pool; the same face in slot 6 leaves it solid. qbsp warns
       `brush has multiple face contents`, and so does `collide_cmp.py` — including when the odd
-      face is `clip` or `sky*`, which are as solid as a wall but still a different content type.
+      face is `clip` or `sky*`, which are as solid as a wall to players but differ in hull 0.
       It almost always means a texture landed in a wall or floor theme slot by mistake.
       The exception is `hint` / `hintskip`: **one such face anywhere** removes the brush from the
       collision hull entirely *and* empties its contents in hull 0, whatever the other five faces
-      say — so it beats a liquid too. qbsp's `IsHintName()` treats the two names identically, so
-      `hintskip` on its own drops a brush exactly as `hint` does.
+      say — so it beats liquids and sky too. qbsp's `IsHintName()` treats the two names
+      identically, so `hintskip` on its own drops a brush exactly as `hint` does.
     * `func_wall`, `func_illusionary` and `trigger_*` become separate BSP models with their own
       hulls, and their real solidity is set at runtime by the progs, not the BSP. `collide_cmp.py`
       lists them in its `note:` line instead of comparing them; a map that depends on one of them
       for collision needs checking by hand.
-    * **`collide_cmp.py` compares the player hull, not the projectile hull.** `clip` and `sky*`
-      are exactly as solid as a wall to a player, so retexturing a wall to either is reported
-      identical — but a rocket passes straight through `clip` and vanishes on `sky*`. If a visual
-      pass touches `clip` or sky brushes, check those by hand. (The other direction is safe: it
-      compares each liquid class on its own, so reshaping a liquid buried inside a solid wall
-      reports a difference nobody can feel — a false alarm rather than a miss.)
+    * **`collide_cmp.py` compares both hulls independently.** A wall retextured `clip` reports
+      player-identical and `PROJECTILE COLLISION DIFFERS` (exit 1); retextured `sky*`, it reports
+      player-identical and both `PROJECTILE COLLISION DIFFERS` and `SKY CONTENTS DIFFER` (exit 1).
+      Because each class is compared on its own, reshaping a liquid (or sky/clip) brush buried
+      inside an unchanged solid wall reports a difference nobody can feel — a conservative false
+      alarm rather than a miss.
 
 ---
 
