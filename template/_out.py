@@ -1,5 +1,5 @@
 # =========================================================================
-# OUTPUT - .map and .json writer (template, qmap-toolkit v3)
+# OUTPUT - .map and .json writer (template, qmap-ai-toolkit)
 #   Per-face texturing: every wall face is textured from the AIR it faces, cut into bands
 #   (kickplate / wall / light strip / wall / cornice) at that room's heights. Detail (lamps,
 #   panels) is func_detail_illusionary: never collision. Walkable tops get a minlight skin.

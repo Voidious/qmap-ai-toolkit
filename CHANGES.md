@@ -1,3 +1,15 @@
+# v4.0.0 (SemVer versioning)
+
+* **Semantic Versioning (`VERSION` single source of truth)**: switched from ad-hoc 1- and 2-part
+  versions (`v1`..`v3.7`) to 3-part SemVer (`MAJOR.MINOR.PATCH`, git tags `vMAJOR.MINOR.PATCH`),
+  starting at `4.0.0`.
+  - Added root `VERSION` file (`4.0.0`) as the canonical version source.
+  - Removed stale hardcoded release numbers from top-level doc headings (`README.md`, `GUIDE.md`,
+    `qmap/ITEMS.md`) and `template/` file banners (`_core.py`, `_out.py`, `plan.py`,
+    `texgen_blockout.py`, `views.py`), standardizing template headers on `qmap-ai-toolkit`.
+  - Added `tests/test_version.py` to enforce SemVer formatting in `VERSION`, alignment with the top
+    `CHANGES.md` release heading, and no stale version headers in docs/template banners.
+
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 
 * `qmap/collide_cmp.py` & `GUIDE.md`: **compare hull 0 (projectile solid + sky) alongside the

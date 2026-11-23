@@ -1,4 +1,4 @@
-# Building Quake 1 / QuakeWorld maps with an AI model — field guide (v3)
+# Building Quake 1 / QuakeWorld maps with an AI model — field guide
 
 This guide and toolkit come out of building nine multiplayer maps for one QuakeWorld group:
 Clan Arena (Agora, Vigil, Crucible, Cistern, Lyceum), FFA (Relay) and CTF (Bastion, Circuit,
