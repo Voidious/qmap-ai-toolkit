@@ -171,7 +171,11 @@ def brush_contents(texes):
 
 
 def entities(txt):
-    """Yield (entity text, classname or None) for every entity block in a .map file.
+    """Yield (brush blocks, classname or None) for every entity block in a .map file.
+
+    A brush block is its text from '{' to the matching '}' inclusive, exactly the span
+    map_entity_t::parse() hands to parse_brush(); parse_brush() below ignores the brace lines
+    along with every other line that holds no face.
 
     Walks tokens the way map_file_t::parse / map_entity_t::parse / parse_entity_dict do
     (common/mapfile.cc), because nothing about .map structure is decided by anything else. Every
@@ -216,6 +220,13 @@ def entities(txt):
         structural by comparing the token text in a key slot, without asking whether it was
         quoted. So a brace inside a quoted *value* is text -- '"message" "a{b"' compiles at 180,
         while counting brace characters merged the whole file into one entity block.
+      - A brush is where a '{' lands in that same key slot, and nothing about its *layout* marks
+        it. parse_brush() opens with parse_token(PARSE_PEEK), which skips whitespace and comments
+        before deciding anything, so qbsp keeps a brush whose '{' is followed by a comment, a
+        blank line, a trailing space, or its own first face on the same line. Measured: a wall
+        cube written in any of those four shapes is a full 180 clipnodes, where a pattern
+        requiring '{' + newline + '(' found no brush at all and dropped a solid one with no note
+        -- the one way a brush could still leave this comparison silently.
 
     What qbsp then does with the pairs:
       - The value must be on the key's line, read with PARSE_SAMELINE. A newline between the two
@@ -237,15 +248,17 @@ def entities(txt):
         overwrite a real one (180). Only the classname *value* is matched case-insensitively, by
         the callers, which is where qbsp uses Q_strcasecmp.
     """
-    start, depth, key, key_end, cls, refused = None, 0, None, 0, None, False
+    depth, brs, bstart, key, key_end, cls, refused = 0, [], 0, None, 0, None, False
     for m in TOKEN_RE.finditer(txt):
         kind = m.lastindex                  # None for a comment, which is not a token at all
         if depth >= 2:
-            # inside a brush, which parse_brush() consumes. Only its nesting matters here -- and
-            # it does nest, because the brush-primitives format wraps its faces in a second brace
-            # pair -- so skip every other token without paying to extract it.
+            # inside a brush, whose faces parse_brush() reads. Only its nesting matters here --
+            # and it does nest, because the brush-primitives format wraps its faces in a second
+            # brace pair -- so skip every other token without paying to extract it.
             if kind == BRACE:
                 depth += 1 if m.group(BRACE) == '{' else -1
+                if depth == 1:
+                    brs.append(txt[bstart:m.end()])
             continue
         if kind is None:
             continue
@@ -260,11 +273,13 @@ def entities(txt):
             key = None
         elif tok == '{':
             if depth == 0:
-                start, cls, refused = m.start(), None, False
+                brs, cls, refused = [], None, False
+            else:
+                bstart = m.start()      # a '{' in an entity's key slot opens a brush
             depth += 1
         elif tok == '}':
             if depth == 1:
-                yield txt[start:m.end()], cls
+                yield brs, cls
             depth = max(depth - 1, 0)
         elif depth == 1 and not refused:
             key, key_end = tok, m.end()
@@ -272,8 +287,10 @@ def entities(txt):
 
 def parse_brush(br):
     """Return (aabb_lo, aabb_hi, (N, D), is_aabb, geom_key, face_textures, no_normal_faces) for one
-    brush, or None if degenerate. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD,
-    so inside is n.x <= d.
+    brush block as entities() yields it -- braces included -- or None if degenerate. A line with
+    fewer than three plane points holds no face, which covers the braces, a 'brushDef' header and
+    any comment. Quake .map face winding: (p3 - p1) x (p2 - p1) points OUTWARD, so inside is
+    n.x <= d.
 
     Face textures come back in file order, and only for the faces qbsp itself keeps. A face whose
     three plane points give no normal is dropped by ParseBrushFace() (qbsp/map.cc) before it is
@@ -350,13 +367,15 @@ def brushes(path):
     as is every brush in an entity that becomes its own BSP model.
 
     The note is what keeps this blind spot from coming back: a classname or texture flavour these
-    rules do not know about is reported by name instead of vanishing from the comparison."""
+    rules do not know about is reported by name instead of vanishing from the comparison. Which
+    is also why the brushes come from entities()' token walk rather than a second scan of the
+    entity text -- a brush a pattern does not recognise is not ignored for a reason, it is simply
+    absent, and there is nothing left to name in a note."""
     out = {k: [] for k, _, _, _ in CLASSES}
     skipped, mixed, no_normal = 0, 0, 0
     no_collision, submodel, no_contents = Counter(), Counter(), Counter()
-    for e, found in entities(open(path).read()):
+    for brs, found in entities(open(path).read()):
         cls = found or '(no classname)'
-        brs = re.findall(r'\{\n(\(.*?)\n\}', e, re.S)
         kept = WORLD_ENTITY_TYPES.get(cls.lower())
         if kept is None:
             if brs:                    # lights, spawns and items have no brushes: nothing ignored
