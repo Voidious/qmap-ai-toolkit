@@ -210,10 +210,11 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
 
         # 2. Prism vs non-prism grid solids (walls, fill() rects, stairs) at each nearby floor.
         # Wall-attached structural prisms (kind=None, e.g. chamfers) may sit flush on backing
-        # walls: an edge is mounted only when a plain grid wall cell (m is None) at walkable
-        # height lies completely on its outward side with positive-length collinear face contact.
+        # walls: an edge is mounted on a floor band only when a plain grid wall cell (m is None)
+        # overlapping that band lies completely on its outward side with positive-length
+        # collinear face contact.
         floor_bands = [(f, max(f + STEP, z0), min(f + HEAD, z1)) for f in sorted(floors)]
-        mounted_planes = []
+        edge_mounts = []
         if attached_kind:
             n_v = len(P)
             for k in range(n_v):
@@ -228,13 +229,10 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                 ei1 = min(i1, int((max(ax, bx) + C - XMIN) // C) + 1)
                 ej0 = max(j0, int((min(ay, by) - C - YMIN) // C))
                 ej1 = min(j1, int((max(ay, by) + C - YMIN) // C) + 1)
-                found = False
+                mcells = []
                 for i in range(ei0, ei1):
                     bx0 = XMIN + i * C
                     for j in range(ej0, ej1):
-                        if not any(m is None and any(b > zlo and a < zhi for _, zlo, zhi in floor_bands)
-                                   for a, b, m in cols[i][j]):
-                            continue
                         by0 = YMIN + j * C
                         box = [(bx0, by0), (bx0 + C, by0), (bx0 + C, by0 + C), (bx0, by0 + C)]
                         sd = [(u - ax) * enx + (v - ay) * eny for u, v in box]
@@ -242,15 +240,22 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                             continue
                         on_edge = [(u - ax) * tx + (v - ay) * ty for (u, v), s in zip(box, sd) if s <= 1e-6]
                         if len(on_edge) >= 2 and min(max(on_edge), L) - max(min(on_edge), 0.0) > 1e-3:
-                            mounted_planes.append((ax, ay, enx, eny))
-                            found = True
-                            break
-                    if found:
-                        break
+                            mcells.append((i, j))
+                if mcells:
+                    edge_mounts.append((ax, ay, enx, eny, mcells))
 
         backing_mats = ('wall', 'ramp', 'stair', 'flank')
         best_grid = None
         for f, zlo, zhi in floor_bands:
+            mounted_planes = [
+                (ax, ay, enx, eny)
+                for ax, ay, enx, eny, mcells in edge_mounts
+                if any(
+                    m is None and b > zlo and a < zhi
+                    for i, j in mcells
+                    for a, b, m in cols[i][j]
+                )
+            ]
             solid_cells = {}
             for i in range(i0, i1):
                 for j in range(j0, j1):

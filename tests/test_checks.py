@@ -270,6 +270,49 @@ class TestPrismSeparation(unittest.TestCase):
         res2 = check.check_map(g2.to_dict(), quiet=True)
         self.assertTrue(any('wall' in p and '16.0' in p for p in res2['prism_separation']), res2['prism_separation'])
 
+    def test_mounting_plane_is_scoped_to_each_floor_band(self):
+        # Lower-floor mounting against a raised platform (z=0..128) must not exempt
+        # an unrelated upper-floor wall (z=128..256) separated by a 32u gap at z=128.
+        g = MiniGrid(-512, 512, -512, 512)
+        g.carve((-384, -384, 384, 384), 0, 384)
+        g.fill((64, -128, 256, 128), 0, 128, None)
+        g.prism([(-64, -64), (64, -64), (64, 64), (-64, 64)], 0, 256, kind=None)
+        g.fill((96, -32, 128, 32), 128, 256, None)
+        g.spawn(-256, -256, 0, 's1')
+        g.spawn(224, 96, 128, 's2')
+        res = check.check_map(g.to_dict(), quiet=True)
+        self.assertTrue(
+            any('wall' in p and 'z=128' in p and '32.0' in p for p in res['prism_separation']),
+            res['prism_separation'],
+        )
+
+        # Conversely, upper-floor mounting (z=128..256) must not exempt a lower-floor
+        # wall (z=0..128) separated by a 32u gap at z=0.
+        g2 = MiniGrid(-512, 512, -512, 512)
+        g2.carve((-384, -384, 384, 384), 0, 384)
+        g2.fill((-256, -128, -128, 128), 112, 128, None)      # nearby z=128 floor, 64u west of prism
+        g2.fill((64, -128, 256, 128), 128, 256, None)         # valid upper mounting wall on x=64
+        g2.prism([(-64, -64), (64, -64), (64, 64), (-64, 64)], 0, 256, kind=None)
+        g2.fill((96, -32, 128, 32), 0, 128, None)             # unrelated 32u gap at z=0
+        g2.spawn(-256, -256, 0, 's1')
+        g2.spawn(-192, 0, 128, 's2')
+        res2 = check.check_map(g2.to_dict(), quiet=True)
+        self.assertTrue(
+            any('wall' in p and 'z=0' in p and '32.0' in p for p in res2['prism_separation']),
+            res2['prism_separation'],
+        )
+
+        # Control: valid mounting on both floors (full-height backing wall) still passes.
+        g3 = MiniGrid(-512, 512, -512, 512)
+        g3.carve((-384, -384, 384, 384), 0, 384)
+        g3.fill((-256, -128, -128, 128), 112, 128, None)
+        g3.fill((64, -128, 256, 128), 0, 256, None)
+        g3.prism([(-64, -64), (64, -64), (64, 64), (-64, 64)], 0, 256, kind=None)
+        g3.spawn(-256, -256, 0, 's1')
+        g3.spawn(-192, 0, 128, 's2')
+        res3 = check.check_map(g3.to_dict(), quiet=True)
+        self.assertEqual(res3['prism_separation'], [])
+
     def test_custom_min_prism_sep_threshold(self):
         g = self._arena()
         g.octagon(-256, 0, r=48)  # x=-300..-212 -> 84u from west wall x=-384
