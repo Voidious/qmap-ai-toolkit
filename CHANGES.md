@@ -33,6 +33,7 @@
   - Profiled ten well-regarded larger QW classics — six custom multi-player maps (`skull`, `bravado`, `spinev2`, `ultrav`, `schloss`, `cmt4`) plus four canonical 4v4 TDM classics (`dm3`, `e2m2tdm`, `cmt3`, `e1m2`) — with `vprofile.py` and `itemprofile.py`, storing full geometry profiles in `gallery/profiles/large_refs.json` (no BSPs redistributed).
   - Integrated the ten larger classics alongside the five compact classics on equal footing across `GUIDE.md` section 3 (*Design for height*, *Item economy*, *Sizing a map*), section 8 (group TDM/FFA/CA demo findings), `gallery/GALLERY.md`, and `gallery/items/README.md`: documents invariants that hold at every scale (`dominant_level <= 0.37`, `eff_levels 4.3–9.0`, angled walls, `2–7` teleporters, `0/256` common-eye RL/LG/resource trios) vs metrics that scale down with map size (`route_vert_per_1000` naturally drops to `87–215` while `route_level_pairs` stays `0.75–0.98`; 4v4 TDM travel `1,600–2,300` vs 8–12p CA sweet spot `1,050–1,350`; 4v4 TDM keeping 1 RL + deeper powerup/MH/recovery supply).
   - `qmap/vprofile.py`: added `REFERENCE_LARGE` and `--ref duel|large` (default `duel`) for `--targets`, and updated `SIZE_BANDS` labels to include the larger classics.
+* `AGENTS.md`: added repository guidance for coding agents working on the toolkit codebase (environment/dependencies, test and `template/` smoke-build commands, script/concatenation/versioning conventions, key invariants, architecture map, and test guidelines).
 
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 
