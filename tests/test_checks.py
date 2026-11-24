@@ -145,6 +145,20 @@ class TestCheckDocstring(unittest.TestCase):
         self.assertIn('pocket', doc)
         self.assertIn('prism', doc)
 
+    def test_large_reference_profiles_dataset(self):
+        p = REPO_ROOT / 'gallery' / 'profiles' / 'large_refs.json'
+        self.assertTrue(p.is_file(), 'Missing gallery/profiles/large_refs.json')
+        rows = json.loads(p.read_text(encoding='utf-8'))
+        names = {r['map'] for r in rows}
+        self.assertEqual(
+            names,
+            {'skull', 'bravado', 'spinev2', 'ultrav', 'schloss', 'cmt4', 'dm3', 'e2m2tdm', 'cmt3', 'e1m2'},
+        )
+        for r in rows:
+            self.assertLessEqual(r['dominant_level'], 0.37)
+            self.assertGreaterEqual(r['eff_levels'], 4.3)
+            self.assertGreaterEqual(r['teleporters'], 2)
+
 
 class TestPrismSeparation(unittest.TestCase):
     def _arena(self):
@@ -414,6 +428,22 @@ class TestVprofilePassageWidth(unittest.TestCase):
         adj[nid[(35, 6)]].append((nid[(2, 2)], 0.0, 'tele'))
         pks2 = vprofile._bsp_pockets(DummyBSP(), nodes, R, adj, 0.0, 0.0)
         self.assertEqual(pks2, [])
+
+    def test_targets_supports_duel_and_large_reference_pools(self):
+        sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'large_refs.json').read_text(encoding='utf-8'))[0]
+        import io
+        import contextlib
+        buf_duel = io.StringIO()
+        with contextlib.redirect_stdout(buf_duel):
+            vprofile.targets(sample, ref='duel')
+        self.assertIn('five compact QW classics', buf_duel.getvalue())
+        buf_large = io.StringIO()
+        with contextlib.redirect_stdout(buf_large):
+            vprofile.targets(sample, ref='large')
+        self.assertIn('ten larger QW classics', buf_large.getvalue())
+        self.assertNotIn('LOW', buf_large.getvalue())
+        with self.assertRaises(ValueError):
+            vprofile.targets(sample, ref='unknown')
 
 
 if __name__ == '__main__':

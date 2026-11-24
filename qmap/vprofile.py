@@ -1,9 +1,10 @@
 """Verticality profile of a compiled Quake map (BSP29), from its collision hulls alone, so any map can
 be measured the same way - ours and the classics.
 
-    python3 vprofile.py map.bsp [more.bsp ...] [--targets] [--check] [--min-passage 64] [--json out.json] [--png-dir figs/]
+    python3 vprofile.py map.bsp [more.bsp ...] [--targets] [--ref duel|large] [--check] [--min-passage 64] [--json out.json] [--png-dir figs/]
 
---targets prints each measure against the range of five classic QW maps (REFERENCE below);
+--targets prints each measure against the reference range of classic QW maps (--ref duel, the default,
+uses five compact duel/FFA classics; --ref large uses ten larger custom and 4v4 TDM classics);
 --check reports cut-off spawns, one-way traps, narrow passages (where the player fits with less than
 --min-passage effective width, default 64 = 32 spare on axial walls), blind pockets (floor with one way
 in/out, no item/spawn, and depth > opening width), and unreachable items on the map's REAL player hull:
@@ -1187,9 +1188,8 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
 
 
 # ------------------------------------------------------------------ targets
-# The range of five well-liked QW maps (aerowalk, ztndm3, dapak12, naked3, naked4), measured with
-# this tool in Nov 2026 (see gallery/profiles). They are 1on1 / small-team maps; scale-free measures
-# carry over to bigger maps, counts (teleporters, sites) grow with size. (lo, hi, which way is better)
+# The range of five well-liked compact QW maps (aerowalk, ztndm3, dapak12, naked3, naked4), measured
+# with this tool in Nov 2026 (see gallery/profiles/profiles.json). (lo, hi, which way is better)
 REFERENCE = {
     'stacked_share':       (0.19, 0.21, 'up',   'floor with another floor directly over or under it'),
     'eff_levels':          (3.88, 5.15, 'up',   'effective number of levels (64-unit bands)'),
@@ -1202,15 +1202,30 @@ REFERENCE = {
     'teleporters':         (2, 5,       'up',   'teleporters'),
 }
 
+# The range of ten well-regarded larger QW maps: six custom multi-player classics (skull, bravado,
+# spinev2, ultrav, schloss, cmt4) plus four canonical 4v4 TDM classics (dm3, e2m2tdm, cmt3, e1m2),
+# measured with this tool in Nov 2026 (see gallery/profiles/large_refs.json).
+REFERENCE_LARGE = {
+    'stacked_share':       (0.07, 0.26, 'up',   'floor with another floor directly over or under it'),
+    'eff_levels':          (4.30, 8.98, 'up',   'effective number of levels (64-unit bands)'),
+    'dominant_level':      (0.22, 0.37, 'down', 'share of floor on the single biggest level'),
+    'overlook_share':      (0.25, 0.66, 'up',   'floor that can see floor >= 64 below it'),
+    'cross_level_sight':   (0.17, 0.47, 'up',   'of what you can see, share >= 64 above or below'),
+    'route_vert_per_1000': (87, 215,    'up',   'height changed per 1000 units, item to item'),
+    'route_level_pairs':   (0.75, 0.98, 'up',   'item pairs whose route changes level'),
+    'angled_walls':        (0.03, 0.30, 'up',   'wall area that is not axis-aligned'),
+    'teleporters':         (2, 7,       'up',   'teleporters'),
+}
+
 
 # v3.3: SIZE BY TRAVEL - median and 90th-percentile walking distance between random spots (teleporters,
 # pads and drops included). Floor area overrates vertical maps; travel is what players feel. Measured
 # Nov 2026 on maps with a known player count (see GUIDE, 'Sizing a map'):
 SIZE_BANDS = [   # (travel median up to, label)
-    (950,  'duel / FFA 2-6; Clan Arena 4-10 (like helix, relay, naked3, aerowalk)'),
-    (1160, 'duel / FFA 2-8; Clan Arena 6-12 (like crucible, lyceum, cistern, naked4, dapak12, ztndm3)'),
+    (950,  'duel / FFA 2-6; Clan Arena 4-10 (like helix, relay, naked3, skull, aerowalk)'),
+    (1160, 'duel / FFA 4-8; Clan Arena 6-12 (like bravado, spinev2, ultrav, dm6, lyceum, ztndm3)'),
     (1400, 'Clan Arena / TDM 8-12+ (like agora, vigil)'),
-    (10 ** 9, 'big: CTF or large TDM (like bastion, strata, circuit)'),
+    (10 ** 9, 'large 4v4 TDM or CTF (like schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2, bastion, strata, circuit)'),
 ]
 
 
@@ -1220,11 +1235,19 @@ def size_line(res):
             f"(floor {res['floor_area_k']}k sq units) -> {label}")
 
 
-def targets(res):
-    """Print each measure against the reference range: ok / LOW / HIGH."""
-    print(f"verticality profile of {res['map']} (reference range from five classic QW maps):")
+def targets(res, ref='duel'):
+    """Print each measure against the reference range: ok / LOW / HIGH.
+    ref='duel' compares against the five compact QW classics; ref='large' compares against
+    the ten larger custom and 4v4 TDM classics."""
+    if ref == 'large':
+        table, label = REFERENCE_LARGE, 'ten larger QW classics'
+    elif ref == 'duel':
+        table, label = REFERENCE, 'five compact QW classics'
+    else:
+        raise ValueError(f"unknown --ref {ref!r} (expected 'duel' or 'large')")
+    print(f"verticality profile of {res['map']} (reference range from {label}):")
     print(size_line(res))
-    for k, (lo, hi, way, desc) in REFERENCE.items():
+    for k, (lo, hi, way, desc) in table.items():
         v = res[k]
         verdict = 'ok' if lo <= v <= hi else ('LOW' if v < lo else 'HIGH')
         if verdict == 'HIGH' and way == 'up' or verdict == 'LOW' and way == 'down':
@@ -1328,6 +1351,7 @@ if __name__ == '__main__':
     js = args[args.index('--json') + 1] if '--json' in args else None
     pd_ = args[args.index('--png-dir') + 1] if '--png-dir' in args else None
     mp = float(args[args.index('--min-passage') + 1]) if '--min-passage' in args else DEFAULT_MIN_PASSAGE
+    ref = args[args.index('--ref') + 1] if '--ref' in args else 'duel'
     paths = [a for a in args if a.endswith('.bsp')]
     allres = []
     for p in paths:
@@ -1341,7 +1365,7 @@ if __name__ == '__main__':
             check_report(r)
         r.pop('_check')
         if '--targets' in args:
-            targets(r)
+            targets(r, ref=ref)
         else:
             print(json.dumps(r))
         allres.append(r)

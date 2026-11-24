@@ -177,38 +177,74 @@ Known gaps today: curved walls (beyond prism approximations), diagonal ramps, sl
 doors, lifts, and moving brushes. If a design needs one, build it (see section 4, *Extending the
 toolkit*).
 
-### Design for height (v3)
+### Design for height
 
-**What the survey found.** After nine maps the group felt the layouts lacked vertical complexity.
-`vprofile.py` measured all nine against five classic QW maps the group rates (aerowalk, ztndm3,
-dapak12, naked3, naked4) from their collision hulls. The full table is in `gallery/GALLERY.md`.
+**What the surveys found.** After nine maps the group felt the layouts lacked vertical complexity.
+`vprofile.py` measured all nine against **two classic QuakeWorld reference pools** from their
+collision hulls alone:
+* **Five compact / duel classics** (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`;
+  `gallery/profiles/profiles.json`) — 1on1 / small-team maps (`travel_median` 823–1,148).
+* **Ten larger QuakeWorld classics** (`gallery/profiles/large_refs.json`) — six well-regarded
+  custom multi-player maps (`skull`, `bravado`, `spinev2`, `ultrav`, `schloss`, `cmt4`;
+  `travel_median` 905–1,738) plus four canonical 4v4 TDM classics (`dm3`, `e2m2tdm`, `cmt3`,
+  `e1m2`; `travel_median` 1,939–2,277). (`dm2` is omitted from the automated `vprofile` ranges
+  because ~20% of its floor is button/swim/rocket-jump-gated in the walk+jump model.)
 
-| measure | five classics | our nine maps |
-|---|---|---|
-| route height change per 1000 units, item to item | **251–551** | 61–229 |
-| effective levels (64-unit bands) | 3.9–5.2 | 2.0–4.1 |
-| share of floor on the biggest level | 0.28–0.41 | 0.43–0.78 |
-| floor that can see floor ≥ 64 below it | 0.46–0.62 | 0.23–0.55 |
-| of what you see, share ≥ 64 above or below | 0.31–0.42 | 0.17–0.42 |
-| wall area that is not axis-aligned | 0.03–0.22 | 0 |
-| teleporters | 2–5 | 0–2 |
+The full per-map tables are in [`gallery/GALLERY.md`](gallery/GALLERY.md).
 
-The biggest gap is the first line: in the classics, **going from one item to the next changes
-height two to five times as much**. Our maps put most of their floor on one level and route
-along it; the high and low ground is a side trip.
+| measure | 5 compact classics | 10 larger classics | our first nine maps |
+|---|---|---|---|
+| route height change per 1000 units, item to item | **251–551** | **87–215** *(6 customs: 120–215)* | 61–229 |
+| item pairs whose route changes level | 0.89–0.96 | 0.75–0.98 *(8 of 10 ≥ 0.84)* | 0.65–0.95 |
+| effective levels (64-unit bands) | 3.9–5.2 | **4.3–9.0** *(6 customs: 4.3–7.6)* | 2.0–4.1 |
+| share of floor on the biggest level | 0.28–0.41 | **0.22–0.37** | 0.43–0.78 |
+| stacked share (two floors ≥ 64 apart) | 0.19–0.21 | 0.07–0.26 | 0.00–0.32 |
+| floor that can see floor ≥ 64 below it | 0.46–0.62 | 0.25–0.66 | 0.23–0.55 |
+| of what you see, share ≥ 64 above or below | 0.31–0.42 | 0.17–0.47 | 0.17–0.42 |
+| wall area that is not axis-aligned | 0.03–0.22 | 0.03–0.30 | 0 |
+| teleporters | 2–5 | 2–7 | 0–2 |
+
+**What holds at every scale — and what changes on larger maps:**
+* **No classic puts half its floor on one flat slab.** Across all 15 reference maps (compact and
+  large alike), `dominant_level` stays at **0.22–0.41** — and across all 10 larger classics it
+  never exceeds **0.37** (0.29–0.37 on the six customs; 0.22–0.37 on the four 4v4 TDM legends).
+  Our early maps sat at 0.43–0.78 because they treated one main floor as the default and hung side
+  trips off it.
+* **Larger maps add *more* elevation bands, not wider flat slabs.** Effective levels climb from
+  3.9–5.2 on the compact classics to **4.3–7.6** on the six larger customs (`skull` 5.98,
+  `schloss` 6.67, `cmt4` 7.55) and **5.3–9.0** on `e1m2`/`e2m2tdm`/`dm3`/`cmt3`.
+* **Every reference map uses angled walls (`0.03–0.30`) and active teleporters (`2–7`).**
+  Teleporters are also what keep larger multi-level footprints tight to traverse (`skull` has
+  2,031k sq units of floor yet plays at `travel_median` 905).
+* **Route height change per 1,000 units drops naturally with horizontal scale.** None of the 10
+  larger classics hits the duel cohort's `≥ 250`: height span grows slowly (~270–688 units) while
+  horizontal travel between pickups roughly doubles, so `route_vert_per_1000` sits at **120–215**
+  on the six larger customs (`bravado` 215, `skull` 214, `schloss` 195, `cmt4` 187, `spinev2` 131,
+  `ultrav` 120) and **87–212** on the four 4v4 TDM classics (`e1m2` 212, `cmt3` 187, `dm3` 162,
+  `e2m2tdm` 87). Crucially, **`route_level_pairs` stays high (0.84–0.98 on 8 of 10)**: routes still
+  change level on almost every item trip, just over longer horizontal runs. Do not force duel-scale
+  `≥ 250` onto a large map.
+* **Stacking and overlooks depend on architectural style.** `bravado` and `spinev2` both have
+  `stacked_share = 0.07` and still feel strongly vertical through terraced levels and sightlines
+  (`bravado`: `overlook 0.66`, `cross_sight 0.38`, `eff_levels 4.30`), while open/atrium-linked
+  larger maps (`skull` 0.55/0.47, `schloss` 0.48/0.36, `dm3` 0.44/0.31, `cmt3` 0.46/0.30) keep
+  high overlooks whereas walled room-and-corridor layouts (`ultrav` 0.25/0.23, `e2m2tdm` 0.29/0.18,
+  `cmt4` 0.40/0.24) trade wide sightlines for tighter compartmentalized fights.
 
 **Stacked is not vertical.** Strata stacks more floor than any classic (0.32 of the footprint has
-a floor over or under it) and is still the flattest map to *play* (route height 61): two big
-slabs, each crossed on its own level, a few links between them. What counts is how often a route
-climbs or drops and what you see above and below you, not how many storeys there are. Its light
-wells (holes in the slab you can look through, drop down and hook back up) were the feature the
-group singled out.
+a floor over or under it) and is still the flattest map to *play* (route height 61, dominant level
+0.56, 2.5 effective levels): two big slabs, each crossed on its own level, a few links between
+them. What counts is how often a route climbs or drops and what you see above and below you, not
+how many storeys there are. Its light wells (holes in the slab you can look through, drop down and
+hook back up) were the feature the group singled out.
 
-**Targets.** `build.sh` runs `vprofile.py --check --targets` (`VPROFILE=0` skips it). Treat the
-reference ranges as **diagnostics and comparisons, not release gates or proof of gameplay
-quality** — report where a map sits, and never add token teleporters or move good items solely to
-push a metric across a threshold. In particular, Clan Arena plays without item incentives, so
-item-route height cannot validate CA circulation on its own.
+**Targets.** `build.sh` runs `vprofile.py --check --targets` (`VPROFILE=0` skips it). For larger
+multi-player or 4v4 TDM maps, run `vprofile.py map.bsp --targets --ref large` to compare against
+the ten larger classics instead of the five compact duel classics. Treat both reference tables as
+**diagnostics and comparisons, not release gates or proof of gameplay quality** — report where a
+map sits, and never add token teleporters or move good items solely to push a metric across a
+threshold. In particular, Clan Arena plays without item incentives, so item-route height cannot
+validate CA circulation on its own.
 
 **Give high ground a spatial counter.** Verticality works best when an upper advantage has a local
 answer built into the fighting space: a short turn out of sight, a sheltered route passing
@@ -250,20 +286,31 @@ Two RLs mean moving LG away from one can create a new cluster around the other.
 Nearby GA can intentionally support a recovery weapon without duplicating a
 premium RA/YA bundle; that tradeoff still needs actual games.
 
-**Counts and quantities are different from frequency.** The five reference
-BSPs contain 3–4 armors, two RLs and one LG, but those are embedded inventories,
-not rules for an 8–12-player map. Count small/big ammo separately. MH, ordinary
-health, armor absorption, weapon pickup ammo, backpacks and configured respawn
-rules are not interchangeable. Do not derive supply per minute from a BSP alone
-or multiply a duel map's inventory by floor area/player count. Server mods can
-change pickups or remove extra armors/powerups.
+**Counts and quantities are different from frequency — and larger does not mean more RLs.**
+The five compact classics carry 3–4 armors, two RLs and one LG, and the six larger custom classics
+mostly follow that pattern (`skull`, `bravado`, `spinev2`, `cmt4`, `schloss`: 2–3 RLs, 0–1 LG,
+2–3 armors, 1–2 MHs; `ultrav` drops RA/MH for 3 RLs, 2×YA, GA, Quad). By contrast, canonical 4v4
+TDM maps (`dm3`, `cmt3`, `e2m2tdm`, `e1m2`) deliberately hold **only 1 RL and 1 LG** (0 LG on
+`e1m2`) and **2–3 armors**, creating contested team control over scarce strong guns while putting
+extra supply into **1–3 MHs, powerups (Quad, Pent, Ring), and deeper mid-tier recovery caches**
+(145–600 ordinary HP, 100–375 nails/shells). Count small/big ammo separately. MH, ordinary health,
+armor absorption, weapon pickup ammo, backpacks, and configured respawn rules are not
+interchangeable — never multiply a duel map's inventory by floor area or player count.
 
-**Give small supplies a reason.** Some ammo belongs near its gun; some belongs
-on a different route to sustain a carrier's rotation. Paired modest health can
-make a sheltered recovery stop. A weak dead-end reward should justify the
-commitment, but do not answer every quiet corner with another premium item or
-put every useful resource in one safe bundle. Check what an out-of-control
-player can reach without first taking the position already holding the guns.
+**What holds across all reference sizes for trio control:** on every map with supported RL + LG +
+armor/MH trios across both the compact survey (`aerowalk`, `ztndm3`, `dapak12`) and the larger
+survey (`spinev2`, `skull`, `ultrav`, `dm3`, `cmt3`, `e2m2tdm`), `itemprofile.py` measures **0 /
+256 common-eye samples** — no single sampled standing position can lock down both strong weapons
+plus a major armor or Megahealth. (On maps like `cmt4`, `schloss`, `bravado`, and `e1m2`, one or
+more endpoints are unresolved in the walk+jump model and stay reported as unknown rather than 0.)
+
+**Give small supplies a reason.** In our group's TDM demos, spawn and mid-tier weapons (SG, SSG,
+SNG) account for ~36% of kills and combat distance shrinks ~80–100 units compared to CA (195–216u
+vs 291u) as teams fight over item pockets and recovery routes. Some ammo belongs near its gun;
+some belongs on an alternate route to sustain a carrier's or out-of-control team's rotation. Paired
+modest health and shell/nail caches away from RL/RA hot zones give trailing players a real recovery
+loop. A dead-end reward should justify the commitment, but do not answer every quiet corner with
+another premium item or bundle every useful resource in one safe spot.
 
 Use `qmap/itemprofile.py map.bsp --json items.json --png-dir figures` for
 inventories, directed matrices and diagnostic trios. `--inventory-only` is fast;
@@ -281,23 +328,30 @@ verticality changes when the key-item set changes: adding GA can lower that
 metric without flattening any geometry. Keep the item-set change explicit and
 do not move good resources simply to maximize a height statistic.
 
-**Sizing a map: by travel, not by floor area** (v3.3). Helix has more floor than any of the five
-classics (2.07 M sq units against 1.08–1.60 M) yet is the quickest of all fifteen profiled maps to
-get around: stacked floor adds area, not distance, and pads, drops and teleporters shorten trips.
-The group rated it a duel/FFA map. So `vprofile.py` now measures **travel**: the median and 90th
-percentile walking distance between random spots on reachable floor (teleporters, pads and drops
-included), and `build.sh` prints a size line with a suggested player range.
+**Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
+(`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet
+play at duel/compact travel speed (`797` and `905`): stacked floor adds area, not distance, and
+pads, drops, and teleporters shorten trips. `vprofile.py` measures **travel** — the median and
+90th-percentile walking distance between random spots on reachable floor (teleporters, pads, and
+drops included) — and `build.sh` prints a size line.
 
-| travel median (90%) | maps | suggested |
+| travel median (90%) | reference & toolkit maps | typical mode / player count |
 |---|---|---|
-| 797–918 (1234–1699) | helix, naked3, relay, aerowalk | duel / FFA 2–6; Clan Arena 4–10 |
-| 968–1148 (1775–2052) | naked4, dapak12, crucible, lyceum, cistern, ztndm3 | duel / FFA 2–8; Clan Arena 6–12 |
-| 1273–1312 (2095–2260) | agora, vigil | Clan Arena / TDM 8–12+ |
-| 1831–3045 (3506–5373) | bastion, strata, circuit | CTF, large TDM |
+| 797–950 (1234–1745) | helix, naked3, relay, skull, aerowalk | duel / FFA 2–6; Clan Arena 4–10 |
+| 966–1160 (1478–2283) | bravado, naked4, spinev2, dapak12, crucible, lyceum, ultrav, dm6, cistern, ztndm3 | duel / FFA 4–8; Clan Arena 6–12; compact 4v4 TDM |
+| 1200–1400 (2095–2260) | agora, vigil | Clan Arena / FFA / TDM 8–12+ |
+| 1600–2300 (2896–4828) | schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2 | full 4v4 TDM / large FFA (too slow for 8–12p CA) |
+| 1831–3045 (3506–5373) | bastion, strata, circuit | CTF (8–12+) |
 
-The bands are a first calibration from these fifteen maps and what the group thought of them; adjust
-them as the group plays more. For a vertical map, aim the *travel* at the band you want - an 8–12
-Clan Arena map built for height needs more floor than a flat one did.
+**Mode changes the right travel band.** `travel_median` 1,600–2,300 is canonical 4v4 TDM territory
+(`schloss` 1,616, `cmt4` 1,738, `dm3` 1,939, `e2m2tdm` 2,162, `cmt3` 2,189, `e1m2` 2,277) because
+teams hold wings, time items, and regroup. In Clan Arena, where there are no item timers and rounds
+end on elimination, that same scale drags: in our group's demos, 8-player CA on `cmt4` (1,738) ran
+a **74 s** median round (longer than `ctf1` at 70 s), while `spinev2` (1,014), `dm6` (1,097),
+`ztndm3` (1,148), and `ca_agora` (1,273) sat cleanly in the **35–45 s** sweet spot. For an 8–12p
+CA map with strong verticality, aim travel at ~1,050–1,350 even if total floor area reaches
+2,200k–2,800k, using teleporters, drops, and compact loops to keep transit brisk. Adjust these
+bands as your own group plays more.
 
 **In real play** (`demos/vert.py` on the group's demos): floor height changed per 1000 units
 travelled was ~100–125 on dm6, 148 dm2, 91 dm4, ~150–165 ctf1, 159 ctf3, 138 ctf6, and ~100–118 on
@@ -529,13 +583,21 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 * **Hook-only perches** are a good second layer in CTF: slabs too high to jump to, stocked with
   ammo or small health, not armour.
 
-### What real demos showed (22 CA + 7 CTF-map games of this group)
+### What real demos showed (group CA, TDM, FFA, and CTF games)
 
-* **Clan Arena**: ~80–85% of kills are rocket; median kill distance ~190–390 units; first kill
-  ~5–12 s into a round; rounds ~35–55 s on good maps. CA on a CTF-sized map (ctf1): ~70 s rounds,
-  ~11 s to first contact — too big. dm6 = hub + distinct rooms + short corridors (corridors are
-  low-lethality transit). Players live on high ground when it exists; open floors and pits become
-  kill zones. *These are findings to design against, not a layout to copy.*
+* **Clan Arena** (initial 22 CA + follow-up 39 CA demos): ~80–85% of kills are rocket, ~15% LG;
+  median kill distance ~290 units (range ~190–390); first kill ~6–12 s into a round; rounds ~35–55 s
+  on well-sized maps (`spinev2` 35 s, `ca_agora` 40 s, `ztndm3` 42 s, `dm6` 45 s). Oversized maps
+  drag CA rounds past a minute (`ctf1` 70 s, `cmt4` 74 s). Players live on high ground when it
+  exists (high-ground killers >48u above victims reach 15–26% on overlook-rich maps like `ca_agora`,
+  `spinev2`, and `dm2`); open floors and pits without cover become kill zones. *These are findings
+  to design against, not a layout to copy.*
+* **TDM & FFA** (10 TDM + 20 FFA demos, 3,755 kills): median kill distance shrinks ~80–100 units vs
+  CA (**216 u** in TDM, **195 u** in FFA vs **291 u** in CA) because players contest item rooms and
+  fight with close-range recovery weapons. In TDM, RL drops to 46% while spawn/mid-tier weapons
+  (SG 25%, SNG 5%, SSG 5%) drive ~36% of kills; in FFA, RL is 59% and LG 17%. High-ground advantage
+  stays prominent on vertical maps (`aerowalk` 24%, `ztndm3` 20%, `cmt4` 17%, `dm3` 15%). In-play
+  floor height change sits around ~98–110 per 1,000 units travelled across modes (16–18% airborne).
 * **CTF**: real carriers move ~250–350 u/s; solo hook runs are much faster — don't panic about
   fast solo times. Captures convert ~1 in 5 pickups. About half of carrier deaths happen at or
   near the enemy flag: give flag rooms 2–3 exits. Loops let carriers kite (ctf1); a single
