@@ -1,4 +1,4 @@
-# v4.0.0 (SemVer versioning, expanded README)
+# v4.0.0 (SemVer, README & GUIDE overhaul, AGENTS.md, larger-map benchmarks, layout checks)
 
 * **Semantic Versioning (`VERSION` single source of truth)**: switched from ad-hoc 1- and 2-part
   versions (`v1`..`v3.7`) to 3-part SemVer (`MAJOR.MINOR.PATCH`, git tags `vMAJOR.MINOR.PATCH`),
