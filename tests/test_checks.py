@@ -286,6 +286,24 @@ class TestBlindPockets(unittest.TestCase):
         self.assertIn('prism separation (< 64): 1 PROBLEMS', proc.stdout)
         self.assertIn('BLIND POCKETS: 1', proc.stdout)
 
+    def test_exec_compat_for_contact_sightlines_and_routes(self):
+        # contact.py, sightlines.py, routes.py, and pick_spawns*.py load check.py via exec()
+        # and rely on its module-level globals (spawns, snodes, nodes, C, XMIN, bfs, etc.).
+        g = self._arena_with_corridor(length=96, width=128)
+        with tempfile.TemporaryDirectory() as td:
+            jp = pathlib.Path(td) / 'test.json'
+            jp.write_text(json.dumps(g.to_dict()), encoding='utf-8')
+            for script, extra in (
+                ('contact.py', []),
+                ('sightlines.py', []),
+                ('routes.py', ['--from', '-256,-256,0', '--to', '-256,256,0']),
+            ):
+                proc = subprocess.run(
+                    [sys.executable, str(QMAP_DIR / script), str(jp), *extra],
+                    capture_output=True, text=True, check=True,
+                )
+                self.assertTrue(proc.stdout.strip(), f'{script} produced no output')
+
 
 # ------------------------------------------------------------------ synthetic clipnode tests for vprofile.py
 def _build_convex_room_clipnodes(planes):

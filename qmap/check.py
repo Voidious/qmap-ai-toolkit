@@ -783,6 +783,12 @@ def check_map(d, min_prism_sep=DEFAULT_MIN_PRISM_SEP, quiet=False):
         slots=sorted(slots),
         prism_separation=prism_bad,
         pockets=pockets,
+        env=dict(
+            d=d, C=C, XMIN=XMIN, YMIN=YMIN, NX=NX, NY=NY, BOT=BOT, TOP=TOP,
+            cols=cols, AIR=AIR, solid_at=solid_at, nodes=nodes,
+            neighbours=neighbours, bfs=bfs, spawns=spawns, snodes=snodes,
+            reach=reach, r0=r0, TELEPORTS=TELEPORTS,
+        ),
     )
 
 
@@ -801,5 +807,8 @@ def main(argv=None):
     return check_map(d, min_prism_sep=min_prism_sep)
 
 
-if __name__ == '__main__':
-    main()
+if globals().get('__name__') in ('__main__', None):
+    _res = main()
+    # Populate module-level globals when run via exec(open('check.py').read(), g)
+    # (used by routes.py, sightlines.py, contact.py, pick_spawns*.py).
+    globals().update(_res['env'])
