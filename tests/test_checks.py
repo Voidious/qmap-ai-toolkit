@@ -226,6 +226,50 @@ class TestPrismSeparation(unittest.TestCase):
         res = check.check_map(g.to_dict(), quiet=True)
         self.assertTrue(any('crate' in p and '32.0' in p for p in res['prism_separation']), res['prism_separation'])
 
+    def test_crate_overlapping_chamfer_exposed_face_fails(self):
+        g = self._arena()
+        g.chamfer((-384, -384, 384, 384), 'nw', 128, 0, 256)
+        g.fill((-336, 288, -272, 352), 0, 128, 'crate')       # 32u off N/W walls, crosses diagonal face
+        res = check.check_map(g.to_dict(), quiet=True)
+        self.assertTrue(any('crate' in p and 'dist 0.0' in p for p in res['prism_separation']), res['prism_separation'])
+
+    def test_unnamed_fill_crossing_or_touching_chamfer_exposed_face_fails(self):
+        # Unnamed fill(..., None) crossing the exposed diagonal face must still fail
+        g = self._arena()
+        g.chamfer((-384, -384, 384, 384), 'nw', 128, 0, 256)
+        g.fill((-336, 288, -272, 352), 0, 128, None)
+        res = check.check_map(g.to_dict(), quiet=True)
+        self.assertTrue(any('wall' in p and 'dist 0.0' in p for p in res['prism_separation']), res['prism_separation'])
+
+        # Corner contact on the exposed diagonal face (zero interior overlap) must also fail
+        g2 = self._arena()
+        g2.chamfer((-384, -384, 384, 384), 'nw', 128, 0, 256)
+        g2.fill((-320, 256, -256, 320), 0, 128, 'crate')      # NW corner (-320,320) touches hypotenuse
+        res2 = check.check_map(g2.to_dict(), quiet=True)
+        self.assertTrue(any('crate' in p and 'dist 0.0' in p for p in res2['prism_separation']), res2['prism_separation'])
+
+        # Room-side crate touching the chamfer's east vertex (-256, 384) must fail
+        g3 = self._arena()
+        g3.chamfer((-384, -384, 384, 384), 'nw', 128, 0, 256)
+        g3.fill((-256, 352, -192, 384), 0, 128, 'crate')
+        res3 = check.check_map(g3.to_dict(), quiet=True)
+        self.assertTrue(any('crate' in p and 'dist 0.0' in p for p in res3['prism_separation']), res3['prism_separation'])
+
+    def test_freestanding_structural_prism_below_floor_flags_touching_crate(self):
+        # A freestanding kind=None prism starting at BOT must not treat the floor slab below
+        # z=0 as a mounting wall that exempts obstacles touching or near it at floor height.
+        g = self._arena()
+        g.prism([(-64, -64), (64, -64), (64, 64), (-64, 64)], g.BOT, 256, kind=None)
+        g.fill((64, -32, 128, 32), 0, 128, 'crate')
+        res = check.check_map(g.to_dict(), quiet=True)
+        self.assertTrue(any('crate' in p and 'dist 0.0' in p for p in res['prism_separation']), res['prism_separation'])
+
+        g2 = self._arena()
+        g2.prism([(-64, -64), (64, -64), (64, 64), (-64, 64)], g2.BOT, 256, kind=None)
+        g2.fill((80, -32, 128, 32), 0, 128, None)             # 16u gap to unnamed wall
+        res2 = check.check_map(g2.to_dict(), quiet=True)
+        self.assertTrue(any('wall' in p and '16.0' in p for p in res2['prism_separation']), res2['prism_separation'])
+
     def test_custom_min_prism_sep_threshold(self):
         g = self._arena()
         g.octagon(-256, 0, r=48)  # x=-300..-212 -> 84u from west wall x=-384

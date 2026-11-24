@@ -182,7 +182,7 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                         floors.add(a)
         if not floors:
             continue
-        attached_kind = kind in (None, 'bridge')
+        attached_kind = kind is None
         klabel = kind or 'wall'
 
         # 1. Prism vs every other prism overlapping vertically at a walkable floor
@@ -200,7 +200,7 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                 continue
             dist = poly_poly_dist(P, Q)
             if dist < min_sep - 1e-6:
-                if dist <= 1e-6 and attached_kind and qkind in (None, 'bridge') and poly_clip_area(P, Q) < 1.0:
+                if dist <= 1e-6 and attached_kind and qkind is None and poly_clip_area(P, Q) < 1.0:
                     continue
                 qklabel = qkind or 'wall'
                 probs.append(
@@ -208,10 +208,49 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                     f'({qklabel} @ {qcx:.0f},{qcy:.0f}) z={min(shared_f)}: dist {dist:.1f} < {min_sep}'
                 )
 
-        # 2. Prism vs non-prism grid solids (walls, fill() rects, stairs) at each nearby floor
+        # 2. Prism vs non-prism grid solids (walls, fill() rects, stairs) at each nearby floor.
+        # Wall-attached structural prisms (kind=None, e.g. chamfers) may sit flush on backing
+        # walls: an edge is mounted only when a plain grid wall cell (m is None) at walkable
+        # height lies completely on its outward side with positive-length collinear face contact.
+        floor_bands = [(f, max(f + STEP, z0), min(f + HEAD, z1)) for f in sorted(floors)]
+        mounted_planes = []
+        if attached_kind:
+            n_v = len(P)
+            for k in range(n_v):
+                ax, ay = P[k]
+                bx, by = P[(k + 1) % n_v]
+                L = math.hypot(bx - ax, by - ay)
+                if L <= 1e-9:
+                    continue
+                tx, ty = (bx - ax) / L, (by - ay) / L
+                enx, eny = ty, -tx
+                ei0 = max(i0, int((min(ax, bx) - C - XMIN) // C))
+                ei1 = min(i1, int((max(ax, bx) + C - XMIN) // C) + 1)
+                ej0 = max(j0, int((min(ay, by) - C - YMIN) // C))
+                ej1 = min(j1, int((max(ay, by) + C - YMIN) // C) + 1)
+                found = False
+                for i in range(ei0, ei1):
+                    bx0 = XMIN + i * C
+                    for j in range(ej0, ej1):
+                        if not any(m is None and any(b > zlo and a < zhi for _, zlo, zhi in floor_bands)
+                                   for a, b, m in cols[i][j]):
+                            continue
+                        by0 = YMIN + j * C
+                        box = [(bx0, by0), (bx0 + C, by0), (bx0 + C, by0 + C), (bx0, by0 + C)]
+                        sd = [(u - ax) * enx + (v - ay) * eny for u, v in box]
+                        if min(sd) < -1e-6:
+                            continue
+                        on_edge = [(u - ax) * tx + (v - ay) * ty for (u, v), s in zip(box, sd) if s <= 1e-6]
+                        if len(on_edge) >= 2 and min(max(on_edge), L) - max(min(on_edge), 0.0) > 1e-3:
+                            mounted_planes.append((ax, ay, enx, eny))
+                            found = True
+                            break
+                    if found:
+                        break
+
+        backing_mats = ('wall', 'ramp', 'stair', 'flank')
         best_grid = None
-        for f in sorted(floors):
-            zlo, zhi = f + STEP, f + HEAD
+        for f, zlo, zhi in floor_bands:
             solid_cells = {}
             for i in range(i0, i1):
                 for j in range(j0, j1):
@@ -237,33 +276,12 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                         solid_cells[(i, j)] = (m or 'wall', box)
                         break
 
-            # Wall-attached prisms (chamfers, diagonal walls, bridges) sit flush on their
-            # mounting walls: ignore cells flush-touching P (dist <= 0.5) and backing-wall
-            # cells lying completely behind any mounted edge's outward half-plane.
-            mounted_planes = []
-            if attached_kind:
-                n_v = len(P)
-                for k in range(n_v):
-                    ax, ay = P[k]
-                    bx, by = P[(k + 1) % n_v]
-                    L = math.hypot(bx - ax, by - ay)
-                    if L <= 1e-9:
-                        continue
-                    enx, eny = (by - ay) / L, -(bx - ax) / L
-                    steps = max(2, int(math.ceil(L / C)))
-                    if any((int((ax + (bx - ax) * t / steps + enx * 2.0 - XMIN) // C),
-                            int((ay + (by - ay) * t / steps + eny * 2.0 - YMIN) // C)) in solid_cells
-                           for t in range(1, steps)):
-                        mounted_planes.append((ax, ay, enx, eny))
-
             for cell, (mat, box) in solid_cells.items():
-                dist = poly_poly_dist(P, box)
-                if attached_kind:
-                    if dist <= 0.5:
-                        continue
+                if attached_kind and mat in backing_mats and mounted_planes:
                     if any(all((u - ax) * enx + (v - ay) * eny >= -1e-6 for u, v in box)
                            for ax, ay, enx, eny in mounted_planes):
                         continue
+                dist = poly_poly_dist(P, box)
                 if dist < min_sep - 1e-6:
                     if best_grid is None or dist < best_grid[0]:
                         best_grid = (dist, f, mat, XMIN + cell[0] * C, YMIN + cell[1] * C)
