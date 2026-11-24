@@ -20,6 +20,11 @@
   - Added LLM compatibility guidance and evaluation criteria (`Choosing an AI Model`).
   - Added guidance for running your own BSP map and MVD demo analysis (`Doing Your Own Map & Demo Analysis`).
   - Added guidance for extending the toolkit and evolving `GUIDE.md` (`Expanding the Toolkit & Guide`).
+* `qmap/check.py`, `qmap/vprofile.py`, `GUIDE.md`, `tests/test_checks.py`: **passage-width, prism-separation, and blind-pocket layout checks** (motivated by `ca_mesas_b1`, where sealed hall mouths, merged columns, and a 320-long empty dead-end corridor all passed connectivity):
+  - `qmap/vprofile.py --check`: measures lateral clearance on the compiled BSP's real 32×32×56 player hull (exact iterative clipnode trace stepping over walkable `<= 18u` treads, opposing-normal filtered to reject room corners) and reports narrow passages below `--min-passage` (default `64` effective width = `32` spare on axial walls) with `(x, y, z)` and the two opposing solids (position, normal, and BSP face texture/owner). Also runs real-hull blind-pocket detection so angled/prism-sealed dead-end halls are caught even when the 16-unit grid missed them.
+  - `qmap/check.py`: refactored into importable functions (`check_map`, `check_prism_separation`, `check_pockets`), updated the module docstring to distinguish one-way traps from blind pockets, added prism-separation checking (`--min-prism-sep`, default `64` — flags freestanding prisms touching or within `< 64` of any other prism, `fill()` rect, or wall at walkable heights while allowing flush mounting on wall-attached chamfers/diagonal walls and skipping `'bridge'` slabs), and added blind-pocket detection (reachable floor with one way in/out across walk/jump/drop/teleports/pads, no item or spawn, and geodesic depth greater than opening width).
+  - `GUIDE.md` & `README.md`: documented the new checks in sections 1 and 5 and added gotcha 32.
+  - `tests/test_checks.py`: unit and CLI regression tests covering prism separation, blind pockets, docstring accuracy, and (when `numba` is available) `vprofile.py` passage-width and real-hull pocket checks.
 
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 

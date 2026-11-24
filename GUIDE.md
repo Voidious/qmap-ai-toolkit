@@ -30,8 +30,9 @@ template/               START HERE for a new map
   build.sh              generator -> qbsp -> vis -> light -> check.py -> vprofile.py --targets
   plan.py, views.py     top-down plan image; preview renders with a brightness readout
 qmap/                   shared tools - reuse as is
-  check.py              reachability (walk / jump / teleport / push), traps, spawn sightlines,
-                        item placement, perches, stair feet, 16-unit slots
+  check.py              reachability (walk / jump / teleport / push), one-way traps, blind
+                        pockets, spawn sightlines, item placement, perches, stair feet, 16-unit
+                        slots, prism separation (< 64)
   pick_spawns.py        spawn solver: the largest set of spots with no mutual line of sight
   pick_spawns_sym.py    the same for symmetric maps (SYM=rotate or SYM=mirror)
   routes.py             walking routes and times between flags (or any two points), per run
@@ -354,7 +355,17 @@ Measure our new maps the same way once the group has played them.
 * **Connectivity**: every spawn reaches every other; every item reachable. **Unreached floor**
   is reported at every height: crate tops and decoration are expected (say so), anything else
   is a bug.
-* **Traps**: every reachable spot has a route back.
+* **Traps**: every reachable spot has a walk/jump route back to the spawns (no one-way drops into
+  dead pits).
+* **Blind pockets**: reachable floor with only one way in or out, no item and no spawn, and
+  geodesic depth greater than its opening width (`check.py` on the grid, and `vprofile.py --check`
+  on the real player hull so prism-sealed halls are caught too). Either open a second exit, shorten
+  the alcove, or put a deliberate reward in it.
+* **Prism separation**: distance from every `prism()` obstacle footprint to every other prism,
+  `fill()` rect, and wall at walkable height (`check.py`, fails below 64; configurable via
+  `--min-prism-sep N`). Walkable `'bridge'` slabs are skipped; wall-attached structural prisms
+  (`chamfer`, `diag_wall`) are allowed flush contact with their mounting wall; freestanding prisms
+  (pillars, cover blocks) must stay clear of every solid.
 * **Stair feet**: the floor in front of every stair's bottom step must be clear across its full
   width — catches stairs running into a pillar or a wall stub.
 * **16-unit slots**: gaps a player can see but not fit into (a notch between a stub and a step).
@@ -381,11 +392,14 @@ Measure our new maps the same way once the group has played them.
   full solidity rules — several are not what you would guess.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
-  traps and unreachable items on the compiled map's **real collision** with a 32×32×56 player
-  (walk, jump, gaps, drops, teleporters, pads; no rocket jumps). It is the authority on whether you
-  can get somewhere and back: `check.py`'s grid treats the player as one 16-unit cell, so it cannot
-  see a gap narrower than 32 next to an angled brush, or a ceiling that catches a player still
-  half on the step above. Hook-only perches are listed as a note, not an error.
+  one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
+  to spare on axial walls, reporting `(x, y, z)` and the two opposing solids), **blind pockets**,
+  and unreachable items on the compiled map's **real collision** with a 32×32×56 player (walk,
+  jump, gaps, drops, teleporters, pads; no rocket jumps). It is the authority on whether you can
+  get somewhere and back: `check.py`'s grid treats the player as one 16-unit cell, so it cannot
+  see a gap narrower than 32 next to an angled brush, a tight pinch between two solids where a
+  32×32 body barely fits, or a ceiling that catches a player still half on the step above.
+  Hook-only perches are listed as a note, not an error.
 * **Height** (`vprofile.py map.bsp --targets`, run by `build.sh`): each measure against the five
   classics' range — `ok`, `LOW`, `HIGH`, or `ok+` (past the range in the good direction). Works on
   any BSP29, so you can profile a map the group names as a reference. `--json` and `--png-dir`
@@ -619,6 +633,14 @@ Measure our new maps the same way once the group has played them.
       Because each class is compared on its own, reshaping a liquid (or sky/clip) brush buried
       inside an unchanged solid wall reports a difference nobody can feel — a conservative false
       alarm rather than a miss.
+32. **Pass/fail connectivity at 32×32 is not enough (`ca_mesas_b1`).** The next order of problem
+    past gotcha 23 is when connectivity still passes and the layout is still broken in play: a
+    column 5 units from a hall mouth seals the hall onto the mesa while the hall stays connected at
+    its far end, columns merge into an unintended wall, a 320-long empty hall becomes a blind dead
+    end, or a 40-unit squeeze lets a 32×32 player pass while reading as blocked. `check.py` now
+    enforces prism separation (`< 64`, `--min-prism-sep`) and empty blind pockets (`depth > width`),
+    and `vprofile.py --check` reports narrow passages (`--min-passage`, default `64`) with both
+    opposing solids as well as real-hull blind pockets.
 
 ---
 
