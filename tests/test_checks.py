@@ -286,6 +286,29 @@ class TestBlindPockets(unittest.TestCase):
         res = check.check_map(g.to_dict(), quiet=True)
         self.assertEqual(res['pockets'], [])
 
+    def test_root_swapping_merge_in_loop_not_reported_as_pocket(self):
+        # Three parallel paths between cut node 14 and junction 6:
+        #   14 -- 6
+        #   14 -- 34 -- 32 -- 6
+        #   14 -- 8 -- 21 -- 17 -- 31 -- 29 -- 20 -- 28 -- 23 -- 6
+        # Removing {14} leaves all 11 remaining nodes in one connected component;
+        # a size-swapping union-find merge must keep newly discovered nodes on
+        # the surviving root's queue rather than dropping them onto a merged root.
+        graph = {
+            6: (32, 14, 23), 8: (21, 14), 14: (8, 34, 6), 17: (21, 31),
+            20: (28, 29), 21: (8, 17), 23: (28, 6), 28: (20, 23),
+            29: (20, 31), 31: (17, 29), 32: (34, 6), 34: (32, 14),
+        }
+        d = {'C': 16, 'XMIN': 0, 'YMIN': 0, 'spawns': [], 'team_spawns': [], 'items': []}
+        for offset in range(4):
+            coords = {v: (offset + idx * 2, 0, 0) for idx, v in enumerate(sorted(graph))}
+            inv = {c: v for v, c in coords.items()}
+            pks = check.check_pockets(
+                d, set(coords.values()),
+                lambda n, _s=40, _c=coords, _inv=inv: [_c[m] for m in graph[_inv[n]]],
+            )
+            self.assertEqual(pks, [], f'false pocket at offset={offset}: {pks}')
+
     def test_cli_reports_prism_and_pocket_problems(self):
         g = self._arena_with_corridor(length=320, width=128)
         g.octagon(0, 0, r=64)
@@ -428,6 +451,34 @@ class TestVprofilePassageWidth(unittest.TestCase):
         adj[nid[(35, 6)]].append((nid[(2, 2)], 0.0, 'tele'))
         pks2 = vprofile._bsp_pockets(DummyBSP(), nodes, R, adj, 0.0, 0.0)
         self.assertEqual(pks2, [])
+
+    def test_bsp_pockets_root_swapping_merge_in_loop_not_reported(self):
+        # 2-connected looping graph (3 paths between 0 and 3 plus a 2-connected ear
+        # between 1 and 4 so any truncated component has depth 64 > width 48).
+        # No single-node cut disconnects this graph, so _bsp_pockets must return [].
+        class DummyBSP:
+            ents = []
+
+        adj = {u: [] for u in range(18)}
+
+        def add_edge(u, v):
+            adj[u].append((v, 16.0, 'walk'))
+            adj[v].append((u, 16.0, 'walk'))
+
+        add_edge(0, 3)
+        add_edge(0, 1)
+        add_edge(1, 4)
+        add_edge(4, 3)
+        add_edge(0, 2)
+        for a, b in ((2, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12), (12, 3)):
+            add_edge(a, b)
+        for a, b in ((1, 13), (13, 14), (14, 15), (15, 16), (16, 4)):
+            add_edge(a, b)
+
+        nodes = [(u * 2, 0, 0.0) for u in range(18)]
+        R = np.ones(len(nodes), dtype=bool)
+        pks = vprofile._bsp_pockets(DummyBSP(), nodes, R, adj, 0.0, 0.0)
+        self.assertEqual(pks, [], pks)
 
     def test_targets_supports_duel_and_large_reference_pools(self):
         sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'large_refs.json').read_text(encoding='utf-8'))[0]

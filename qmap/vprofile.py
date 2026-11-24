@@ -576,9 +576,13 @@ def _bsp_pockets(B, nodes, R, adj_dir, x0, y0, max_opening=512):
         finished = []
         while len(alive) > 1:
             for idx in list(alive):
+                if idx not in alive:
+                    continue
                 if not queues[idx]:
                     alive.discard(idx)
                     finished.append(idx)
+                    if len(alive) <= 1:
+                        break
                     continue
                 u = queues[idx].popleft()
                 ru = find(idx)
@@ -589,7 +593,7 @@ def _bsp_pockets(B, nodes, R, adj_dir, x0, y0, max_opening=512):
                     if ov is None:
                         owner[v] = ru
                         comps[ru].add(v)
-                        queues[idx].append(v)
+                        queues[ru].append(v)
                     else:
                         rv = find(ov)
                         if rv != ru:
