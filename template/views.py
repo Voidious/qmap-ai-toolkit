@@ -1,4 +1,4 @@
-"""Preview renders of a compiled .bsp (qmap-toolkit v3, generic).
+"""Preview renders of a compiled .bsp (qmap-ai-toolkit, generic).
 Edit CAMS for your map: (label, (x, y, z eye), yaw degrees (0 = +x, 90 = +y), pitch degrees (+ = DOWN, as in Quake; - looks up)).
 The tone curve 255*(raw/255)^0.55 was fitted to ezQuake screenshots at default gamma/contrast, so the
 'mean' brightness printed per view is comparable between maps (our maps sit around 45-60).

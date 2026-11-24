@@ -1,3 +1,40 @@
+# v4.0.0 (SemVer, README & GUIDE overhaul, AGENTS.md, larger-map benchmarks, layout checks)
+
+* **Semantic Versioning (`VERSION` single source of truth)**: switched from ad-hoc 1- and 2-part
+  versions (`v1`..`v3.7`) to 3-part SemVer (`MAJOR.MINOR.PATCH`, git tags `vMAJOR.MINOR.PATCH`),
+  starting at `4.0.0`.
+  - Added root `VERSION` file (`4.0.0`) as the canonical version source.
+  - Removed stale hardcoded release numbers from top-level doc headings (`README.md`, `GUIDE.md`,
+    `qmap/ITEMS.md`) and `template/` file banners (`_core.py`, `_out.py`, `plan.py`,
+    `texgen_blockout.py`, `views.py`), standardizing template headers on `qmap-ai-toolkit`.
+  - Added `tests/test_version.py` to enforce SemVer formatting in `VERSION`, alignment with the top
+    `CHANGES.md` release heading, no stale version headers in docs/template banners, and valid local
+    links/images in `README.md`.
+* `README.md`: expanded from a brief placeholder into a full human-oriented project
+  overview while keeping a prominent top callout directing AI map-building agents to `GUIDE.md`.
+  Covers visual gallery previews, getting started with basic/medium/complex example prompts, the
+  human + AI workflow, engineering highlights (verticality benchmarking and travel-distance sizing,
+  dual-hull voxel collision proofs, item economy diagnostics), repository and tool reference
+  (`template/`, `qmap/`, `examples/`, `gallery/`, `demos/`, `tests/`), optional local build/test
+  commands, SemVer policy, and licensing.
+  - Added LLM compatibility guidance and evaluation criteria (`Choosing an AI Model`).
+  - Added guidance for running your own BSP map and MVD demo analysis (`Doing Your Own Map & Demo Analysis`).
+  - Added guidance for extending the toolkit and evolving `GUIDE.md` (`Expanding the Toolkit & Guide`).
+* `qmap/check.py`, `qmap/vprofile.py`, `GUIDE.md`, `tests/test_checks.py`: **passage-width, prism-separation, and blind-pocket layout checks** (motivated by `ca_mesas_b1`, where sealed hall mouths, merged columns, and a 320-long empty dead-end corridor all passed connectivity):
+  - `qmap/vprofile.py --check`: measures lateral clearance on the compiled BSP's real 32×32×56 player hull (exact iterative clipnode trace stepping over walkable `<= 18u` treads, opposing-normal filtered to reject room corners) and reports narrow passages below `--min-passage` (default `64` effective width = `32` spare on axial walls) with `(x, y, z)` and the two opposing solids (position, normal, and BSP face texture/owner). Also runs real-hull blind-pocket detection so angled/prism-sealed dead-end halls are caught even when the 16-unit grid missed them.
+  - `qmap/check.py`: refactored into importable functions (`check_map`, `check_prism_separation`, `check_pockets`), updated the module docstring to distinguish one-way traps from blind pockets, added prism-separation checking (`--min-prism-sep`, default `64` — flags freestanding prisms touching or within `< 64` of any other prism, `fill()` rect, or wall at walkable heights while allowing flush mounting on wall-attached chamfers/diagonal walls and skipping `'bridge'` slabs), and added blind-pocket detection (reachable floor with one way in/out across walk/jump/drop/teleports/pads, no item or spawn, and geodesic depth greater than opening width).
+  - `GUIDE.md` & `README.md`: documented the new checks in sections 1 and 5 and added gotcha 32.
+  - `tests/test_checks.py`: unit and CLI regression tests covering prism separation, blind pockets, docstring accuracy, and (when `numba` is available) `vprofile.py` passage-width and real-hull pocket checks.
+* `GUIDE.md`: full review for correctness, completeness, prescriptiveness, and toolkit extensibility:
+  - Fixed drift against the current repo: added `itemprofile.py`, `itemcheck.py`, `ITEMS.md`, `gallery/items/`, `tests/`, and `VERSION` to section 1; fixed `build.sh` summary (`--check --targets`), prism stand-in behavior (any overlapping cell, not centre-only; named-kind interior cells; 8-unit outward air probes), exposed-ramp veneers, gated overhang architraves, sky-safe `room_lamps()`, `examples/` verification wording (no shipped `.map` files; `ctf_bastion` has no `README.txt`), `makewad.py` prerequisite before `views.py`, exit-code vs stdout diagnostic conventions, and KTX-specific caveats on `demos/ca_run.py` / `ctf_run.py`.
+  - Softened overly prescriptive wording across sections 2, 3, 5, 6, 7, 8, and 12 so targets, brightness bands, spawn counts, and wall-band defaults read clearly as calibrated starting points rather than rigid rules, and added the spatial-counter / combat-situation design principle in section 3.
+  - Added a dedicated *Extending the toolkit & evolving this guide* subsection in section 4 emphasizing that `template/`, `qmap/`, and `GUIDE.md` are meant to be expanded when map designs or playtests outgrow them.
+* `GUIDE.md`, `qmap/vprofile.py`, `gallery/profiles/large_refs.json`, `gallery/GALLERY.md`, `gallery/items/README.md`, `README.md`: **larger QuakeWorld reference map benchmarks and design guidelines**:
+  - Profiled ten well-regarded larger QW classics — six custom multi-player maps (`skull`, `bravado`, `spinev2`, `ultrav`, `schloss`, `cmt4`) plus four canonical 4v4 TDM classics (`dm3`, `e2m2tdm`, `cmt3`, `e1m2`) — with `vprofile.py` and `itemprofile.py`, storing full geometry profiles in `gallery/profiles/large_refs.json` (no BSPs redistributed).
+  - Integrated the ten larger classics alongside the five compact classics on equal footing across `GUIDE.md` section 3 (*Design for height*, *Item economy*, *Sizing a map*), section 8 (group TDM/FFA/CA demo findings), `gallery/GALLERY.md`, and `gallery/items/README.md`: documents invariants that hold at every scale (`dominant_level <= 0.37`, `eff_levels 4.3–9.0`, angled walls, `2–7` teleporters, `0/256` common-eye RL/LG/resource trios) vs metrics that scale down with map size (`route_vert_per_1000` naturally drops to `87–215` while `route_level_pairs` stays `0.75–0.98`; 4v4 TDM travel `1,600–2,300` vs 8–12p CA sweet spot `1,050–1,350`; 4v4 TDM keeping 1 RL + deeper powerup/MH/recovery supply).
+  - `qmap/vprofile.py`: added `REFERENCE_LARGE` and `--ref duel|large` (default `duel`) for `--targets`, and updated `SIZE_BANDS` labels to include the larger classics.
+* `AGENTS.md`: added repository guidance for coding agents working on the toolkit codebase (environment/dependencies, test and `template/` smoke-build commands, script/concatenation/versioning conventions, key invariants, architecture map, and test guidelines).
+
 # v3.7 (collide_cmp hull-0 pass, non-inflating ROI merge, parser hardening)
 
 * `qmap/collide_cmp.py` & `GUIDE.md`: **compare hull 0 (projectile solid + sky) alongside the

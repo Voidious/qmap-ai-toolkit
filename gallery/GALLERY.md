@@ -62,3 +62,32 @@ drops, and what you can see above and below you.
 * `verticality_refs.jpg`, `verticality_ours.jpg`: floor height maps of each map.
 * `ctf_strata_section.png`, `ctf_strata_iso.png`: `qmap/section.py` and `qmap/iso.py` on Strata,
   which show the two slabs at a glance.
+
+### Larger QuakeWorld reference maps (`profiles/large_refs.json`)
+
+Because the original five classics are compact duel / small-team maps (`travel_median` 823–1,148),
+`vprofile.py` also profiled **ten well-regarded larger QuakeWorld maps** — six custom multi-player
+classics (`skull`, `bravado`, `spinev2`, `ultrav`, `schloss`, `cmt4`) and four canonical 4v4 TDM
+classics (`dm3`, `e2m2tdm`, `cmt3`, `e1m2`). Their full JSON is in `profiles/large_refs.json`
+(original BSPs are not included; use `vprofile.py map.bsp --targets --ref large` to compare against
+this pool).
+
+| Map | Travel med (p90) | Floor (k) | Spawns | Stacked | Eff levels | Dom level | Overlook | X-sight | Route vert /1000 | Level pairs | Angled walls | Teles / pads |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| **skull** | 905 (1745) | 2031 | 9 | 0.18 | 5.98 | 0.31 | 0.55 | 0.47 | 214 | 0.93 | 0.24 | 2 / 1 |
+| **bravado** | 966 (1478) | 1552 | 9 | 0.07 | 4.30 | 0.36 | 0.66 | 0.38 | 215 | 0.95 | 0.19 | 2 / 0 |
+| **spinev2** | 1014 (1959) | 1583 | 7 | 0.07 | 4.76 | 0.37 | 0.44 | 0.24 | 131 | 0.75 | 0.08 | 4 / 0 |
+| **ultrav** | 1097 (2108) | 1400 | 7 | 0.13 | 4.79 | 0.32 | 0.25 | 0.23 | 120 | 0.78 | 0.30 | 4 / 0 |
+| **schloss** | 1616 (2896) | 2993 | 9 | 0.20 | 6.67 | 0.29 | 0.48 | 0.36 | 195 | 0.91 | 0.12 | 2 / 1 |
+| **cmt4** | 1738 (3593) | 3453 | 11 | 0.26 | 7.55 | 0.30 | 0.40 | 0.24 | 187 | 0.93 | 0.04 | 3 / 0 |
+| **dm3** | 1939 (4828) | 4710 | 7 | 0.21 | 8.77 | 0.24 | 0.44 | 0.31 | 162 | 0.98 | 0.09 | 2 / 0 |
+| **e2m2tdm** | 2162 (4069) | 3598 | 7 | 0.26 | 5.85 | 0.37 | 0.29 | 0.18 | 87 | 0.84 | 0.22 | 2 / 0 |
+| **cmt3** | 2189 (4613) | 3861 | 9 | 0.17 | 8.98 | 0.22 | 0.46 | 0.30 | 187 | 0.97 | 0.21 | 2 / 1 |
+| **e1m2** | 2277 (3729) | 3902 | 14 | 0.22 | 5.33 | 0.36 | 0.44 | 0.17 | 212 | 0.90 | 0.03 | 7 / 0 |
+| **10-map range** | 905–2277 | 1400–4710 | 7–14 | 0.07–0.26 | 4.30–8.98 | 0.22–0.37 | 0.25–0.66 | 0.17–0.47 | 87–215 | 0.75–0.98 | 0.03–0.30 | 2–7 / 0–1 |
+
+Key contrast against the five compact classics: every larger classic keeps `dominant_level <= 0.37`,
+adds more effective levels (`4.30–8.98`), uses angled walls (`0.03–0.30`) and `2–7` teleporters,
+and keeps `route_level_pairs` high (`0.75–0.98`), while `route_vert_per_1000` naturally drops to
+`87–215` as horizontal item-to-item runs lengthen. `dm2` is omitted from the table because ~20% of
+its floor is button/swim/rocket-jump-gated in `vprofile`'s walk+jump model.

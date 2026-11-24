@@ -111,6 +111,34 @@ client inspection. All raw pickups remain in inventory; unsupported costs and
 common-eye results are null. No universal reference ranges are derived by
 silently replacing these unknowns with zero or Euclidean distance.
 
+## Larger QuakeWorld reference maps
+
+Running the same `qmap/itemprofile.py` pipeline on ten well-regarded larger QW maps (six custom
+multi-player classics + four canonical 4v4 TDM classics; BSPs not redistributed) extends the
+embedded inventory and trio-control picture beyond compact duel maps:
+
+| Map | Travel med | RA / YA / GA | RL / LG / GL | MH / Quad / Pent / Ring | Ordinary HP | Loose R / C / N / S | Supported RL+LG+res trios | Max common-eye |
+|---|---:|---|---|---|---:|---|---|---|
+| skull | 905 | 1 / 1 / 1 | 2 / 1 / 1 | 1 / 0 / 0 / 0 | 200 | 25 / 12 / 0 / 40 | 8 / 8 | 0 / 256 |
+| bravado | 966 | 1 / 1 / 1 | 2 / 1 / 1 | 1 / 1 / 0 / 0 | 205 | 15 / 24 / 75 / 20 | 0 / 8 *(2 unres)* | unknown |
+| spinev2 | 1014 | 1 / 1 / 1 | 2 / 1 / 1 | 1 / 0 / 0 / 0 | 125 | 30 / 30 / 225 / 0 | 8 / 8 | 0 / 256 |
+| ultrav | 1097 | 0 / 2 / 1 | 3 / 1 / 1 | 0 / 1 / 0 / 0 | 105 | 30 / 42 / 0 / 0 | 9 / 9 | 0 / 256 |
+| schloss | 1616 | 1 / 2 / 0 | 2 / 0 / 1 | 2 / 1 / 1 / 1 | 290 | 30 / 0 / 250 / 120 | — *(no LG)* | — |
+| cmt4 | 1738 | 1 / 1 / 0 | 2 / 1 / 1 | 2 / 1 / 1 / 0 | 600 | 20 / 54 / 275 / 80 | 0 / 8 *(8 unres)* | unknown |
+| dm3 | 1939 | 1 / 1 / 0 | 1 / 1 / 1 | 3 / 1 / 1 / 1 | 145 | 50 / 24 / 375 / 260 | 5 / 5 | 0 / 256 |
+| e2m2tdm | 2162 | 1 / 1 / 1 | 1 / 1 / 2 | 2 / 1 / 0 / 0 | 310 | 30 / 30 / 125 / 140 | 5 / 5 | 0 / 256 |
+| cmt3 | 2189 | 1 / 1 / 0 | 1 / 1 / 1 | 1 / 1 / 1 / 1 | 245 | 25 / 24 / 200 / 100 | 3 / 3 | 0 / 256 |
+| e1m2 | 2277 | 0 / 1 / 1 | 1 / 0 / 1 | 1 / 1 / 0 / 0 | 480 | 15 / 0 / 275 / 300 | — *(no LG; 6 unres)* | — |
+
+Two patterns stand out alongside the five compact classics:
+1. **Zero common-eye trio control holds at every scale:** every single supported RL + LG +
+   armor/MH trio across `spinev2`, `skull`, `ultrav`, `dm3`, `cmt3`, and `e2m2tdm` (38 trios across
+   six maps, matching `aerowalk`, `ztndm3`, and `dapak12`) has **0 / 256 common-eye samples**.
+2. **4v4 TDM scales into powerups and recovery, not extra RLs:** whereas the custom multi-player
+   maps carry 2–3 RLs, the four canonical 4v4 TDM classics (`dm3`, `e2m2tdm`, `cmt3`, `e1m2`) all
+   keep **1 RL** and **2–3 armors**, shifting supply into 1–3 MHs, Quad/Pent/Ring, and substantial
+   nail/shell/health reserves.
+
 ## Reproduce
 
 From the toolkit root, with the BSP files available locally:

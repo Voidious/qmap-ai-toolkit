@@ -1,4 +1,4 @@
-"""MAP GENERATOR CORE (template, qmap-toolkit v3).
+"""MAP GENERATOR CORE (template, qmap-ai-toolkit).
 
 The generator is plain Python concatenated from parts (build.sh does it):
     _core.py   settings, grid, building primitives, texture mapping      <- edit the SETTINGS block
