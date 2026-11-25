@@ -77,8 +77,7 @@ aerowalk travel times. Give it three distinct elevation tiers with strong
 overlooks between a sunken red-armor pit, a high quad/mega balcony, and separate
 RL and LG control routes — check the resource spacing with itemprofile.py and
 keep straight sightlines under ~1200 units. Pitch 3 structurally different
-concepts in both plan and section (distinct from gallery/GALLERY.md) before
-building the first blockout.
+concepts in both plan and section before building the first blockout.
 ```
 
 ---
@@ -114,7 +113,7 @@ The codebase is a **starting point, not a framework and not a cage**. Each new m
 The iterative human + AI loop (detailed in [`GUIDE.md` Section 2](GUIDE.md#2-working-with-the-human-the-process-that-worked)):
 
 1. **Spec** — You share the mode (CA / FFA / TDM / CTF), player count, symmetry, and favourite or disliked maps. The agent sizes the map by **travel distance**, not floor area.
-2. **Concept in plan *and* section** — Before writing any geometry, the agent sketches 2–3 structurally distinct skeletons (checked against [`gallery/GALLERY.md`](gallery/GALLERY.md)) showing vertical levels, overlooks, and climbing routes so you can pick the best direction up front.
+2. **Concept in plan *and* section** — Before writing any geometry, the agent sketches 2–3 structurally distinct skeletons (using [`gallery/GALLERY.md`](gallery/GALLERY.md) as reference, not a blacklist) showing vertical levels, overlooks, and climbing routes so you can pick the best direction up front.
 3. **Layout blockout** — The agent generates a playable `.bsp` with neutral height-marked zone textures (`template/texgen_blockout.py`), runs automated geometry and player-hull checks, and delivers the build alongside a floor plan, vertical sections, an isometric cutaway, and software-rendered preview shots.
 4. **Layout fix rounds** — You run around in-client and give layout feedback; the agent iterates on structure and verticality until the layout feels settled (structural edits after a visual pass force texture rework). Every build gets a new filename (`name_bN`) because QuakeWorld clients cache maps by name.
 5. **Visual pass** — Once the layout is locked, you pick a visual theme from concrete proposals. The agent synthesizes an original procedural texture set and lighting pass (plus optional bounded decorative architecture like `≤ 16u` item plinths, column bases, arch frames, or wall reliefs), audits collision diffs with `qmap/collide_cmp.py` so only declared spots change (zero change on pure texture passes), and re-runs the full check suite if collision changed.
@@ -270,7 +269,7 @@ Each folder rebuilds **byte-identical** `.map` source from this repository — u
 
 - **Capture every real gotcha**: When a build wastes a feedback round on a subtle Quake, `ericw-tools`, ezQuake, or texture/lighting surprise, have your agent distill the root cause and fix into [`GUIDE.md`](GUIDE.md) (especially [Section 9](GUIDE.md#9-gotchas-each-cost-at-least-one-round-of-feedback)) so future map sessions don't repeat the same mistake.
 - **Tailor the guide to your group**: If you maintain a fork for your own players, update `GUIDE.md` with your group's tastes — favourite and disliked maps, server mod settings (KTX, CA, TDM/FFA item rules), preferred lighting brightness, and calibration bands from your own map/demo analysis.
-- **Log finished maps in `gallery/`**: Adding a plan, preview sheet, and one-line skeleton/look summary to [`gallery/GALLERY.md`](gallery/GALLERY.md) after each finished map gives your agent memory of what you've already built, preventing future maps from drifting into the same layout or visual theme.
+- **Log finished maps in `gallery/`**: Adding a plan, preview sheet, and one-line skeleton/look summary to [`gallery/GALLERY.md`](gallery/GALLERY.md) after each finished map gives your agent memory of what you've already built and what played well, helping future concepts stay intentional rather than drifting into copy-paste repeats.
 
 ---
 

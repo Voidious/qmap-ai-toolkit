@@ -2,11 +2,13 @@
 
 Each map has a plan (`*_plan.jpg`) and a sheet of preview renders (`*_views.jpg`).
 
-**How to use this.** It is a reference, not a blacklist. Reuse the building blocks you see here
-freely — hubs, balconies, loops, broad stairs, a high ground with two ways up, a contested
-powerup room are the vocabulary of every good map. What to avoid is *defaulting* to the same
-overall skeleton or the same look as a map already in this list. Aim for a fresh take on a
-classic form (GUIDE section 3).
+**How to use this.** It is a reference, not a blacklist. Reuse the building blocks and broad
+archetypes you see here freely — hubs, courts, cruciform halls, balconies, loops, broad stairs,
+and high ground with two ways up are the vocabulary of every good map, and original Quake built
+dozens of distinctive maps from just a few broad visual themes (base, gothic, runic, elder). What
+to avoid is *copy-pasting* a previous map's room plan or textures out of habit — start fresh from
+`template/`, pitch multiple genuinely distinct options, and aim for a fresh take on a classic form
+(GUIDE section 3).
 
 | Map | Mode | Symmetry | Skeleton | Look |
 |---|---|---|---|---|

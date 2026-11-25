@@ -101,11 +101,12 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
    Size the map for its mode and player count by **travel distance**, not floor area (section 3,
    *Sizing a map*).
 2. **Concept.** Before any blockout, draw two or three *structurally different* overall shapes
-   as a one-page sketch (see section 3), with a recommendation and rough route lengths. Compare
-   them with the gallery. The human picks. This step is cheap and it is the one that decides
-   whether a map is a fresh take or a repeat. **Draw each one in section (side-on) as well as in
-   plan**: where the levels are, what looks down on what, which routes climb. A plan alone hides
-   exactly the thing our maps were short of (section 3, *Design for height*).
+   as a one-page sketch (see section 3), with a recommendation and rough route lengths. Use the
+   gallery as reference rather than a veto list — overlapping a fundamental form is fine as long
+   as the design is built fresh rather than copied from a previous map. The human picks. **Draw
+   each one in section (side-on) as well as in plan**: where the levels are, what looks down on
+   what, which routes climb. A plan alone hides exactly the thing our maps were short of
+   (section 3, *Design for height*).
 3. **Layout blockout** with the blockout textures. Deliver `.bsp`, `.map`, `.wad`, a top-down
    **plan image**, **sections** and an **iso cutaway** (`section.py`, `iso.py`), **preview
    renders**, a README. The human runs around in game and reports.
@@ -113,8 +114,11 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
    profile (`build.sh` prints it) each build. **Settle the layout before the visual pass**: signs,
    inlays, bands and lamps are anchored to the geometry, so a structural change after the visual
    pass costs a texture round as well.
-5. **Visual pass** — ask the human to pick a style: 3–4 concrete options with a recommendation,
-   each *different from the group's existing maps* (name them). Structural changes (rooms, doors,
+5. **Visual pass** — ask the human to pick a style: pitch 3–4 concrete, distinct options with a
+   recommendation. Don't rule out a broad theme category (gothic stone, industrial base, runic
+   foundry, temple, etc.) just because a gallery map used it — original Quake made dozens of
+   distinctive maps from only a few broad visual styles. Aim for original textures, lighting, and
+   room-by-room identity rather than avoiding category overlap. Structural changes (rooms, doors,
    main floor heights, routes) stay in step 4, but **bounded decorative architecture is welcome**
    — raised item plinths (≤ 16 units so players step right up, or with their own steps), column
    bases and capitals, door/arch frames, buttresses, wall reliefs/statues, railings, overhead
@@ -148,29 +152,35 @@ started by copying the previous map's files, the copied layout and heights becam
 and the demo finding "hub + satellite rooms" read as a recipe that confirmed the habit. The
 textures differed; the maps still felt alike. The group noticed before the builder did.
 
-**What "fresh" means — and what it doesn't.** Freshness lives in the map's *skeleton* (how the
-big spaces connect, where the levels are, how routes loop) and in its *identity* (one strong
-idea per room, a distinct look). It does **not** mean avoiding proven building blocks. Hubs,
-balconies, loops, broad stairs, a high ground with two ways up, a low route with cover, a
-contested powerup room — these are the vocabulary of every good map, and they should be reused
-freely. Chasing novelty at the level of every room leads straight to wacky, unplayable design.
-Aim for *a fresh take on a classic form*, not for something no one has seen.
+**What "fresh" means — and what it doesn't.** Freshness lives in designing deliberately from
+scratch — how the spaces connect, where the levels sit, how routes loop, and each room's visual
+and architectural identity — rather than sleepwalking into a copy-pasted template. It does **not**
+mean banning proven building blocks *or* broad layout archetypes (hub + satellites, central court,
+cruciform hall, twin forts, multi-arc loop) just because an earlier map in `gallery/GALLERY.md`
+used one. Hubs, balconies, loops, broad stairs, high ground with two ways up, low routes with
+cover, and contested powerup rooms are the vocabulary of every good map, and two maps sharing a
+broad form can play completely differently once their elevations, sightlines, and focal spaces
+differ. Chasing novelty for its own sake leads straight to wacky, unplayable design. Aim for *a
+fresh take on a classic form*, not for something no one has seen.
 
 **The concept step (do it every time):**
-1. Read the gallery (`gallery/GALLERY.md`): nine skeletons already built for this group, and
-   their height profiles.
-2. Sketch two or three candidates that differ *in skeleton* from each other and from the
-   gallery's — not just in room shapes. Ask: where is the high ground, where is the low ground,
-   how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do players
-   meet first?
+1. Skim the gallery (`gallery/GALLERY.md`) as reference for what has worked well (and its height
+   profiles) — not as a blacklist of off-limits layouts.
+2. Sketch two or three candidates that genuinely differ *in skeleton* **from each other** — not
+   minor variations of one room plan. Revisiting a broad form seen in the gallery with a fresh
+   elevation plan, loop structure, or twist is fine; what to avoid is accidentally repeating an
+   earlier map's room-by-room layout out of habit. Ask: where is the high ground, where is the low
+   ground, how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do
+   players meet first?
 3. Measure before drawing conclusions: route lengths (`routes.py` on a quick blockout, or grid
    distance on the sketch), likely longest sightlines.
-4. Recommend one, say in a line what is new about it and what classic it riffs on.
+4. Recommend one, say in a line what makes it distinct and what classic it riffs on.
 
-**Skeletons not tried yet** (starting points, not prescriptions): a figure-8 (two loops sharing a
-courtyard); two hubs joined by parallel routes; a ring of rooms round an open court; one huge room
-broken by structure; a vertical map (a tower, a shaft with rooms opening off it at many heights);
-diagonal halls or octagonal rooms (buildable since v3). Strata did two full levels stacked.
+**Other skeletons worth exploring** (ideas, not prescriptions — revisiting a gallery archetype
+with a fresh elevation plan or twist is fine too): a figure-8 (two loops sharing a courtyard); two
+hubs joined by parallel routes; a ring of rooms round an open court; one huge room broken by
+structure; a vertical map (a tower, a shaft with rooms opening off it at many heights); diagonal
+halls or octagonal rooms (buildable since v3). Strata did two full levels stacked.
 
 **Starting from a copy anchors you.** Start a new map's layout from `template/` (an empty demo) —
 not by copying the previous map's room coordinates. Reuse techniques and custom primitives freely
@@ -580,8 +590,12 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   (`STRIP_SHIFT`) when clamps should land on step corners.
 * Pictures (`panel`): emblems and banners on non-solid panels, the right way round from both
   sides; size them about two thirds of first instinct.
-* **Each map needs its own look** — palette, materials, one idea per room. Before proposing
-  styles, list the group's existing maps' looks and stay clear of them.
+* **Original look, not off-limits categories** — give each map its own synthesized textures,
+  material palette, lighting mood, and room-by-room identity, and still pitch 3–4 concrete style
+  options for the human to pick from. Don't veto a broad theme category (gothic stone, industrial
+  base, runic lava foundry, temple, etc.) just because a gallery or earlier map already used it:
+  original Quake built dozens of memorable, distinct-looking maps out of only a handful of visual
+  themes.
 
 ---
 
