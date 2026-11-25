@@ -48,6 +48,8 @@ qmap/                   shared tools - reuse or extend as needed
   makewad.py            palette PNGs -> WAD2;  quake_palette.lmp (LibreQuake, BSD-3)
   vprofile.py           compiled BSP29 player-hull check (--check: connectivity, traps, narrow
                         passages, blind pockets) + verticality & travel-distance profile (--targets)
+  ctfprofile.py         compiled BSP29 CTF route-independence diagnostics: walk (hook-off) & grapple
+                        (hook-on) flag routes, LOS-separated lanes, single-vantage chokes, flag exits
   itemprofile.py, itemcheck.py, ITEMS.md   BSP29 item-economy diagnostics (inventories, directed
                         routes, RL/LG/resource trios, hypothetical --move) and MVDSV edict verification
   section.py, iso.py    side-on slices and isometric cutaways of a map from its JSON
@@ -60,7 +62,7 @@ examples/               four finished maps whose Python sources rebuild cleanly 
                         diffusion, a sky oculus, columns with bases and capitals
   ctf_strata/           CTF, rotation; two stacked levels, covered side lanes, light wells;
                         stratified walls, team lights by half, direction signs, a sun
-gallery/                plan + preview sheet of the nine maps, GALLERY.md; profiles/: height
+gallery/                plan + preview sheet of the nine maps, GALLERY.md; profiles/: height & CTF
                         surveys (JSON + comparison figures); items/: reference item-placement survey
 demos/                  MVD demo reader (mvd.py), in-play verticality (vert.py), and reference
                         CA / CTF analysis scripts (ca_run.py, ctf_run.py)
@@ -352,6 +354,49 @@ verticality changes when the key-item set changes: adding GA can lower that
 metric without flattening any geometry. Keep the item-set change explicit and
 do not move good resources simply to maximize a height statistic.
 
+### CTF layout & route structure
+
+**Don't funnel every route through one open center.** A frequent first-layout failure in CTF is
+putting both bases on opposite sides of a single open central hall or courtyard — even with
+multiple bridges, pillars, or ramps inside it, **one mid defender has line of sight on every
+crossing** (classic `ctf8` Strongbox is the textbook example: two spatially distinct paths across
+mid, yet one central vantage sees both).
+
+* **Build 2–3 genuinely distinct flag-to-flag routes, with at least one visually isolated bypass.**
+  Give attackers and carriers a route that is walled off from the central room — an outer wing or
+  arc, a covered side tunnel, or an enclosed underpass — so a single standing defender in mid
+  cannot watch or spam every flag run at once. Among the ten established Threewave CTF maps
+  profiled in [`gallery/profiles/ctf_refs.json`](gallery/profiles/ctf_refs.json) (table in
+  [`gallery/GALLERY.md`](gallery/GALLERY.md)), `ctf2m1` (*McKinley Station*) is the clear
+  route-topology standout: **3 LOS-independent midfield routes** on both walk (`6,220u` / `7,188u`
+  `1.16×` / `9,313u` `1.50×`, `1,154u` lateral and `492u` vertical separation) and grapple hook
+  (`13.9s` / `14.7s` `1.05×` / `20.6s` `1.48×`), with no single mid vantage cutting all routes.
+* **Keep alternate routes competitive in length.** Aim for secondary routes around **~1.05×–1.35×**
+  the shortest flag-to-flag run (up to ~1.5× for a safer third flank like `ctf2m1`'s high north
+  wing). A 2× detour looks like a side route on a plan and gets ignored in play.
+* **Separate base-mouth exits from midfield lanes.** Multiple mid crossings lose much of their
+  value if they merge into a single doorway or corridor right outside each base — `ctf1` (*McKinley
+  Base*) and `ctf5` (*Da Ancient War Grounds*) both feature memorable midfights (`ctf1`'s wide N/S
+  kiting loops, `ctf5`'s three-tier chasm), yet still funnel into one base-entry neck. Give
+  **both** the flag room (2–3 exits) **and** the base perimeter distinct connections into the
+  midfield lanes, and keep flags out of mutual LOS and out of central-mid LOS
+  (`flags_mutual_los = false`, `mid_sees_flag = false`).
+* **Calibrate scale, verticality, and hook vs. walk together.** Across the playable full-scale
+  Threewave classics (`ctf1`, `ctf5`, `ctf2m1`), flag-to-flag walking runs cluster tightly at
+  **~5,900–6,700 units** (`~18.5–21 s` at 320 u/s; `travel_median ~2,400–3,020`), while grapple
+  hook shortens flag runs by **~1.1–1.5×** (`~12.8–16.6 s`) and opens additional vertical crossings
+  (`ctf5`, `ctf2m3`). Avoid tiny straight-spine runs (`ctf3`: `2,720u` / `8.5 s` walk, `6.8 s` hook)
+  or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep real height play rather than flat side
+  tubes: the playable classics maintain `eff_levels 4.7–6.0`, `stacked_share 0.24–0.34`, and
+  `route_vert_per_1000 127–207`.
+* **Diagnose every CTF blockout with `qmap/ctfprofile.py`.** Run
+  `python3 qmap/ctfprofile.py map.bsp --png-dir figs/` to measure walk (hook-off) and grapple
+  (hook-on) flag times, LOS-independent route counts and length ratios, single-vantage mid chokes,
+  flag-room exits, flag sightlines, and whether the grapple unlocks otherwise walk-disconnected
+  flags (as on lift-heavy `ctf2m4`). Treat the output as a diagnostic, not a rigid gate; its
+  movement model covers walk/jump/teleporter/pad/swim and solid/sky grapple swings, and does not
+  simulate button- or lift-gated paths (`func_plat` / triggered `func_door`).
+
 **Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
 (`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet
 play at duel/compact travel speed (`797` and `905`): stacked floor adds area, not distance, and
@@ -365,7 +410,7 @@ drops included) — and `build.sh` prints a size line.
 | 966–1160 (1478–2283) | bravado, naked4, spinev2, dapak12, crucible, lyceum, ultrav, dm6, cistern, ztndm3 | duel / FFA 4–8; Clan Arena 6–12; compact 4v4 TDM |
 | 1200–1400 (2095–2260) | agora, vigil | Clan Arena / FFA / TDM 8–12+ |
 | 1600–2300 (2896–4828) | schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2 | full 4v4 TDM / large FFA (too slow for 8–12p CA) |
-| 1831–3045 (3506–5373) | bastion, strata, circuit | CTF (8–12+) |
+| 1831–3045 (3506–6655) | ctf8, ctf2m3, ctf5, ctf1, ctf2m1; bastion, strata, circuit | CTF (8–12+) |
 
 **Mode changes the right travel band.** `travel_median` 1,600–2,300 is canonical 4v4 TDM territory
 (`schloss` 1,616, `cmt4` 1,738, `dm3` 1,939, `e2m2tdm` 2,162, `cmt3` 2,189, `e1m2` 2,277) because
@@ -503,6 +548,11 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   edge, not on a spawn. **Perches** must need the hook (not reachable with a plain jump).
 * **Routes** (`routes.py`): measure every distinct run between the flags with `--run`. Report
   units and seconds at 320 u/s (real carriers in our demos) and 460 u/s (a solo hook run).
+* **CTF route independence & hook/walk travel** (`ctfprofile.py map.bsp --png-dir figs/`): on
+  compiled CTF BSPs, checks bidirectional flag-to-flag time with **hook off** (walk/jump/tele/pad/swim)
+  and **hook on** (grapple swings/climbs), counts visually independent (LOS-separated) midfield
+  routes, tests whether a single standing defender can watch every crossing, and reports flag-room
+  exits and flag sightlines (see section 3, *CTF layout & route structure*).
 * **Sightlines** (`sightlines.py`): a clear line the length of a route is usually a problem.
   On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
   lanes cut the longest to ~2,100 units within one half.
@@ -666,10 +716,12 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   floor height change sits around ~98–110 per 1,000 units travelled across modes (16–18% airborne).
 * **CTF**: real carriers move ~250–350 u/s; solo hook runs are much faster — don't panic about
   fast solo times. Captures convert ~1 in 5 pickups. About half of carrier deaths happen at or
-  near the enemy flag: give flag rooms 2–3 exits. Loops let carriers kite (ctf1); a single
-  straight spine makes mid irrelevant (ctf3); a maze with close flags is disliked (ctf6). Our maps:
-  Bastion ~5,500 units flag to flag (~12–14 s for the group's fast runs), Circuit 6,100–7,300 by
-  three runs (~13–16 s solo, ~19–23 s carrier pace); ctf1 caps took 20–21 s.
+  near the enemy flag: give flag rooms 2–3 exits, and keep at least one route visually separated
+  from the central room (section 3, *CTF layout & route structure*, verified with `ctfprofile.py`).
+  Loops let carriers kite (ctf1); a single straight spine makes mid irrelevant (ctf3); a maze with
+  close flags is disliked (ctf6). Our maps: Bastion ~5,500 units flag to flag (~12–14 s for the
+  group's fast runs), Circuit 6,100–7,300 by three runs (~13–16 s solo, ~19–23 s carrier pace);
+  ctf1 caps took 20–21 s.
 * **In a "theta" (two arcs plus a middle route)**, a cross-over through the middle can never be a
   shortcut between arcs — it adds the distance between them. Make the middle its own direct run.
 

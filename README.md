@@ -166,9 +166,10 @@ The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorl
 
 ### Profiling Your Favourite Maps (`.bsp`)
 
-Both [`qmap/vprofile.py`](qmap/vprofile.py) and [`qmap/itemprofile.py`](qmap/itemprofile.py) work directly on any compiled Quake 1 / QuakeWorld **BSP29** file — you don't need `.map` source. Point your agent at your local copies of the maps your group loves (or hates):
+[`qmap/vprofile.py`](qmap/vprofile.py), [`qmap/ctfprofile.py`](qmap/ctfprofile.py), and [`qmap/itemprofile.py`](qmap/itemprofile.py) all work directly on any compiled Quake 1 / QuakeWorld **BSP29** file — you don't need `.map` source. Point your agent at your local copies of the maps your group loves (or hates):
 
-- **Verticality & travel sizing (`vprofile.py`)** — Measure `travel_median`, `travel_p90`, effective levels, overlooks, route height change, and angled walls on your reference pool to calibrate sizing and verticality targets for your mode (especially useful for CTF, since the bundled five classics are deathmatch maps).
+- **Verticality & travel sizing (`vprofile.py`)** — Measure `travel_median`, `travel_p90`, effective levels, overlooks, route height change, and angled walls on your reference pool to calibrate sizing and verticality targets for your mode (supports both `--ref duel` and `--ref large`).
+- **CTF route independence & hook/walk travel (`ctfprofile.py`)** — Measure bidirectional flag-to-flag time with hook off (walk/jump/tele/pad/swim) and hook on (grapple swings/climbs), count visually independent (LOS-separated) midfield routes, flag single-vantage center chokes, and check flag-room exits and sightlines (classic Threewave benchmarks in `gallery/profiles/ctf_refs.json`).
 - **Item economy (`itemprofile.py`)** — Inspect embedded inventories, directed RL/LG/armor/MH route matrices, and pickup layouts across your favourite TDM/FFA maps, or test hypothetical moves on your own builds with `--move` (see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md)).
 
 ### Analyzing Your Group's Match Demos (`.mvd`)
@@ -229,6 +230,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 | | `vprofile.py` | Real 32×32×56 player-hull check (`--check`: cut-off spawns, one-way traps, narrow passages below `--min-passage` with opposing solids, blind pockets, and unreachable items), verticality benchmark against compact duel (`--targets`) or larger QW classics (`--targets --ref large`), and travel-distance sizing (`travel_median` / `travel_p90`) on any BSP29 |
 | | `collide_cmp.py` | Dual-hull voxel collision comparator for auditing visual-pass builds (proving zero change on pure texture passes or verifying only declared decorative edits changed collision): checks both player collision (hulls 1/2) and hull 0 (`proj` solid, `sky*`, `*water`, `*slime`, `*lava`) across boxes and convex half-space brushes (ramps, prisms, veneers) down to sub-unit `--step` |
 | **Spawns, Routes & Pacing** | `pick_spawns.py`, `pick_spawns_sym.py` | Solvers for the largest set of spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror` symmetric) |
+| | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag times, LOS-separated midfield routes, single-vantage choke detection, flag exits/sightlines, and diagnostic plots |
 | | `routes.py`, `flagtime.py` | Named walking routes and timings between flags or arbitrary coordinates (carrier pace vs solo hook pace) |
 | | `sightlines.py` | Longest straight eye-level sightlines per floor level along X and Y |
 | | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map |

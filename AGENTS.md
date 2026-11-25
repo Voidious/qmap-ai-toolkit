@@ -16,13 +16,14 @@ scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 
 - **Unit tests & `collide_cmp.py`**: Python 3 stdlib + `numpy` (no `ericw-tools` or `.bsp` files
   required).
-- **Full toolkit** (`vprofile.py`, `itemprofile.py`, `render.py`, `section.py`, `iso.py`,
-  `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`, `scipy`,
-  `matplotlib`, `numba`.
-  - `qmap/vprofile.py` (and `qmap/itemprofile.py`, which imports it) requires `numba`. Without
-    `numba`, the five `TestVprofilePassageWidth` tests in `tests/test_checks.py` are skipped
-    rather than failing. Run in a Python environment with `numba` installed whenever you touch
-    `vprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
+- **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
+  `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
+  `scipy`, `matplotlib`, `numba`.
+  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/itemprofile.py`, which import it) requires
+    `numba`. Without `numba`, the `TestVprofilePassageWidth` tests in `tests/test_checks.py` and
+    `TestCtfRouteIndependence` tests in `tests/test_ctfprofile.py` are skipped rather than failing.
+    Run in a Python environment with `numba` installed whenever you touch `vprofile.py`,
+    `ctfprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
 - **Map compilation** (only needed to smoke-test `template/build.sh` or rebuild `examples/`):
   [`ericw-tools`](https://github.com/ericwa/ericw-tools) built from source with `ERICW` pointing
   to the build directory containing `qbsp/qbsp`, `vis/vis`, and `light/light`, plus `bash`. On
@@ -132,7 +133,7 @@ surrounding file and keep diffs clean and scoped.
 | `GUIDE.md` | End-to-end map-making field guide (process, design, verticality, sizing, item economy, gotchas). |
 | `VERSION` | Single source of truth for toolkit SemVer (`MAJOR.MINOR.PATCH`). |
 | `CHANGES.md` | Release changelog (top heading must match `VERSION`). |
-| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`), and item-placement study (`items/`). |
+| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality & CTF benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`), and item-placement study (`items/`). |
 | `examples/` | Four frozen, reproducible reference maps (`ca_lyceum`, `ctf_circuit`, `ctf_strata`, `ctf_bastion`). |
 
 ### `template/` -- starting point for each new map
@@ -153,6 +154,7 @@ surrounding file and keep diffs clean and scoped.
 | --- | --- |
 | `check.py` | Grid-level checks on generator JSON: reachability, one-way traps, blind pockets, spawn sightlines, item margins, perches, stair feet, 16-unit slots, and prism separation (`--min-prism-sep`). |
 | `vprofile.py` | Compiled BSP29 player-hull check (`--check`: traps, narrow passages `--min-passage`, blind pockets, unreachable items), verticality benchmark (`--targets --ref duel\|large`), and travel-distance sizing (`numba` required). |
+| `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag routes, LOS-separated midfield lanes, single-vantage choke detection, flag exits/sightlines, and two-panel PNG plots (`numba` required). |
 | `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator auditing visual-pass collision diffs (proving zero change on texture-only builds or verifying only declared decorative edits). |
 | `pick_spawns.py`, `pick_spawns_sym.py` | Spawn solvers maximizing spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror`). |
 | `routes.py`, `flagtime.py` | 8-way Dijkstra walking routes and timings on `check.py`'s floor graph. |
@@ -183,6 +185,10 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
   compatibility, docstring coverage), `gallery/profiles/large_refs.json` invariants, and
   `numba`-gated `vprofile.py` checks (synthetic clipnode passage width, real-hull blind pockets,
   `--targets --ref duel|large`).
+- `tests/test_ctfprofile.py` -- `gallery/profiles/ctf_refs.json` schema & classic-only invariant,
+  plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, geodesic
+  U-shape progress, flag exits, hook-edge kernel against open/blocked synthetic clipnode rooms,
+  and report formatting).
 - `tests/test_collide_cmp.py` -- `collide_cmp.py` (7x11 entity x texture matrix, hull-0 and
   player-hull CLI scenarios, ROI merging/overlap masking against brute force, `.map` parser
   comment/brushDef/quoting hardening).
