@@ -119,6 +119,8 @@ The iterative human + AI loop (detailed in [`GUIDE.md` Section 2](GUIDE.md#2-wor
 5. **Visual pass** — Once the layout is locked, you pick a visual theme from concrete proposals. The agent synthesizes an original procedural texture set and lighting pass (plus optional bounded decorative architecture like `≤ 16u` item plinths, column bases, arch frames, or wall reliefs), audits collision diffs with `qmap/collide_cmp.py` so only declared spots change (zero change on pure texture passes), and re-runs the full check suite if collision changed.
 6. **In-client screenshot & demo rounds** — You send ezQuake screenshots of anything that looks off — the agent fixes whole classes of visual issues at once, and mocks up 2–3 rendered options from your camera angle when a choice is subjective. Once your group plays real matches on the map, the `demos/` tools can analyze MVD recordings for pacing and movement verticality.
 
+**Prefer to co-design hands-on?** The loop above is the default, not a rigid script — you can bring your own sketch, room ideas, or visual direction up front and steer the design directly while still using the same automated checks, renders, and build pipeline.
+
 ---
 
 ## Engineering Highlights

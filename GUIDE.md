@@ -96,10 +96,13 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
 ## 2. Working with the human (the process that worked)
 
 1. **Spec.** Mode (CA / FFA / TDM / CTF), player count (target and soft max), favourite and
-   disliked maps, symmetric or not — plus any theme or gimmick the human already has in mind. Keep
-   the kickoff brief instead of interrogating the human with a long questionnaire before sketching.
-   Size the map for its mode and player count by **travel distance**, not floor area (section 3,
-   *Sizing a map*).
+   disliked maps, symmetric or not — plus any layout ideas, sketches, theme, or gimmick the human
+   already has in mind. Keep the kickoff brief instead of interrogating the human with a long
+   questionnaire before sketching, and mention briefly that if they'd rather co-design hands-on
+   (bringing their own sketch, room ideas, or pacing) instead of picking from pitched concepts, you
+   can adapt the loop to their lead while keeping the same checks, renders, and `_bN` build
+   hygiene. Size the map for its mode and player count by **travel distance**, not floor area
+   (section 3, *Sizing a map*).
 2. **Concept.** Before any blockout, draw two or three *structurally different* overall shapes
    as a one-page sketch (see section 3), with a recommendation and rough route lengths. Use the
    gallery as reference rather than a veto list — overlapping a fundamental form is fine as long
@@ -163,15 +166,17 @@ broad form can play completely differently once their elevations, sightlines, an
 differ. Chasing novelty for its own sake leads straight to wacky, unplayable design. Aim for *a
 fresh take on a classic form*, not for something no one has seen.
 
-**The concept step (do it every time):**
+**The concept step:**
 1. Skim the gallery (`gallery/GALLERY.md`) as reference for what has worked well (and its height
    profiles) — not as a blacklist of off-limits layouts.
 2. Sketch two or three candidates that genuinely differ *in skeleton* **from each other** — not
-   minor variations of one room plan. Revisiting a broad form seen in the gallery with a fresh
-   elevation plan, loop structure, or twist is fine; what to avoid is accidentally repeating an
-   earlier map's room-by-room layout out of habit. Ask: where is the high ground, where is the low
-   ground, how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do
-   players meet first?
+   minor variations of one room plan. (If the human already brought a specific layout or wants to
+   co-design hands-on, sketch and refine that concept in plan and section instead of forcing
+   unrelated alternatives.) Revisiting a broad form seen in the gallery with a fresh elevation
+   plan, loop structure, or twist is fine; what to avoid is accidentally repeating an earlier
+   map's room-by-room layout out of habit. Ask: where is the high ground, where is the low ground,
+   how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do players
+   meet first?
 3. Measure before drawing conclusions: route lengths (`routes.py` on a quick blockout, or grid
    distance on the sketch), likely longest sightlines.
 4. Recommend one, say in a line what makes it distinct and what classic it riffs on.
@@ -839,8 +844,9 @@ maps with their `.map` source.
 ## 12. Starting a new map
 
 1. Copy `template/` to a new folder. Set `NAME`, `TITLE`, `SYM`, bounds in `_core.py`.
-2. Do the **concept step** (section 3) — plan *and* section for each candidate, with where the
-   items sit in height — and get the human's pick.
+2. Do the **concept step** (section 3) — plan *and* section for each candidate (or for the
+   human's own concept if co-designing hands-on), with where the items sit in height — and align
+   before building.
 3. Delete the demo in `_layout.py` and `_items.py`; write the layout.
 4. Blockout textures and build:
    ```
