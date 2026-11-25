@@ -153,7 +153,7 @@ surrounding file and keep diffs clean and scoped.
 | --- | --- |
 | `check.py` | Grid-level checks on generator JSON: reachability, one-way traps, blind pockets, spawn sightlines, item margins, perches, stair feet, 16-unit slots, and prism separation (`--min-prism-sep`). |
 | `vprofile.py` | Compiled BSP29 player-hull check (`--check`: traps, narrow passages `--min-passage`, blind pockets, unreachable items), verticality benchmark (`--targets --ref duel\|large`), and travel-distance sizing (`numba` required). |
-| `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator proving visual-only builds preserve collision. |
+| `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator auditing visual-pass collision diffs (proving zero change on texture-only builds or verifying only declared decorative edits). |
 | `pick_spawns.py`, `pick_spawns_sym.py` | Spawn solvers maximizing spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror`). |
 | `routes.py`, `flagtime.py` | 8-way Dijkstra walking routes and timings on `check.py`'s floor graph. |
 | `sightlines.py` | Longest straight eye-level sightlines per floor level along X and Y. |

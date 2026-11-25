@@ -41,7 +41,7 @@ qmap/                   shared tools - reuse or extend as needed
   routes.py             walking routes and times between flags (or any two points), per run
   sightlines.py         longest straight sightline per floor level
   contact.py            Clan Arena pacing proxy (compare against a map the group likes)
-  collide_cmp.py        prove a visual-only build didn't change collision (player + hull-0 voxel compare)
+  collide_cmp.py        audit visual-pass collision diffs (player + hull-0 voxel compare)
   render.py             software BSP renderer (lightmaps + textures) for preview images
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
   fsq.py                error-diffusion quantising for colours the palette lacks (cream, ivory)
@@ -114,8 +114,15 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
    inlays, bands and lamps are anchored to the geometry, so a structural change after the visual
    pass costs a texture round as well.
 5. **Visual pass** — ask the human to pick a style: 3–4 concrete options with a recommendation,
-   each *different from the group's existing maps* (name them). Collision must stay identical;
-   prove it with `collide_cmp.py` — and read gotcha 31 for what counts as solid.
+   each *different from the group's existing maps* (name them). Structural changes (rooms, doors,
+   main floor heights, routes) stay in step 4, but **bounded decorative architecture is welcome**
+   — raised item plinths (≤ 16 units so players step right up, or with their own steps), column
+   bases and capitals, door/arch frames, buttresses, wall reliefs/statues, railings, overhead
+   beams, and cupolas — as long as movement lanes stay smooth and snag-free. Still run
+   `collide_cmp.py` as an audit (exit 0 on pure texture rounds; otherwise confirm every diff is
+   declared and catch silent contents bugs — see section 5 and gotcha 31), list every collision
+   change by location in the build notes, and re-run the full check suite whenever collision
+   changes.
 6. **Texture touch-up rounds** driven by the human's in-client screenshots. They find what your
    renderer can't: palette tints, lightmap seams, misaligned edges. Fix the whole *class* of
    problem each time, not just the pictured spot.
@@ -125,8 +132,10 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
 8. **Every build gets a new filename** (`name_bN`). QuakeWorld clients cache maps by name and
    will not re-download a changed map that kept its name.
 9. For each fix, send a **before/after render** of the exact spot and say what caused it.
-10. Small additions (perches, banners, a cupola) can ride along with a visual pass — list every
-    change that touches collision separately so the human knows what to re-test.
+10. Small decorative or gameplay-neutral additions (item plinths, frames, statues, perches,
+    banners, a cupola) can ride along with a visual pass — list every change that touches
+    collision by location in the build notes and re-run the full check suite so the human knows
+    exactly what to re-test (section 5, *Visual-pass collision audit*).
 
 ---
 
@@ -391,9 +400,10 @@ Measure our new maps the same way once the group has played them.
   climbing beside stairs. These bands are a default, not a requirement: outdoor areas, caverns, or
   custom visual passes can omit strips (`strip=10**6`), skip caps/architraves (`nocap`, `noarch`),
   or replace `_out.py`'s banding logic.
-* **Detail is non-solid** (`func_detail_illusionary`): wall lamps, panels, banners. It never
-  changes player collision (though avoid `*` liquids or `sky*` on illusionary brushes — see
-  gotcha 31).
+* **Non-solid fixtures** (`func_detail_illusionary`): wall lamps, panels, banners, and light trim
+  that should never snag movement or block rockets (avoid `*` liquids or `sky*` on illusionary
+  brushes — see gotcha 31). Substantial decorative architecture within reach (item plinths, column
+  bases, statues, arch frames) may be solid when kept snag-free; see section 5.
 * **Ramps** (v3): `ramp(rect, axis, z0, z1, rev=False)` — the floor over rect rises from z0 to z1
   along +axis (`rev`: along −axis), as one wedge brush. Rise ≤ run (45°, QW's walkable limit);
   15–35° plays best. The grid holds a stepped stand-in (mat `'ramp'`, never written) so the checks
@@ -481,19 +491,47 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
-* **Visual-only builds**: `collide_cmp.py old.map new.map` must **exit 0**, or explain.
-  Check the exit code, not the text: it compares both the player hull (hulls 1/2) and hull 0
-  (projectile solid, sky, and water/slime/lava contents), so stdout can say "collision identical"
-  on the player pass while `PROJECTILE COLLISION DIFFERS`, `SKY CONTENTS DIFFER`, or
-  `LAVA CONTENTS DIFFER` on a later pass takes the exit code to 1. `echo $?` after it, or run it
-  under `set -e`.
-  It counts every brush qbsp puts in the world hulls — `worldspawn`, `func_group` and the whole
-  `func_detail` / `func_detail_wall` / `func_detail_fence` family, plus `func_detail_illusionary`
-  liquids/sky and `func_illusionary_visblocker` `clip`, with face textures read for contents — so
-  retexturing a wall to `clip`, `sky*`, or `*lava`, or swapping a `*water` pool for `*lava`, is
-  reported instead of passing silently. It prints a `note:` line accounting for every brush it
-  ignored, so a flavour it does not know about is named rather than dropped. Gotcha 31 has the
-  full solidity rules — several are not what you would guess.
+* **Visual-pass collision audit** (`collide_cmp.py old.map new.map`): the old "zero collision
+  change" rule protected three real things — keeping the playtested layout intact, preventing
+  movement snags from solid detail, and catching silent contents changes (retexturing to `clip`,
+  `sky*`, or `*liquid` changes what rockets and players hit). You don't need zero change to protect
+  all three; you need changes to be **bounded, snag-free, and declared**:
+  - **Pure texture / lighting builds** (such as texture touch-up rounds): `collide_cmp.py` must
+    **exit 0**.
+  - **Visual passes with decorative architecture**: small, gameplay-neutral solid additions are
+    allowed — raised item plinths/daises (keep a single step `≤ 16` units since QW's step height
+    is `18`, or build steps onto it so pickups don't become jumps), column bases and capitals,
+    door/arch frames, buttresses, wall reliefs/statues/niches, railings, skylight beams, and
+    cupolas. Structural layout changes (rooms, connections, main floor heights, routes, major
+    cover) still belong in layout rounds.
+  - **Solid vs. non-solid boundary**: substantial detail within player reach (plinths, column
+    bases, statues, sturdy frames) should usually be **solid** so players don't walk or shoot
+    straight through solid-looking geometry — *provided* active strafe lanes stay smooth at player
+    height (`0..72` units: recess wall ornaments, and avoid protruding pilasters, 16-unit notches,
+    catch-lips, or squeezes). Keep thin surface trim, plaques/banners, low-profile detail along
+    tight lanes, and light out-of-reach filigree/cornices **non-solid** (`func_detail_illusionary`,
+    never with `*` or `sky*` textures) so they can't snag jumps or block rockets; structural
+    overhead beams and arch lintels (`≥ 96` units above floor) may be solid when you want real
+    cast shadows and solid rocket collision.
+  - **Audit and re-verify every collision change**: run `collide_cmp.py` on every visual build and
+    verify that every reported diff corresponds to a declared addition (any undeclared diff —
+    especially hull-0 projectile, sky, or liquid contents — is a bug to fix). **List every
+    intentional collision change by location** in the build notes so the human knows what to
+    re-test, and **re-run the full check suite** whenever collision changes: `check.py` (traps,
+    pockets, 16-unit slots, stair feet, prism separation, item margins, and spawn sightlines —
+    re-solving spawns if needed), `vprofile.py --check` (real 32×32×56 player hull: narrow
+    passages, traps, pockets, unreachable items), plus `itemprofile.py` / `sightlines.py` if
+    pickups or major sightlines moved.
+  - **Reading `collide_cmp.py` output**: check the exit code, not just the first stdout line — it
+    compares both the player hull (hulls 1/2) and hull 0 (projectile solid, sky, and
+    water/slime/lava contents), so stdout can say "collision identical" on the player pass while
+    `PROJECTILE COLLISION DIFFERS`, `SKY CONTENTS DIFFER`, or `LAVA CONTENTS DIFFER` on a later
+    pass takes the exit code to 1 (`echo $?` or run under `set -e`). It counts every brush qbsp
+    puts in the world hulls — `worldspawn`, `func_group`, `func_detail` / `func_detail_wall` /
+    `func_detail_fence`, plus `func_detail_illusionary` liquids/sky and
+    `func_illusionary_visblocker` `clip`, with face textures read for contents — and prints a
+    `note:` line accounting for every ignored brush. Gotcha 31 has the full solidity rules —
+    several are not what you would guess.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
@@ -806,8 +844,11 @@ maps with their `.map` source.
 5. Solve spawns (`pick_spawns.py` or `pick_spawns_sym.py`), measure routes and sightlines, fix,
    rebuild, deliver with the plan, sections, views, README.
 6. Visual pass: write `texgen_<style>.py` (borrow techniques from the examples' generators),
-   replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, verify with
-   `collide_cmp.py` (gotcha 31: what counts as solid).
+   replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, and add any bounded
+   decorative architecture (plinths, frames, columns, wall reliefs, overhead beams — see section
+   5). Audit diffs with `collide_cmp.py` (gotcha 31: what counts as solid), list every intentional
+   collision change by location in the build notes, and re-run the full check suite if collision
+   changed.
 
 High-leverage habits worth keeping: render and check before delivering; a new filename every build
 (`_bN`) so QW clients don't serve cached copies; and in-client screenshots from the human for every
