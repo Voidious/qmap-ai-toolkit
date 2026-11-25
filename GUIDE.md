@@ -374,8 +374,9 @@ end on elimination, that same scale drags: in our group's demos, 8-player CA on 
 a **74 s** median round (longer than `ctf1` at 70 s), while `spinev2` (1,014), `dm6` (1,097),
 `ztndm3` (1,148), and `ca_agora` (1,273) sat cleanly in the **35–45 s** sweet spot. For an 8–12p
 CA map with strong verticality, aim travel at ~1,050–1,350 even if total floor area reaches
-2,200k–2,800k, using teleporters, drops, and compact loops to keep transit brisk. Adjust these
-bands as your own group plays more.
+2,200k–2,800k, using teleporters, drops, and compact loops to keep transit brisk. For CTF, size
+routes to play well with both hook off (clean on-foot travel) and hook on (big enough that grapple
+runs don't turn into instant caps; see section 8). Adjust these bands as your own group plays more.
 
 **In real play** (`demos/vert.py` on the group's demos): floor height changed per 1000 units
 travelled was ~100–125 on dm6, 148 dm2, 91 dm4, ~150–165 ctf1, 159 ctf3, 138 ctf6, and ~100–118 on
@@ -637,8 +638,16 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   spots. KTX `ctf` defaults: deathmatch 3 (weapons stay), based spawn 1, hook off, runes off, GA
   on spawn. Check in game: `status1`, `status2`. KTX names demos by mode — a demo called `ca_...`
   on a CTF map is a Clan Arena game.
-* **Hook-only perches** are a good second layer in CTF: slabs too high to jump to, stocked with
-  ammo or small health, not armour.
+* **Support both hook on and hook off in CTF**: KTX defaults to hook off, yet many groups play CTF
+  with the grapple on — design every CTF layout to play well under **both** settings unless the
+  human explicitly asks otherwise. For **hook off**, every flag route, base exit, and core resource
+  must be cleanly traversable on foot (stairs, ramps, jumps, pads, or teleporters — no
+  hook-required gaps or traps). For **hook on**, size flag-to-flag runs big enough that grapple
+  carriers don't score instant caps (see section 3's CTF travel band and the carrier vs. solo hook
+  paces below), leave headroom and clean swing lines in mid/lanes, and account for grapple sticking
+  to sky (section 7).
+* **Hook-only perches** are a good optional second layer when hook is on: slabs too high to jump
+  to, stocked with ammo or small health — never flags, armour, or key weapons needed with hook off.
 
 ### What real demos showed (group CA, TDM, FFA, and CTF games)
 
