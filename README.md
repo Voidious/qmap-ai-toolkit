@@ -4,7 +4,7 @@
 
 > [!IMPORTANT]
 > **AI agents building a Quake map with this toolkit: read [`GUIDE.md`](GUIDE.md) first.**
-> Read **Section 3** (designing fresh skeletons, *Design for height*, sizing by travel distance, and item economy) before designing anything, and **Section 9** (31 hard-won gotchas) before texturing or running a visual pass.
+> Read **Section 3** (designing fresh skeletons, *Design for height*, item economy, CTF route structure, and sizing by travel distance) before designing anything, and **Section 9** (32 hard-won gotchas) before texturing or running a visual pass.
 
 ---
 
@@ -184,9 +184,9 @@ The [`demos/`](demos) folder provides a minimal QuakeWorld MVD parser ([`demos/m
 # Example prompt for analyzing your own references and playtest demos
 I put our group's favourite CTF .bsp maps in ./ref_maps/ and ten recent KTX .mvd
 demos in ./my_demos/ (including two playtest games on our new map). Profile the
-reference maps with vprofile.py, adapt demos/ctf_run.py + vert.py to analyze our
-demos, and tell me how our new map's flag-carry pace, death zones, and in-play
-verticality compare to the classics we play.
+reference maps with vprofile.py and ctfprofile.py, adapt demos/ctf_run.py +
+vert.py to analyze our demos, and tell me how our new map's route independence,
+flag-carry pace, death zones, and in-play verticality compare to the classics we play.
 ```
 
 ---
@@ -201,7 +201,7 @@ qmap-ai-toolkit/
 ├── template/         Clean starting point for a new map (builds as-is into a small demo map)
 ├── qmap/             Shared checks, spatial/verticality/item analytics, renderer, texture & WAD tools
 ├── examples/         Four finished maps that rebuild byte-identical from source
-├── gallery/          Plans, preview renders, height benchmark, and item-placement reference study
+├── gallery/          Plans, preview renders, height & CTF benchmarks, and item-placement reference study
 ├── demos/            QuakeWorld MVD demo parser and match / movement-verticality analysis
 └── tests/            Self-contained regression test suite (stdlib + NumPy, no qbsp required)
 ```
@@ -254,7 +254,7 @@ Each folder rebuilds **byte-identical** `.map` source from this repository — u
 
 ### `gallery/` & `demos/`
 
-- **`gallery/`** — Top-down plans and preview contact sheets for all nine maps (`ca_agora`, `ca_vigil`, `ca_crucible`, `relay`, `ca_cistern`, `ctf_bastion`, `ca_lyceum`, `ctf_circuit`, `ctf_strata`) documented in [`gallery/GALLERY.md`](gallery/GALLERY.md), plus the verticality benchmark (`gallery/profiles/`) and five-classic item-placement survey (`gallery/items/`).
+- **`gallery/`** — Top-down plans and preview contact sheets for all nine maps (`ca_agora`, `ca_vigil`, `ca_crucible`, `relay`, `ca_cistern`, `ctf_bastion`, `ca_lyceum`, `ctf_circuit`, `ctf_strata`) documented in [`gallery/GALLERY.md`](gallery/GALLERY.md), plus the compact/large verticality and classic CTF benchmarks (`gallery/profiles/`) and five-classic item-placement survey (`gallery/items/`).
 - **`demos/`** — Minimal QuakeWorld MVD reader (`mvd.py`), Clan Arena (`ca_run.py`) and CTF (`ctf_run.py`) analysis scripts, and `vert.py` for measuring in-play floor height change per 1,000 units travelled and airborne share.
 
 ---
