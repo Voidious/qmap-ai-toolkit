@@ -419,9 +419,13 @@ def _sample_path_points(P, path, band_set, min_step=48.0):
 
 def analyze_band_routes(adj, f1, f2, P, band_nodes, los_fn_points, los_fn_single,
                         spatial_radius=384.0, max_los_routes=4, max_sp_routes=4,
-                        seed=42):
+                        vantage_grid=128.0):
     """Analyze LOS-separated routes, spatially-separated routes, and single-vantage chokes
     within a given geodesic band (e.g. midfield [0.30, 0.70] or full [0.15, 0.85]).
+
+    Single-vantage checks are sampled deterministically across every ~`vantage_grid`-unit
+    3D cell in the band plus waypoints along the shortest route (diagnostic sample, not an
+    exhaustive proof over every 16u cell).
 
     los_fn_points(src_pts, band_nodes) -> bool array over band_nodes
     los_fn_single(v_pt, band_nodes) -> bool array over band_nodes
@@ -471,7 +475,8 @@ def analyze_band_routes(adj, f1, f2, P, band_nodes, los_fn_points, los_fn_single
         for idx in np.nonzero(blocked)[0]:
             forb_sp.add(int(band_arr[idx]))
 
-    # 3. Single-vantage choke test: can ONE standing defender in the band see every route?
+    # 3. Single-vantage choke test (sampled): test ~20 route-1 points plus every ~128u
+    # spatial voxel in the band to check if one standing defender sees every crossing.
     vantage_cuts_all = False
     worst_bypass = None
     worst_vantage_pos = None
@@ -484,9 +489,17 @@ def analyze_band_routes(adj, f1, f2, P, band_nodes, los_fn_points, los_fn_single
         if p1_band:
             stride = max(1, len(p1_band) // 20)
             cands.extend(p1_band[::stride])
-        rng = np.random.default_rng(seed)
-        extra = rng.choice(band_arr, min(40, len(band_arr)), replace=False)
-        cands.extend(int(x) for x in extra)
+        seen_cells = set()
+        for n_id in band_arr:
+            idx_n = int(n_id)
+            cell = (
+                int(round(P[idx_n, 0] / vantage_grid)),
+                int(round(P[idx_n, 1] / vantage_grid)),
+                int(round(P[idx_n, 2] / vantage_grid)),
+            )
+            if cell not in seen_cells:
+                seen_cells.add(cell)
+                cands.append(idx_n)
         cands = list(dict.fromkeys(cands))
         for v_id in cands:
             mask = los_fn_single(P[v_id], band_arr)
@@ -922,11 +935,11 @@ def format_report(res):
         lines.append(
             f"     midfield (0.30..0.70): {w['mid_los_route_count']} LOS-indep routes {w['mid_los_route_lens']} "
             f"({w['mid_los_route_ratios']}x), {w['mid_sp384_route_count']} spatial-384 routes, "
-            f"single-vantage: {mid_v}, sep {w['mid_lat_sep']}u xy / {w['mid_vert_sep']}u z"
+            f"single-vantage (128u grid): {mid_v}, sep {w['mid_lat_sep']}u xy / {w['mid_vert_sep']}u z"
         )
         lines.append(
             f"     base-to-base (0.15..0.85): {w['full_los_route_count']} LOS-indep routes {w['full_los_route_lens']}, "
-            f"single-vantage: {full_v}"
+            f"single-vantage (128u grid): {full_v}"
         )
     else:
         lines.append(
@@ -945,7 +958,7 @@ def format_report(res):
             )
             lines.append(
                 f"     midfield (0.30..0.70): {h['mid_los_route_count']} LOS-indep routes {h['mid_los_route_s']}s "
-                f"({h['mid_los_route_ratios']}x), single-vantage: {hv}"
+                f"({h['mid_los_route_ratios']}x), single-vantage (128u grid): {hv}"
             )
         else:
             t12 = 'None' if h['f1_to_f2_s'] is None else f"{h['f1_to_f2_s']}s"

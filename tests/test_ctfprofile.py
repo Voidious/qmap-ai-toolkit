@@ -139,6 +139,41 @@ class TestCtfRouteIndependence(unittest.TestCase):
         self.assertAlmostEqual(res['worst_bypass'], 3200.0, delta=1.0)
         self.assertAlmostEqual(res['lat_sep'], 600.0, delta=1.0)
 
+    def test_single_vantage_128u_grid_finds_off_route_choke(self):
+        # Walled lanes EXCEPT one elevated sniper perch off route 1 in the band that sees all 3 lanes.
+        f1, f2, P, lanes, adj = self._build_three_lane_graph(True, True)
+        perch_id = len(P)
+        # Attach perch off the center spine at (1000, 300, 128)
+        P = np.vstack([P, [[1000.0, 300.0, 128.0]]])
+        lanes = np.append(lanes, 99)
+        # Connect perch to center node at x=1000 (index 10)
+        adj[10].append((perch_id, 326.0, 'walk'))
+        adj[perch_id].append((10, 326.0, 'walk'))
+        g = ctfprofile._geodesic_progress(adj, f1, f2, len(P))
+        mid = np.nonzero((g >= 0.30) & (g <= 0.70))[0]
+        self.assertIn(perch_id, mid)
+
+        def lane_of_pt(pt):
+            if pt[2] > 64.0:
+                return 99
+            return 1 if pt[1] > 200 else (2 if pt[1] < -200 else 0)
+
+        def walled_pts(src_pts, b_arr):
+            src_lanes = {lane_of_pt(pt) for pt in src_pts}
+            if 99 in src_lanes:
+                return np.ones(len(b_arr), dtype=bool)
+            return np.array([lanes[m] in src_lanes for m in b_arr], dtype=bool)
+
+        def walled_one(v_pt, b_arr):
+            vl = lane_of_pt(v_pt)
+            if vl == 99:
+                return np.ones(len(b_arr), dtype=bool)
+            return np.array([lanes[m] == vl for m in b_arr], dtype=bool)
+
+        res = ctfprofile.analyze_band_routes(adj, f1, f2, P, mid, walled_pts, walled_one)
+        self.assertTrue(res['vantage_cuts_all'])
+        self.assertEqual(res['worst_vantage_pos'], (1000, 300, 128))
+
     def test_geodesic_progress_handles_u_shaped_horseshoe(self):
         # Flags side-by-side at (0, 0) and (0, 400), connected only via an eastern loop out to x=1000
         pts = [(0.0, 0.0, 0.0), (500.0, 0.0, 0.0), (1000.0, 0.0, 0.0),

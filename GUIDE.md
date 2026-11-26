@@ -392,7 +392,8 @@ mid, yet one central vantage sees both).
   `route_vert_per_1000 127–207`.
 * **Diagnose every CTF blockout with `qmap/ctfprofile.py`.** Run
   `python3 qmap/ctfprofile.py map.bsp --png-dir figs/` to measure walk (hook-off) and grapple
-  (hook-on) flag times, LOS-independent route counts and length ratios, single-vantage mid chokes,
+  (hook-on) flag times, LOS-independent route counts and length ratios, sampled single-vantage
+  mid chokes (128-unit grid across the band, not an exhaustive proof over every 16u cell),
   flag-room exits, flag sightlines, and whether the grapple unlocks otherwise walk-disconnected
   flags (as on lift-heavy `ctf2m4`). Treat the output as a diagnostic, not a rigid gate; its
   movement model covers walk/jump/teleporter/pad/swim and solid/sky grapple swings, and does not
