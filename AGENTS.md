@@ -41,7 +41,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 A change isn't done until the full `tests/` suite passes. Check the test output for skipped
-`numba` tests whenever your change touches `qmap/vprofile.py` or `qmap/itemprofile.py`.
+`numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`, or `qmap/itemprofile.py`.
 
 When changing `template/` or the compilation/check pipeline (`qmap/check.py`, `qmap/vprofile.py`,
 `qmap/makewad.py`, `qmap/render.py`), also run an end-to-end `template/` smoke build if `ERICW`
