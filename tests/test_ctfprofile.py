@@ -45,8 +45,9 @@ class TestCtfReferenceDataset(unittest.TestCase):
         # Verify required fields
         for row in data:
             for k in ('map', 'travel_median', 'eff_levels', 'dominant_level',
-                      'flag_gap_2d', 'flag_exits', 'flag_max_los', 'walk', 'hook'):
+                      'flag_gap_2d', 'flag_exits', 'flag_max_los', 'vantage_grid', 'walk', 'hook'):
                 self.assertIn(k, row, f"Missing {k} in {row.get('map')}")
+            self.assertEqual(row['vantage_grid'], 128)
             self.assertIn('connected', row['walk'])
             self.assertIn('connected', row['hook'])
 
@@ -490,6 +491,7 @@ class TestCtfRouteIndependence(unittest.TestCase):
             if 'noflag' in path:
                 raise ValueError(f'{path}: missing item_flag_team1 or item_flag_team2')
             row = dict(ok_row)
+            row['vantage_grid'] = int(vantage_grid) if float(vantage_grid).is_integer() else vantage_grid
             row['_draw'] = {}
             return row
 
@@ -510,6 +512,7 @@ class TestCtfRouteIndependence(unittest.TestCase):
                 written = json.loads(out_json.read_text(encoding='utf-8'))
                 self.assertEqual(len(written), 1)
                 self.assertEqual(written[0]['map'], 'ctf1')
+                self.assertEqual(written[0]['vantage_grid'], 256)
 
             # All maps missing flags -> returns non-zero
             buf_out, buf_err = io.StringIO(), io.StringIO()
@@ -618,16 +621,21 @@ class TestCtfRouteIndependence(unittest.TestCase):
         )
 
         with mock.patch.object(ctfprofile.vprofile, 'profile', return_value=fake_vp):
-            res = ctfprofile.ctf_profile('synth_ctf.bsp', name='synth_ctf', with_hook=True)
+            res = ctfprofile.ctf_profile(
+                'synth_ctf.bsp', name='synth_ctf', with_hook=True, vantage_grid=256.0
+            )
 
         # Water swim edges must have bridged the 48u pit so both flags connect on foot
         self.assertGreater(res['swim_edges'], 0)
+        self.assertEqual(res['vantage_grid'], 256)
         self.assertTrue(res['walk']['connected'])
         self.assertTrue(res['hook']['connected'])
         self.assertTrue(res['flags_mutual_los'])
         self.assertEqual(res['title'], 'Synthetic CTF Room')
         self.assertGreaterEqual(res['hook']['speedup_vs_walk'], 1.0)
-        self.assertIn('synth_ctf', ctfprofile.format_report(res))
+        report_txt = ctfprofile.format_report(res)
+        self.assertIn('synth_ctf', report_txt)
+        self.assertIn('single-vantage (256u grid)', report_txt)
 
         # Exercise draw() PNG output if matplotlib is available, then verify JSON round-trip
         if importlib.util.find_spec('matplotlib') is not None:

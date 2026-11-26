@@ -967,6 +967,7 @@ def ctf_profile(path, name=None, with_hook=True, vantage_grid=128.0):
         flags_mutual_los=flags_mut_los,
         mid_sees_flag=(mid_sees_f1 or mid_sees_f2),
         # Routes
+        vantage_grid=(int(vantage_grid) if float(vantage_grid).is_integer() else round(float(vantage_grid), 2)),
         walk=walk_summary,
         hook=hook_info,
     )
@@ -977,11 +978,12 @@ def ctf_profile(path, name=None, with_hook=True, vantage_grid=128.0):
     return res
 
 
-def format_report(res, vantage_grid=128.0):
+def format_report(res, vantage_grid=None):
     """Human-readable diagnostic summary for one CTF map."""
     w = res['walk']
     h = res.get('hook')
-    vg_lbl = f'{round(vantage_grid)}u grid'
+    vg = res.get('vantage_grid', 128) if vantage_grid is None else vantage_grid
+    vg_lbl = f'{int(vg) if float(vg).is_integer() else round(float(vg), 2)}u grid'
     lines = [f"CTF profile of {res['map']}" + (f" ({res['title']})" if res['title'] else '') + ':']
     lines.append(
         f"   scale: travel med {res['travel_median']} (p90 {res['travel_p90']}), "
@@ -1166,7 +1168,7 @@ def main(argv=None):
             os.makedirs(args.png_dir, exist_ok=True)
             draw(r, os.path.join(args.png_dir, r['map'] + '.ctf.png'))
         r.pop('_draw')
-        print(format_report(r, vantage_grid=args.vantage_grid))
+        print(format_report(r))
         results.append(r)
 
     if args.json_out:

@@ -46,6 +46,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 5965,
@@ -145,6 +146,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": false,
    "f1_to_f2": 2310,
@@ -209,6 +211,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": true,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 2720,
@@ -308,6 +311,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 6234,
@@ -407,6 +411,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 6096,
@@ -506,6 +511,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": true,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 7121,
@@ -605,6 +611,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 4248,
@@ -705,6 +712,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 6220,
@@ -814,6 +822,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": true,
    "f1_to_f2": 7408,
@@ -915,6 +924,7 @@
   ],
   "flags_mutual_los": false,
   "mid_sees_flag": false,
+  "vantage_grid": 128,
   "walk": {
    "connected": false,
    "f1_to_f2": null,
