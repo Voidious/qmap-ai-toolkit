@@ -188,6 +188,80 @@ class TestCtfRouteIndependence(unittest.TestCase):
         self.assertEqual(ctfprofile._count_flag_exits(adj1, f1, radius=112.0), 1)
         self.assertEqual(ctfprofile._count_flag_exits(adj2, f2, radius=112.0), 2)
 
+    def test_count_flag_exits_handles_large_open_room_and_prunes_corners(self):
+        # 1024x1024 open flag room (ix,iy in [-32..32], 16u grid) with 3 corridors
+        # (East, North, South) that connect into an outer midfield node, while the
+        # four room corners are dead-end interiors.
+        nid = {}
+        idx = 0
+        for ix in range(-32, 33):
+            for iy in range(-32, 33):
+                nid[(ix, iy)] = idx
+                idx += 1
+        # East corridor (width 9 cells = 128u, length 32 cells = 512u)
+        for ix in range(33, 65):
+            for iy in range(-4, 5):
+                nid[(ix, iy)] = idx
+                idx += 1
+        # North corridor
+        for iy in range(33, 65):
+            for ix in range(-4, 5):
+                nid[(ix, iy)] = idx
+                idx += 1
+        # South corridor
+        for iy in range(-64, -32):
+            for ix in range(-4, 5):
+                nid[(ix, iy)] = idx
+                idx += 1
+        adj = defaultdict(list)
+        for (ix, iy), u in nid.items():
+            for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                v = nid.get((ix + di, iy + dj))
+                if v is not None:
+                    adj[u].append((v, 16.0))
+        # Connect outer ends of all 3 corridors to a distant target flag node
+        far_flag = idx
+        for end_cell in ((64, 0), (0, 64), (0, -64)):
+            u = nid[end_cell]
+            adj[u].append((far_flag, 256.0))
+            adj[far_flag].append((u, 256.0))
+
+        # Adaptive shell advances past the 1024u interior and prunes the 4 room corners -> exactly 3
+        self.assertEqual(ctfprofile._count_flag_exits(adj, nid[(0, 0)], target_node=far_flag), 3)
+
+    def test_count_flag_exits_stops_at_narrow_single_doorway_before_downstream_fork(self):
+        # Small flag room (192x192) with ONE narrow 96u exit east that forks N/S 512u away.
+        nid = {}
+        idx = 0
+        for ix in range(-6, 7):
+            for iy in range(-6, 7):
+                nid[(ix, iy)] = idx
+                idx += 1
+        # Single narrow east corridor (6 cells wide = 80u) from ix=7..32
+        for ix in range(7, 33):
+            for iy in range(-2, 3):
+                nid[(ix, iy)] = idx
+                idx += 1
+        # Fork north and south at ix=33..37
+        for ix in range(33, 38):
+            for iy in range(-20, 21):
+                nid[(ix, iy)] = idx
+                idx += 1
+        adj = defaultdict(list)
+        for (ix, iy), u in nid.items():
+            for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                v = nid.get((ix + di, iy + dj))
+                if v is not None:
+                    adj[u].append((v, 16.0))
+        far_flag = idx
+        for end_cell in ((37, 20), (37, -20)):
+            u = nid[end_cell]
+            adj[u].append((far_flag, 256.0))
+            adj[far_flag].append((u, 256.0))
+
+        # Must report 1 (the single flag-room doorway), not 2 (the downstream fork)
+        self.assertEqual(ctfprofile._count_flag_exits(adj, nid[(0, 0)], target_node=far_flag), 1)
+
     def test_hook_edge_kernel_respects_open_room_and_blocking_wall(self):
         # Convex box room: x in [0, 600], y in [-200, 200], z in [0, 256]
         # Hull 0 (world): inward planes for empty interior

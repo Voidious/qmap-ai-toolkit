@@ -296,24 +296,21 @@ def _dijk_all(adj, start):
     return dist
 
 
-def _count_flag_exits(adj_undir, flag_node, radius=384.0):
-    """Count distinct passage components crossing geodesic radius from a flag."""
-    dist = {flag_node: 0.0}
-    h = [(0.0, flag_node)]
-    while h:
-        d, u = heapq.heappop(h)
-        if d > dist[u] or d > radius + 64.0:
-            continue
-        for v, c in adj_undir[u]:
-            nd = d + c
-            if nd < dist.get(v, 1e18) and nd <= radius + 64.0:
-                dist[v] = nd
-                heapq.heappush(h, (nd, v))
+def _shell_exit_components(adj_undir, dist, radius, target_node=None, cont_margin=256.0):
+    """Return sorted sizes of shell components at `radius` that continue outward.
+
+    Dead-end room corners/alcoves are pruned by requiring each shell component
+    to have a path staying outside (`d >= radius - 24`) to `target_node` (when
+    reachable) or at least `radius + cont_margin` from the flag.
+    """
+    outer = {u for u, d in dist.items() if d >= radius - 24.0}
     shell = {u for u, d in dist.items() if radius - 24.0 <= d <= radius + 40.0}
     if not shell:
-        return 0
+        return []
+    use_target = (target_node is not None) and (target_node in outer)
+    far_thresh = radius + cont_margin
     seen = set()
-    comps = 0
+    sizes = []
     for u in shell:
         if u in seen:
             continue
@@ -327,9 +324,68 @@ def _count_flag_exits(adj_undir, flag_node, radius=384.0):
                 if v in shell and v not in seen:
                     seen.add(v)
                     st.append(v)
-        if len(comp) >= 3:
-            comps += 1
-    return comps
+        if len(comp) < 3:
+            continue
+        vis_out = set(comp)
+        st_out = list(comp)
+        reaches_out = False
+        while st_out:
+            x = st_out.pop()
+            if (use_target and x == target_node) or (not use_target and dist[x] >= far_thresh):
+                reaches_out = True
+                break
+            for v, _ in adj_undir[x]:
+                if v in outer and v not in vis_out:
+                    vis_out.add(v)
+                    st_out.append(v)
+        if reaches_out:
+            sizes.append(len(comp))
+    sizes.sort(reverse=True)
+    return sizes
+
+
+def _count_flag_exits(adj_undir, flag_node, radius=None, target_node=None):
+    """Estimate distinct passage exits leaving a flag room via outward-pruned geodesic shells.
+
+    When `radius` is None (default), starts at 384u and advances through (512, 640, 768)
+    only while the shell remains a single wide open-room interior (>= 64 cells, wider than
+    a ~256u corridor), avoiding undercounting large open flag rooms without chasing
+    downstream forks past a narrow single doorway. Pass an explicit `radius` for a fixed-
+    radius shell check.
+    """
+    radii = (384.0, 512.0, 640.0, 768.0) if radius is None else (float(radius),)
+    cont_margin = 256.0 if radius is None else min(256.0, max(48.0, 0.4 * float(radius)))
+    max_d = None if target_node is not None else (max(radii) + cont_margin + 64.0)
+
+    dist = {flag_node: 0.0}
+    h = [(0.0, flag_node)]
+    while h:
+        d, u = heapq.heappop(h)
+        if d > dist[u]:
+            continue
+        if max_d is not None and d > max_d:
+            continue
+        for v, c in adj_undir[u]:
+            nd = d + c
+            if nd < dist.get(v, 1e18) and (max_d is None or nd <= max_d):
+                dist[v] = nd
+                heapq.heappush(h, (nd, v))
+
+    last_count = 0
+    for r in radii:
+        sizes = _shell_exit_components(
+            adj_undir, dist, r, target_node=target_node, cont_margin=cont_margin
+        )
+        if not sizes:
+            break
+        last_count = len(sizes)
+        if last_count >= 2:
+            return last_count
+        # Single component narrower than a wide open room (< 64 cells in a 64u-thick shell):
+        # we have already passed through a single doorway/corridor, so stop here.
+        if sizes[0] < 64:
+            return 1
+    return last_count
 
 
 def _geodesic_progress(adj_undir, f1, f2, N):
@@ -618,8 +674,8 @@ def ctf_profile(path, name=None, with_hook=True):
     L21, path21, _ = _dijk_single(adj_walk, f2, f1)
     walk_connected = (L12 is not None) and (L21 is not None)
 
-    exits1 = _count_flag_exits(adj_u_notele, f1, 384.0)
-    exits2 = _count_flag_exits(adj_u_notele, f2, 384.0)
+    exits1 = _count_flag_exits(adj_u_notele, f1, target_node=f2)
+    exits2 = _count_flag_exits(adj_u_notele, f2, target_node=f1)
 
     reach_idx = np.nonzero(R_walk)[0].astype(np.int64)
     flag1_los = float(_max_los_to_target(
@@ -850,7 +906,7 @@ def format_report(res):
         f"GA={it['GA']} MH={it['MH']} Quad={it['Quad']}"
     )
     lines.append(
-        f"   flags: gap {res['flag_gap_2d']}u, exits {res['flag_exits'][0]}/{res['flag_exits'][1]}, "
+        f"   flags: gap {res['flag_gap_2d']}u, exits (shell) {res['flag_exits'][0]}/{res['flag_exits'][1]}, "
         f"max sightline {res['flag_max_los'][0]}u/{res['flag_max_los'][1]}u, "
         f"mutual_los={res['flags_mutual_los']}, mid_sees_flag={res['mid_sees_flag']}"
     )

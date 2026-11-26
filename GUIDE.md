@@ -378,7 +378,8 @@ mid, yet one central vantage sees both).
   value if they merge into a single doorway or corridor right outside each base — `ctf1` (*McKinley
   Base*) and `ctf5` (*Da Ancient War Grounds*) both feature memorable midfights (`ctf1`'s wide N/S
   kiting loops, `ctf5`'s three-tier chasm), yet still funnel into one base-entry neck. Give
-  **both** the flag room (2–3 exits) **and** the base perimeter distinct connections into the
+  **both** the flag room (2–3 exits, verified visually on the plan — `ctfprofile.py`'s
+  `flag_exits` is a heuristic outward-shell estimate) **and** the base perimeter distinct connections into the
   midfield lanes, and keep flags out of mutual LOS and out of central-mid LOS
   (`flags_mutual_los = false`, `mid_sees_flag = false`).
 * **Calibrate scale, verticality, and hook vs. walk together.** Across the playable full-scale
