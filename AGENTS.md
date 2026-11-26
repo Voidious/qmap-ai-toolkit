@@ -186,9 +186,10 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
   `numba`-gated `vprofile.py` checks (synthetic clipnode passage width, real-hull blind pockets,
   `--targets --ref duel|large`).
 - `tests/test_ctfprofile.py` -- `gallery/profiles/ctf_refs.json` schema & classic-only invariant,
-  plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, geodesic
-  U-shape progress, flag exits, hook-edge kernel against open/blocked synthetic clipnode rooms,
-  and report formatting).
+  plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, off-route
+  vantage-grid chokes and route-1 pre-filtering, geodesic U-shape progress, flag exits, walk-time
+  swim/tele graph, `func_wall` hull-0 LOS, hook-edge & anchor-range kernels, CLI batch/fast-skip
+  handling, report formatting, and end-to-end synthetic BSP `ctf_profile()` + `draw()`).
 - `tests/test_collide_cmp.py` -- `collide_cmp.py` (7x11 entity x texture matrix, hull-0 and
   player-hull CLI scenarios, ROI merging/overlap masking against brute force, `.map` parser
   comment/brushDef/quoting hardening).
