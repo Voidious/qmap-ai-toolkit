@@ -140,23 +140,32 @@ def _hull1_clear(roots, cplane, cchild, pn, pd, x1, y1, z1, x2, y2, z2):
 
 @njit(cache=True)
 def _has_hook_anchor(roots0, nplane, nchild, lcont, pn, pd,
-                     ax, ay, az, bx, by, bz):
-    """True when a hook ray from A's eye can latch onto solid (-2) or sky (-6) behind or above B."""
+                     ax, ay, az, bx, by, bz, max_range):
+    """True when a hook ray from A's eye can latch onto solid (-2) or sky (-6) behind or above B
+    within total distance `max_range` from A's eye."""
     ex, ey, ez = ax, ay, az + EYE
-    # 1. Ray through B+(0,0,48) continuing up to 448u past B
+    # 1. Ray through B+(0,0,48) continuing up to 448u past B, capped at total distance max_range
     tx, ty, tz = bx, by, bz + 48.0
     dx, dy, dz = tx - ex, ty - ey, tz - ez
     L = math.sqrt(dx * dx + dy * dy + dz * dz)
-    if L > 1.0 and _los_multi(roots0, nplane, nchild, lcont, pn, pd, ex, ey, ez, tx, ty, tz):
+    if 1.0 < L <= max_range and _los_multi(roots0, nplane, nchild, lcont, pn, pd, ex, ey, ez, tx, ty, tz):
         ux, uy, uz = dx / L, dy / L, dz / L
         for step in range(1, 29):
             dist = step * 16.0
+            if L + dist > max_range:
+                break
             if _is_anchor_leaf(roots0, nplane, nchild, lcont, pn, pd,
                                tx + ux * dist, ty + uy * dist, tz + uz * dist):
                 return True
-    # 2. Ceiling/wall anchor above B (96..384u above B's floor) visible from A_eye
+    # 2. Ceiling/wall anchor above B (96..384u above B's floor) visible from A_eye within max_range
+    max2 = max_range * max_range
     for h_off in (96.0, 160.0, 256.0, 384.0):
         cz = bz + h_off
+        cdx = bx - ex
+        cdy = by - ey
+        cdz = cz - ez
+        if cdx * cdx + cdy * cdy + cdz * cdz > max2:
+            continue
         if _is_anchor_leaf(roots0, nplane, nchild, lcont, pn, pd, bx, by, cz):
             # Check ray from A_eye to just below this anchor is unobstructed
             if _los_multi(roots0, nplane, nchild, lcont, pn, pd, ex, ey, ez, bx, by, cz - 16.0):
@@ -220,7 +229,8 @@ def _build_hook_edges(roots, cplane, cchild, roots0, nplane, nchild, lcont, pn, 
                     flight_ok = True
             if not flight_ok:
                 continue
-            if not _has_hook_anchor(roots0, nplane, nchild, lcont, pn, pd, ax, ay, az, bx, by, bz):
+            if not _has_hook_anchor(roots0, nplane, nchild, lcont, pn, pd,
+                                    ax, ay, az, bx, by, bz, max_range):
                 continue
             if b < 2:
                 out_u.append(u)

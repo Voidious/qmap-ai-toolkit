@@ -387,6 +387,39 @@ class TestCtfRouteIndependence(unittest.TestCase):
             64.0, 0.0, 46.0, 500.0, 0.0, 32.0,
         ))
 
+    def test_hook_anchor_respects_max_range_cap(self):
+        # Tall open box x in [0, 1400], y in [-300, 300], z in [0, 600]
+        # A at x=64, B at x=1000 (936u apart): back wall at x=1400 is 1336u from A (> 1024),
+        # ceiling at z=600 is > 1080u from A (> 1024) -> no anchor within 1024u!
+        def make_box(x_max, z_max):
+            planes0 = [
+                (1, 0, 0, 0), (-1, 0, 0, -x_max),
+                (0, 1, 0, -300), (0, -1, 0, -300),
+                (0, 0, 1, 0), (0, 0, -1, -z_max),
+            ]
+            pn = np.array([[a, b, c] for a, b, c, _ in planes0], dtype=np.float64)
+            pd = np.array([d for _, _, _, d in planes0], dtype=np.float64)
+            k = len(planes0)
+            nplane = np.arange(k, dtype=np.int64)
+            nchild = np.zeros((k, 2), dtype=np.int64)
+            for i in range(k):
+                nchild[i, 0] = (i + 1) if i + 1 < k else -1
+                nchild[i, 1] = -2
+            lcont = np.array([-1, -2], dtype=np.int64)
+            return np.array([0], dtype=np.int64), nplane, nchild, lcont, pn, pd
+
+        roots0, nplane, nchild, lcont, pn, pd = make_box(1400.0, 600.0)
+        self.assertFalse(ctfprofile._has_hook_anchor(
+            roots0, nplane, nchild, lcont, pn, pd,
+            64.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 1024.0,
+        ))
+        # Bring the back wall inside 1024u (x_max = 1050 -> 986u from A) -> anchor valid!
+        roots0, nplane, nchild, lcont, pn, pd = make_box(1050.0, 600.0)
+        self.assertTrue(ctfprofile._has_hook_anchor(
+            roots0, nplane, nchild, lcont, pn, pd,
+            64.0, 0.0, 0.0, 1000.0, 0.0, 0.0, 1024.0,
+        ))
+
     def test_format_report_handles_connected_and_disconnected_profiles(self):
         sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'ctf_refs.json').read_text(encoding='utf-8'))
         for row in sample:
