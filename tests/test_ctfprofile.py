@@ -179,6 +179,34 @@ class TestCtfRouteIndependence(unittest.TestCase):
         self.assertTrue(res['vantage_cuts_all'])
         self.assertEqual(res['worst_vantage_pos'], (1000, 300, 128))
 
+    def test_vantage_prefilter_skips_full_band_los_when_route1_not_visible(self):
+        # Walled 3-lane graph: side-tunnel vantages cannot see route 1 (center lane),
+        # so analyze_band_routes should skip the full-band LOS sweep for them.
+        f1, f2, P, lanes, adj = self._build_three_lane_graph(True, True)
+        g = ctfprofile._geodesic_progress(adj, f1, f2, len(P))
+        mid = np.nonzero((g >= 0.30) & (g <= 0.70))[0]
+        full_band_calls = []
+
+        def lane_of_pt(pt):
+            return 1 if pt[1] > 200 else (2 if pt[1] < -200 else 0)
+
+        def walled_pts(src_pts, b_arr):
+            src_lanes = {lane_of_pt(pt) for pt in src_pts}
+            return np.array([lanes[m] in src_lanes for m in b_arr], dtype=bool)
+
+        def walled_one(v_pt, b_arr):
+            vl = lane_of_pt(v_pt)
+            if len(b_arr) == len(mid):
+                full_band_calls.append(vl)
+            return np.array([lanes[m] == vl for m in b_arr], dtype=bool)
+
+        res = ctfprofile.analyze_band_routes(adj, f1, f2, P, mid, walled_pts, walled_one)
+        self.assertFalse(res['vantage_cuts_all'])
+        self.assertAlmostEqual(res['worst_bypass'], 3200.0, delta=1.0)
+        # Every full-band LOS sweep must come only from lane 0 (which sees route 1), never lanes 1 or 2
+        self.assertGreater(len(full_band_calls), 0)
+        self.assertTrue(all(vl == 0 for vl in full_band_calls))
+
     def test_geodesic_progress_handles_u_shaped_horseshoe(self):
         # Flags side-by-side at (0, 0) and (0, 400), connected only via an eastern loop out to x=1000
         pts = [(0.0, 0.0, 0.0), (500.0, 0.0, 0.0), (1000.0, 0.0, 0.0),
@@ -454,8 +482,10 @@ class TestCtfRouteIndependence(unittest.TestCase):
     def test_cli_batch_skips_maps_without_flags_and_continues(self):
         sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'ctf_refs.json').read_text(encoding='utf-8'))
         ok_row = dict(sample[0])
+        seen_grids = []
 
-        def fake_profile(path, with_hook=True):
+        def fake_profile(path, with_hook=True, vantage_grid=128.0):
+            seen_grids.append(vantage_grid)
             if 'noflag' in path:
                 raise ValueError(f'{path}: missing item_flag_team1 or item_flag_team2')
             row = dict(ok_row)
@@ -468,10 +498,14 @@ class TestCtfRouteIndependence(unittest.TestCase):
                 out_json = pathlib.Path(td) / 'out.json'
                 buf_out, buf_err = io.StringIO(), io.StringIO()
                 with redirect_stdout(buf_out), redirect_stderr(buf_err):
-                    rc = ctfprofile.main(['noflag.bsp', 'ctf1.bsp', '--json', str(out_json)])
+                    rc = ctfprofile.main([
+                        'noflag.bsp', 'ctf1.bsp', '--vantage-grid', '256', '--json', str(out_json),
+                    ])
                 self.assertEqual(rc, 0)
                 self.assertIn('warning: skipping', buf_err.getvalue())
                 self.assertIn('ctf1', buf_out.getvalue())
+                self.assertIn('single-vantage (256u grid)', buf_out.getvalue())
+                self.assertEqual(seen_grids, [256.0, 256.0])
                 written = json.loads(out_json.read_text(encoding='utf-8'))
                 self.assertEqual(len(written), 1)
                 self.assertEqual(written[0]['map'], 'ctf1')

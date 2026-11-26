@@ -6,7 +6,7 @@ single-vantage midfield chokes, heuristic flag-room exits, flag sightline exposu
 both hook-off (walk/jump/tele/pad/swim) and hook-on (grapple swing/climb) flag routes on
 the compiled BSP29 collision hulls.
 
-    python3 ctfprofile.py map.bsp [more.bsp ...] [--json out.json] [--png-dir figs/] [--no-hook]
+    python3 ctfprofile.py map.bsp [more.bsp ...] [--json out.json] [--png-dir figs/] [--no-hook] [--vantage-grid 128]
 
 Treats outputs as design diagnostics, not release gates. Movement model: walk/step 18,
 jump 44, running gaps up to 128, drops, teleporters (0.15 s), push pads, and water swimming
@@ -515,6 +515,7 @@ def analyze_band_routes(adj, f1, f2, P, band_nodes, los_fn_points, los_fn_single
         p1_set = set(los_routes[0][1])
         worst_bypass = base_cost
         p1_band = [n for n in los_routes[0][1] if n in band_set]
+        p1_band_arr = np.asarray(p1_band, dtype=np.int64)
         cands = []
         if p1_band:
             stride = max(1, len(p1_band) // 20)
@@ -532,6 +533,10 @@ def analyze_band_routes(adj, f1, f2, P, band_nodes, los_fn_points, los_fn_single
                 cands.append(idx_n)
         cands = list(dict.fromkeys(cands))
         for v_id in cands:
+            # Cheap exact pre-filter: a vantage that cannot see any node on route 1
+            # inside the band cannot block or lengthen route 1, so skip the full band sweep.
+            if len(p1_band_arr) == 0 or not np.any(los_fn_single(P[v_id], p1_band_arr)):
+                continue
             mask = los_fn_single(P[v_id], band_arr)
             seen_v = set(int(band_arr[idx]) for idx in np.nonzero(mask)[0])
             if not seen_v or seen_v.isdisjoint(p1_set):
@@ -640,8 +645,10 @@ def _build_hook_time_graph(adj_walk_t, nodes, P, R_walk, f1, f2,
 
 
 # ------------------------------------------------------------------ main profile
-def ctf_profile(path, name=None, with_hook=True):
+def ctf_profile(path, name=None, with_hook=True, vantage_grid=128.0):
     """Profile a compiled CTF BSP29 map for route topology, flag exposure, and hook/walk travel."""
+    if vantage_grid <= 0:
+        raise ValueError(f'vantage_grid must be positive, got {vantage_grid}')
     name = name or os.path.splitext(os.path.basename(path))[0]
     vp = vprofile.profile(path, name=name, with_navigation=True)
     nav = vp.pop('_navigation')
@@ -779,8 +786,12 @@ def ctf_profile(path, name=None, with_hook=True):
     walk_mid = None
     walk_full = None
     if walk_connected:
-        walk_mid = analyze_band_routes(adj_walk, f1, f2, P, mid_nodes_walk, los_pts, los_one)
-        walk_full = analyze_band_routes(adj_walk, f1, f2, P, full_nodes_walk, los_pts, los_one)
+        walk_mid = analyze_band_routes(
+            adj_walk, f1, f2, P, mid_nodes_walk, los_pts, los_one, vantage_grid=vantage_grid
+        )
+        walk_full = analyze_band_routes(
+            adj_walk, f1, f2, P, full_nodes_walk, los_pts, los_one, vantage_grid=vantage_grid
+        )
 
     # Hook-assisted analysis
     hook_info = None
@@ -815,7 +826,9 @@ def ctf_profile(path, name=None, with_hook=True):
                         adj_hu[v].append((u, c, k))
             g_hook = _geodesic_progress(adj_hu, f1, f2, N)
             mid_nodes_hook = np.nonzero(R_hook & (g_hook >= 0.30) & (g_hook <= 0.70))[0]
-            hook_mid = analyze_band_routes(adj_hook, f1, f2, P, mid_nodes_hook, los_pts, los_one)
+            hook_mid = analyze_band_routes(
+                adj_hook, f1, f2, P, mid_nodes_hook, los_pts, los_one, vantage_grid=vantage_grid
+            )
 
             def path_len_3d(path, kinds):
                 return float(sum(
@@ -946,10 +959,11 @@ def ctf_profile(path, name=None, with_hook=True):
     return res
 
 
-def format_report(res):
+def format_report(res, vantage_grid=128.0):
     """Human-readable diagnostic summary for one CTF map."""
     w = res['walk']
     h = res.get('hook')
+    vg_lbl = f'{round(vantage_grid)}u grid'
     lines = [f"CTF profile of {res['map']}" + (f" ({res['title']})" if res['title'] else '') + ':']
     lines.append(
         f"   scale: travel med {res['travel_median']} (p90 {res['travel_p90']}), "
@@ -981,11 +995,11 @@ def format_report(res):
         lines.append(
             f"     midfield (0.30..0.70): {w['mid_los_route_count']} LOS-indep routes {w['mid_los_route_lens']} "
             f"({w['mid_los_route_ratios']}x), {w['mid_sp384_route_count']} spatial-384 routes, "
-            f"single-vantage (128u grid): {mid_v}, sep {w['mid_lat_sep']}u xy / {w['mid_vert_sep']}u z"
+            f"single-vantage ({vg_lbl}): {mid_v}, sep {w['mid_lat_sep']}u xy / {w['mid_vert_sep']}u z"
         )
         lines.append(
             f"     base-to-base (0.15..0.85): {w['full_los_route_count']} LOS-indep routes {w['full_los_route_lens']}, "
-            f"single-vantage (128u grid): {full_v}"
+            f"single-vantage ({vg_lbl}): {full_v}"
         )
     else:
         lines.append(
@@ -1004,7 +1018,7 @@ def format_report(res):
             )
             lines.append(
                 f"     midfield (0.30..0.70): {h['mid_los_route_count']} LOS-indep routes {h['mid_los_route_s']}s "
-                f"({h['mid_los_route_ratios']}x), single-vantage (128u grid): {hv}"
+                f"({h['mid_los_route_ratios']}x), single-vantage ({vg_lbl}): {hv}"
             )
         else:
             t12 = 'None' if h['f1_to_f2_s'] is None else f"{h['f1_to_f2_s']}s"
@@ -1115,13 +1129,17 @@ def main(argv=None):
     ap.add_argument('--json', dest='json_out', help='Write structured JSON report to path')
     ap.add_argument('--png-dir', dest='png_dir', help='Write route-independence diagnostic figures to directory')
     ap.add_argument('--no-hook', action='store_true', help='Skip grapple hook route simulation')
+    ap.add_argument('--vantage-grid', type=float, default=128.0,
+                    help='3D grid spacing in units for single-vantage choke sampling (default: 128)')
     args = ap.parse_args(argv)
+    if args.vantage_grid <= 0:
+        ap.error('--vantage-grid must be positive')
 
     results = []
     skipped = 0
     for p in args.maps:
         try:
-            r = ctf_profile(p, with_hook=not args.no_hook)
+            r = ctf_profile(p, with_hook=not args.no_hook, vantage_grid=args.vantage_grid)
         except ValueError as exc:
             print(f'warning: skipping {exc}', file=sys.stderr)
             skipped += 1
@@ -1130,7 +1148,7 @@ def main(argv=None):
             os.makedirs(args.png_dir, exist_ok=True)
             draw(r, os.path.join(args.png_dir, r['map'] + '.ctf.png'))
         r.pop('_draw')
-        print(format_report(r))
+        print(format_report(r, vantage_grid=args.vantage_grid))
         results.append(r)
 
     if args.json_out:
