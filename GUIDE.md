@@ -391,7 +391,7 @@ mid, yet one central vantage sees both).
   Threewave classics (`ctf1`, `ctf5`, `ctf2m1`), flag-to-flag walking runs cluster tightly at
   **~5,900–6,700 units** (`~18.8–21.6 s` on the walk/swim/tele graph; `travel_median ~2,400–3,020`),
   while `ctfprofile.py`'s kinematic grapple model (`650 u/s` pull + `0.35 s` latch — an uncalibrated
-  model estimate, not demo-timed play, though its ~430–510 u/s effective pace sits near the ~460 u/s
+  model estimate, not demo-timed play, though its ~430–490 u/s effective pace sits near the ~460 u/s
   solo hook pace from demos) shortens flag runs by **~1.1–1.5×** (`~13.1–16.7 s` model time) and
   opens an additional LOS-independent crossing on `ctf2m3` (and bridges lift-gated flags on
   `ctf2m4`). Avoid tiny straight-spine runs (`ctf3`: `2,720u` / `8.6 s` walk, `6.8 s` model hook)
