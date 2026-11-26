@@ -20,6 +20,7 @@ import heapq
 import json
 import math
 import os
+import struct
 import sys
 from collections import Counter, defaultdict, deque
 
@@ -644,11 +645,28 @@ def _build_hook_time_graph(adj_walk_t, nodes, P, R_walk, f1, f2,
     return adj_t, len(hu)
 
 
+def _bsp_has_ctf_flags(path):
+    """Fast BSP29 entity-lump pre-check so non-CTF maps fail before running vprofile."""
+    with open(path, 'rb') as f:
+        hdr = f.read(12)
+        if len(hdr) < 12:
+            return True  # let vprofile.BSP report malformed BSPs
+        ver, ent_ofs, ent_len = struct.unpack_from('<iii', hdr, 0)
+        if ver != 29 or ent_ofs < 0 or ent_len < 0:
+            return True  # let vprofile.BSP report version/format errors
+        f.seek(ent_ofs)
+        raw = f.read(ent_len)
+    classes = {e.get('classname') for e in vprofile.parse_ents(raw.decode('latin1'))}
+    return 'item_flag_team1' in classes and 'item_flag_team2' in classes
+
+
 # ------------------------------------------------------------------ main profile
 def ctf_profile(path, name=None, with_hook=True, vantage_grid=128.0):
     """Profile a compiled CTF BSP29 map for route topology, flag exposure, and hook/walk travel."""
     if vantage_grid <= 0:
         raise ValueError(f'vantage_grid must be positive, got {vantage_grid}')
+    if os.path.isfile(path) and not _bsp_has_ctf_flags(path):
+        raise ValueError(f'{path}: missing item_flag_team1 or item_flag_team2')
     name = name or os.path.splitext(os.path.basename(path))[0]
     vp = vprofile.profile(path, name=name, with_navigation=True)
     nav = vp.pop('_navigation')

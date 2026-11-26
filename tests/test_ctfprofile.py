@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import pathlib
+import struct
 import sys
 import tempfile
 import unittest
@@ -516,6 +517,26 @@ class TestCtfRouteIndependence(unittest.TestCase):
                 rc_fail = ctfprofile.main(['noflag.bsp'])
             self.assertEqual(rc_fail, 1)
             self.assertIn('warning: skipping', buf_err.getvalue())
+
+    def test_ctf_profile_rejects_non_ctf_bsp_before_running_vprofile(self):
+        def write_min_bsp(path, ent_text):
+            ent_bytes = ent_text.encode('latin1')
+            # BSP29 header: version (4B) + 15 lumps (offset, length) = 124 bytes
+            hdr = bytearray(4 + 15 * 8)
+            struct.pack_into('<iii', hdr, 0, 29, len(hdr), len(ent_bytes))
+            path.write_bytes(bytes(hdr) + ent_bytes)
+
+        with tempfile.TemporaryDirectory() as td:
+            no_flags = pathlib.Path(td) / 'ca_sample.bsp'
+            write_min_bsp(no_flags, '{\n"classname" "worldspawn"\n}\n')
+            one_flag = pathlib.Path(td) / 'one_flag.bsp'
+            write_min_bsp(one_flag, '{\n"classname" "worldspawn"\n}\n{\n"classname" "item_flag_team1"\n}\n')
+
+            with mock.patch.object(ctfprofile.vprofile, 'profile') as mock_vp:
+                for p in (no_flags, one_flag):
+                    with self.assertRaises(ValueError):
+                        ctfprofile.ctf_profile(str(p))
+                mock_vp.assert_not_called()
 
     def test_ctf_profile_and_draw_end_to_end_synthetic_bsp(self):
         # Build a synthetic convex room x in [0, 640], y in [-128, 128], z in [-64, 256]
