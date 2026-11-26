@@ -106,7 +106,7 @@ profiled **ten classic Threewave CTF maps** (`ctf1`, `ctf2`, `ctf3`, `ctf4`, `ct
 |---|---:|---|---:|---:|---:|---:|---:|---|---|
 | **ctf2m1** (McKinley Station) | 3019 (6655) | 5.77 / 0.34 / 0.34 | 127 | 6220u (19.4s) | **3** (1.0 / 1.16 / 1.50×) | 13.9s (1.39×) | **3** (1.0 / 1.05 / 1.48×) | **No / No** (bypass 1.16× / 1.05×) | Gold-standard 3-lane split: mid + south wing + high north (`12` teles) |
 | **ctf1** (McKinley Base) | 2620 (6316) | 5.94 / 0.32 / 0.31 | 159 | 5965u (18.6s) | 1 | 16.6s (1.12×) | 1 | Yes / Yes | Open central room + wide N/S kiting loops, single base-entry neck on plan |
-| **ctf5** (Ancient War Grounds) | 2407 (4458) | 4.74 / 0.51 / 0.24 | 207 | 6096u (19.0s) | 1 | 12.8s (1.49×) | **2** (1.0 / 1.44×) | Yes / Yes | Open three-tier chasm (hook unlocks second mid lane); single base gate on plan |
+| **ctf5** (Da Ancient War Grounds) | 2407 (4458) | 4.74 / 0.51 / 0.24 | 207 | 6096u (19.0s) | 1 | 12.8s (1.49×) | **2** (1.0 / 1.44×) | Yes / Yes | Open three-tier chasm (hook unlocks second mid lane); single base gate on plan |
 | **ctf2m3** (Spill the Blood) | 2031 (4465) | 3.70 / 0.51 / 0.29 | 140 | 7408u (23.2s) | 1 | 16.5s (1.41×) | **2** (1.0 / 1.04×) | Yes / **No** (bypass 1.04×) | Horseshoe U-layout (`5.3×` winding); hook splits upper/lower east crossing |
 | **ctf8** (Strongbox) | 1919 (3583) | 3.14 / 0.52 / 0.17 | 119 | 4248u (13.3s) | 1 (2 spatial) | 11.0s (1.21×) | 1 | Yes / Yes | Open central court — two physical paths, one mid vantage sees both |
 | **ctf3** (DySpHoRiA) | 1712 (2663) | 5.95 / 0.42 / 0.34 | 305 | 2720u (8.5s) | 1 | 6.8s (1.25×) | 1 | Yes / Yes | Narrow straight spine (`mid_sees_flag = true`) |
