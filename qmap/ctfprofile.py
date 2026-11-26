@@ -45,7 +45,26 @@ VANTAGE_LOS_RANGE = 1500.0
 
 # ------------------------------------------------------------------ numba kernels
 @njit(cache=True)
-def _los_mask_from_point(root0, nplane, nchild, lcont, pn, pd,
+def _los_multi(roots0, nplane, nchild, lcont, pn, pd, ax, ay, az, bx, by, bz):
+    """True when ray (a -> b) is clear across world hull 0 and all func_wall hull-0 trees."""
+    for r0 in roots0:
+        if not vprofile._los(r0, nplane, nchild, lcont, pn, pd, ax, ay, az, bx, by, bz):
+            return False
+    return True
+
+
+@njit(cache=True)
+def _is_anchor_leaf(roots0, nplane, nchild, lcont, pn, pd, x, y, z):
+    """True when (x, y, z) lies inside solid (-2) or sky (-6) in world or func_wall hull 0."""
+    for r0 in roots0:
+        c = vprofile._leaf(r0, nplane, nchild, lcont, pn, pd, x, y, z)
+        if c == -2 or c == -6:
+            return True
+    return False
+
+
+@njit(cache=True)
+def _los_mask_from_point(roots0, nplane, nchild, lcont, pn, pd,
                          vx, vy, vz, P, idx_arr, max_range):
     """Boolean mask over idx_arr where (vx, vy, vz+EYE) sees P[m]+(0,0,BODY) within max_range."""
     M = len(idx_arr)
@@ -59,14 +78,14 @@ def _los_mask_from_point(root0, nplane, nchild, lcont, pn, pd,
         dy = my - vy
         dz = mz - vz
         if dx * dx + dy * dy + dz * dz <= r2:
-            if vprofile._los(root0, nplane, nchild, lcont, pn, pd,
-                             vx, vy, ez, mx, my, mz + BODY):
+            if _los_multi(roots0, nplane, nchild, lcont, pn, pd,
+                          vx, vy, ez, mx, my, mz + BODY):
                 out[k] = True
     return out
 
 
 @njit(cache=True)
-def _los_mask_from_points(root0, nplane, nchild, lcont, pn, pd,
+def _los_mask_from_points(roots0, nplane, nchild, lcont, pn, pd,
                           src_pts, P, idx_arr, max_range):
     """Boolean mask over idx_arr where ANY point in src_pts sees P[m] within max_range."""
     M = len(idx_arr)
@@ -83,15 +102,15 @@ def _los_mask_from_points(root0, nplane, nchild, lcont, pn, pd,
             dy = my - sy
             dz = mz - sz
             if dx * dx + dy * dy + dz * dz <= r2:
-                if vprofile._los(root0, nplane, nchild, lcont, pn, pd,
-                                 sx, sy, sz + EYE, mx, my, tbz):
+                if _los_multi(roots0, nplane, nchild, lcont, pn, pd,
+                              sx, sy, sz + EYE, mx, my, tbz):
                     out[k] = True
                     break
     return out
 
 
 @njit(cache=True)
-def _max_los_to_target(root0, nplane, nchild, lcont, pn, pd, P, idx_arr, tx, ty, tz):
+def _max_los_to_target(roots0, nplane, nchild, lcont, pn, pd, P, idx_arr, tx, ty, tz):
     """Longest 2D distance from any node in idx_arr with direct eye-to-body LOS to (tx, ty, tz)."""
     best = 0.0
     tbz = tz + BODY
@@ -101,8 +120,8 @@ def _max_los_to_target(root0, nplane, nchild, lcont, pn, pd, P, idx_arr, tx, ty,
         d = math.sqrt((mx - tx) ** 2 + (my - ty) ** 2)
         if d <= best:
             continue
-        if vprofile._los(root0, nplane, nchild, lcont, pn, pd,
-                         mx, my, mz + EYE, tx, ty, tbz):
+        if _los_multi(roots0, nplane, nchild, lcont, pn, pd,
+                      mx, my, mz + EYE, tx, ty, tbz):
             best = d
     return best
 
@@ -120,7 +139,7 @@ def _hull1_clear(roots, cplane, cchild, pn, pd, x1, y1, z1, x2, y2, z2):
 
 
 @njit(cache=True)
-def _has_hook_anchor(root0, nplane, nchild, lcont, pn, pd,
+def _has_hook_anchor(roots0, nplane, nchild, lcont, pn, pd,
                      ax, ay, az, bx, by, bz):
     """True when a hook ray from A's eye can latch onto solid (-2) or sky (-6) behind or above B."""
     ex, ey, ez = ax, ay, az + EYE
@@ -128,27 +147,25 @@ def _has_hook_anchor(root0, nplane, nchild, lcont, pn, pd,
     tx, ty, tz = bx, by, bz + 48.0
     dx, dy, dz = tx - ex, ty - ey, tz - ez
     L = math.sqrt(dx * dx + dy * dy + dz * dz)
-    if L > 1.0 and vprofile._los(root0, nplane, nchild, lcont, pn, pd, ex, ey, ez, tx, ty, tz):
+    if L > 1.0 and _los_multi(roots0, nplane, nchild, lcont, pn, pd, ex, ey, ez, tx, ty, tz):
         ux, uy, uz = dx / L, dy / L, dz / L
         for step in range(1, 29):
             dist = step * 16.0
-            c = vprofile._leaf(root0, nplane, nchild, lcont, pn, pd,
-                               tx + ux * dist, ty + uy * dist, tz + uz * dist)
-            if c == -2 or c == -6:
+            if _is_anchor_leaf(roots0, nplane, nchild, lcont, pn, pd,
+                               tx + ux * dist, ty + uy * dist, tz + uz * dist):
                 return True
     # 2. Ceiling/wall anchor above B (96..384u above B's floor) visible from A_eye
     for h_off in (96.0, 160.0, 256.0, 384.0):
         cz = bz + h_off
-        c = vprofile._leaf(root0, nplane, nchild, lcont, pn, pd, bx, by, cz)
-        if c == -2 or c == -6:
+        if _is_anchor_leaf(roots0, nplane, nchild, lcont, pn, pd, bx, by, cz):
             # Check ray from A_eye to just below this anchor is unobstructed
-            if vprofile._los(root0, nplane, nchild, lcont, pn, pd, ex, ey, ez, bx, by, cz - 16.0):
+            if _los_multi(roots0, nplane, nchild, lcont, pn, pd, ex, ey, ez, bx, by, cz - 16.0):
                 return True
     return False
 
 
 @njit(cache=True)
-def _build_hook_edges(roots, cplane, cchild, root0, nplane, nchild, lcont, pn, pd,
+def _build_hook_edges(roots, cplane, cchild, roots0, nplane, nchild, lcont, pn, pd,
                       P, wp_ids, min_range, max_range):
     """Compute valid grapple swing/climb edges between waypoint floor nodes.
     Keeps up to one longest clear edge per (12 azimuth x 3 vertical) sector per
@@ -203,7 +220,7 @@ def _build_hook_edges(roots, cplane, cchild, root0, nplane, nchild, lcont, pn, p
                     flight_ok = True
             if not flight_ok:
                 continue
-            if not _has_hook_anchor(root0, nplane, nchild, lcont, pn, pd, ax, ay, az, bx, by, bz):
+            if not _has_hook_anchor(roots0, nplane, nchild, lcont, pn, pd, ax, ay, az, bx, by, bz):
                 continue
             if b < 2:
                 out_u.append(u)
@@ -587,7 +604,7 @@ def _build_walk_time_graph(adj_walk):
 
 
 def _build_hook_time_graph(adj_walk_t, nodes, P, R_walk, f1, f2,
-                           roots, B, root0):
+                           roots, B, roots0):
     """Extend a walk+swim+tele time graph (seconds) with grapple hook swings/climbs
     between spatial waypoints."""
     adj_t = defaultdict(list, {u: list(edges) for u, edges in adj_walk_t.items()})
@@ -602,7 +619,7 @@ def _build_hook_time_graph(adj_walk_t, nodes, P, R_walk, f1, f2,
     wp_ids = np.array([f1, f2] + sorted(wp_extra), dtype=np.int64)
 
     hu, hv, hd = _build_hook_edges(
-        roots, B.cplane, B.cchild, root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
+        roots, B.cplane, B.cchild, roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         P, wp_ids, HOOK_MIN_RANGE, HOOK_MAX_RANGE,
     )
     for u, v, d in zip(hu, hv, hd):
@@ -645,10 +662,16 @@ def ctf_profile(path, name=None, with_hook=True):
 
     m0 = B.models[0]
     roots = [int(m0['h'][1])]
+    roots0 = [int(m0['h'][0])]
     for e in B.ents:
         if e.get('classname') == 'func_wall' and vprofile.model_index(e):
-            roots.append(int(B.models[vprofile.model_index(e)]['h'][1]))
+            mi = vprofile.model_index(e)
+            roots.append(int(B.models[mi]['h'][1]))
+            orig_s = e.get('origin', '').strip()
+            if not orig_s or all(abs(float(t)) < 1e-6 for t in orig_s.split()[:3]):
+                roots0.append(int(B.models[mi]['h'][0]))
     roots = np.array(roots, np.int64)
+    roots0 = np.array(roots0, np.int64)
     root0 = int(m0['h'][0])
     S1 = lambda x, y, z: vprofile._solid1(roots, B.cplane, B.cchild, B.pn, B.pd, x, y, z)
     LC = lambda x, y, z: vprofile._leaf(root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, x, y, z)
@@ -705,26 +728,26 @@ def ctf_profile(path, name=None, with_hook=True):
 
     reach_idx = np.nonzero(R_walk)[0].astype(np.int64)
     flag1_los = float(_max_los_to_target(
-        root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, P, reach_idx, P[f1, 0], P[f1, 1], P[f1, 2]
+        roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, P, reach_idx, P[f1, 0], P[f1, 1], P[f1, 2]
     ))
     flag2_los = float(_max_los_to_target(
-        root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, P, reach_idx, P[f2, 0], P[f2, 1], P[f2, 2]
+        roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, P, reach_idx, P[f2, 0], P[f2, 1], P[f2, 2]
     ))
-    flags_mut_los = bool(vprofile._los(
-        root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
+    flags_mut_los = bool(_los_multi(
+        roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         P[f1, 0], P[f1, 1], P[f1, 2] + EYE,
         P[f2, 0], P[f2, 1], P[f2, 2] + BODY,
     ))
 
-    # Fast numba LOS closures
+    # Fast numba LOS closures (world + func_wall hull 0; func_door remains open/transparent)
     def los_pts(src_pts, b_arr):
         return _los_mask_from_points(
-            root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, src_pts, P, b_arr, LOS_ROUTE_RANGE
+            roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, src_pts, P, b_arr, LOS_ROUTE_RANGE
         )
 
     def los_one(v_pt, b_arr):
         return _los_mask_from_point(
-            root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
+            roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
             float(v_pt[0]), float(v_pt[1]), float(v_pt[2]), P, b_arr, VANTAGE_LOS_RANGE
         )
 
@@ -735,11 +758,11 @@ def ctf_profile(path, name=None, with_hook=True):
     # Check if any central-mid node (0.35..0.65) can see either flag
     center_mid = np.nonzero(R_walk & (g_walk >= 0.35) & (g_walk <= 0.65))[0].astype(np.int64)
     mid_sees_f1 = bool(np.any(_los_mask_from_point(
-        root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
+        roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         P[f1, 0], P[f1, 1], P[f1, 2], P, center_mid, 4096.0
     ))) if len(center_mid) else False
     mid_sees_f2 = bool(np.any(_los_mask_from_point(
-        root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
+        roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         P[f2, 0], P[f2, 1], P[f2, 2], P, center_mid, 4096.0
     ))) if len(center_mid) else False
 
@@ -754,7 +777,7 @@ def ctf_profile(path, name=None, with_hook=True):
     hook_draw = None
     if with_hook:
         adj_hook, hook_edge_count = _build_hook_time_graph(
-            adj_walk_t, nodes, P, R_walk, f1, f2, roots, B, root0
+            adj_walk_t, nodes, P, R_walk, f1, f2, roots, B, roots0
         )
         T12, hpath12, hkinds12 = _dijk_single(adj_hook, f1, f2)
         T21, hpath21, hkinds21 = _dijk_single(adj_hook, f2, f1)

@@ -331,8 +331,9 @@ class TestCtfRouteIndependence(unittest.TestCase):
 
         P = np.array([[64.0, 0.0, 0.0], [500.0, 0.0, 0.0]], dtype=np.float64)
         wp = np.array([0, 1], dtype=np.int64)
+        roots0 = np.array([0], dtype=np.int64)
         hu, hv, hd = ctfprofile._build_hook_edges(
-            roots, cplane, cchild, 0, nplane, nchild, lcont, pn, pd, P, wp, 96.0, 1024.0
+            roots, cplane, cchild, roots0, nplane, nchild, lcont, pn, pd, P, wp, 96.0, 1024.0
         )
         # Both directions (0->1 and 1->0) must have valid hook edges in the open room
         self.assertEqual(set(zip(hu, hv)), {(0, 1), (1, 0)})
@@ -343,9 +344,48 @@ class TestCtfRouteIndependence(unittest.TestCase):
         pd_blocked[1] = -300.0
         pd_blocked[k + 1] = -284.0
         hu2, hv2, _ = ctfprofile._build_hook_edges(
-            roots, cplane, cchild, 0, nplane, nchild, lcont, pn, pd_blocked, P, wp, 96.0, 1024.0
+            roots, cplane, cchild, roots0, nplane, nchild, lcont, pn, pd_blocked, P, wp, 96.0, 1024.0
         )
         self.assertEqual(len(hu2), 0)
+
+    def test_los_multi_blocks_through_func_wall_hull0(self):
+        # World hull 0: open box x in [0, 600], y in [-200, 200], z in [0, 256] (empty inside -> leaf 0 = -1)
+        # func_wall hull 0: solid slab x in [280, 320], y in [-200, 200], z in [0, 256] (solid inside -> leaf 1 = -2)
+        world_planes = [
+            (1, 0, 0, 0), (-1, 0, 0, -600),
+            (0, 1, 0, -200), (0, -1, 0, -200),
+            (0, 0, 1, 0), (0, 0, -1, -256),
+        ]
+        fwall_planes = [
+            (1, 0, 0, 280), (-1, 0, 0, -320),
+            (0, 1, 0, -200), (0, -1, 0, -200),
+            (0, 0, 1, 0), (0, 0, -1, -256),
+        ]
+        pn = np.array([[a, b, c] for a, b, c, _ in world_planes + fwall_planes], dtype=np.float64)
+        pd = np.array([d for _, _, _, d in world_planes + fwall_planes], dtype=np.float64)
+        k = len(world_planes)
+        nplane = np.arange(2 * k, dtype=np.int64)
+        nchild = np.zeros((2 * k, 2), dtype=np.int64)
+        # World tree (nodes 0..k-1): inside all planes -> leaf 0 (-1 empty), outside -> leaf 1 (-2 solid)
+        for i in range(k):
+            nchild[i, 0] = (i + 1) if i + 1 < k else -1
+            nchild[i, 1] = -2
+        # func_wall tree (nodes k..2k-1): inside all planes -> leaf 1 (-2 solid), outside -> leaf 0 (-1 empty)
+        for i in range(k):
+            nchild[k + i, 0] = (k + i + 1) if i + 1 < k else -2
+            nchild[k + i, 1] = -1
+        lcont = np.array([-1, -2], dtype=np.int64)
+
+        # World-only LOS sees straight across the room
+        self.assertTrue(ctfprofile._los_multi(
+            np.array([0], dtype=np.int64), nplane, nchild, lcont, pn, pd,
+            64.0, 0.0, 46.0, 500.0, 0.0, 32.0,
+        ))
+        # Adding the func_wall hull-0 root blocks LOS across x=280..320
+        self.assertFalse(ctfprofile._los_multi(
+            np.array([0, k], dtype=np.int64), nplane, nchild, lcont, pn, pd,
+            64.0, 0.0, 46.0, 500.0, 0.0, 32.0,
+        ))
 
     def test_format_report_handles_connected_and_disconnected_profiles(self):
         sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'ctf_refs.json').read_text(encoding='utf-8'))
