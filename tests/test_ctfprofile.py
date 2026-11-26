@@ -12,6 +12,7 @@ import tempfile
 import unittest
 from collections import defaultdict
 from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
 from unittest import mock
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -481,6 +482,109 @@ class TestCtfRouteIndependence(unittest.TestCase):
                 rc_fail = ctfprofile.main(['noflag.bsp'])
             self.assertEqual(rc_fail, 1)
             self.assertIn('warning: skipping', buf_err.getvalue())
+
+    def test_ctf_profile_and_draw_end_to_end_synthetic_bsp(self):
+        # Build a synthetic convex room x in [0, 640], y in [-128, 128], z in [-64, 256]
+        # where z < 0 is water (leaf 2 = -3) and z >= 0 is empty (leaf 0 = -1).
+        planes0 = [
+            (1, 0, 0, 0), (-1, 0, 0, -640),
+            (0, 1, 0, -128), (0, -1, 0, -128),
+            (0, 0, 1, -64), (0, 0, -1, -256),
+            (0, 0, 1, 0),  # plane 6: z >= 0 air, z < 0 water
+        ]
+        # Hull 1 inset by +/-16 xy, +24 floor, -32 ceiling
+        planes1 = [
+            (1, 0, 0, 16), (-1, 0, 0, -624),
+            (0, 1, 0, -112), (0, -1, 0, -112),
+            (0, 0, 1, -40), (0, 0, -1, -224),
+        ]
+        pn = np.array([[a, b, c] for a, b, c, _ in planes0 + planes1], dtype=np.float64)
+        pd = np.array([d for _, _, _, d in planes0 + planes1], dtype=np.float64)
+        k0 = len(planes0)
+        nplane = np.arange(k0, dtype=np.int64)
+        nchild = np.zeros((k0, 2), dtype=np.int64)
+        for i in range(6):
+            nchild[i, 0] = i + 1
+            nchild[i, 1] = -2  # leaf 1 -> solid (-2)
+        nchild[6, 0] = -1      # leaf 0 -> empty (-1, z >= 0)
+        nchild[6, 1] = -3      # leaf 2 -> water (-3, z < 0)
+        lcont = np.array([-1, -2, -3], dtype=np.int64)
+
+        k1 = len(planes1)
+        cplane = np.arange(k0, k0 + k1, dtype=np.int64)
+        cchild = np.zeros((k1, 2), dtype=np.int64)
+        for i in range(k1):
+            cchild[i, 0] = (i + 1) if i + 1 < k1 else -1
+            cchild[i, 1] = -2
+
+        # Floor grid: x0=0, y0=-96, i in 2..37 (x=40..600), j in 0..12 (y=-88..104)
+        # Middle strip i in 18..21 sits in sunken water at z=-48; sides sit at z=0.
+        x0, y0 = 0.0, -96.0
+        nodes = []
+        nid = {}
+        for i in range(2, 38):
+            f = -48.0 if 18 <= i <= 21 else 0.0
+            for j in range(0, 13):
+                nid[(i, j)] = len(nodes)
+                nodes.append((i, j, f))
+        adj = defaultdict(list)
+        for (i, j), u in nid.items():
+            fu = nodes[u][2]
+            for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                v = nid.get((i + di, j + dj))
+                if v is None:
+                    continue
+                fv = nodes[v][2]
+                # Normal walk/drop only (cannot walk up out of 48u water pit without swim edges!)
+                if fv <= fu + 18.0:
+                    adj[u].append((v, 16.0, 'walk'))
+
+        fake_bsp = SimpleNamespace(
+            models=[{'h': [0, 0, 0, 0]}],
+            ents=[
+                {'classname': 'worldspawn', 'message': 'Synthetic CTF Room'},
+                {'classname': 'item_flag_team1', 'origin': '64 0 24'},
+                {'classname': 'item_flag_team2', 'origin': '576 0 24'},
+                {'classname': 'info_player_team1', 'origin': '48 0 24'},
+                {'classname': 'info_player_team2', 'origin': '592 0 24'},
+                {'classname': 'weapon_rocketlauncher', 'origin': '320 0 24'},
+            ],
+            pn=pn, pd=pd, nplane=nplane, nchild=nchild, lcont=lcont,
+            cplane=cplane, cchild=cchild,
+        )
+        fake_vp = dict(
+            floor_area_k=100, travel_median=300, travel_p90=500,
+            eff_levels=2.0, dominant_level=0.8, stacked_share=0.0,
+            overlook_share=0.1, cross_level_sight=0.1, route_vert_per_1000=50,
+            angled_walls=0.0, teleporters=0, pads=0,
+            _navigation=dict(bsp=fake_bsp, adjacency=adj),
+            _draw=dict(nodes=nodes, x0=x0, y0=y0, R=[True] * len(nodes)),
+            _check={},
+        )
+
+        with mock.patch.object(ctfprofile.vprofile, 'profile', return_value=fake_vp):
+            res = ctfprofile.ctf_profile('synth_ctf.bsp', name='synth_ctf', with_hook=True)
+
+        # Water swim edges must have bridged the 48u pit so both flags connect on foot
+        self.assertGreater(res['swim_edges'], 0)
+        self.assertTrue(res['walk']['connected'])
+        self.assertTrue(res['hook']['connected'])
+        self.assertTrue(res['flags_mutual_los'])
+        self.assertEqual(res['title'], 'Synthetic CTF Room')
+        self.assertGreaterEqual(res['hook']['speedup_vs_walk'], 1.0)
+        self.assertIn('synth_ctf', ctfprofile.format_report(res))
+
+        # Exercise draw() PNG output if matplotlib is available, then verify JSON round-trip
+        if importlib.util.find_spec('matplotlib') is not None:
+            with tempfile.TemporaryDirectory() as td:
+                out_png = pathlib.Path(td) / 'synth_ctf.ctf.png'
+                ctfprofile.draw(res, str(out_png))
+                self.assertTrue(out_png.is_file())
+                self.assertGreater(out_png.stat().st_size, 1000)
+
+        res.pop('_draw')
+        payload = json.dumps(res)
+        self.assertEqual(json.loads(payload)['map'], 'synth_ctf')
 
 
 if __name__ == '__main__':
