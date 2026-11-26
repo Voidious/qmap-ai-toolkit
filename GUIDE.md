@@ -370,7 +370,8 @@ mid, yet one central vantage sees both).
   [`gallery/GALLERY.md`](gallery/GALLERY.md)), `ctf2m1` (*McKinley Station*) is the clear
   route-topology standout: **3 LOS-independent midfield routes** on both walk (`6,220u` / `7,188u`
   `1.16×` / `9,313u` `1.50×`, `1,154u` lateral and `492u` vertical separation) and grapple hook
-  (`13.9s` / `14.7s` `1.05×` / `20.6s` `1.48×`), with no single mid vantage cutting all routes.
+  (`14.4s` / `16.3s` `1.14×` / `20.5s` `1.43×` model times), with no single sampled mid vantage
+  cutting all routes.
 * **Keep alternate routes competitive in length.** Aim for secondary routes around **~1.05×–1.35×**
   the shortest flag-to-flag run (up to ~1.5× for a safer third flank like `ctf2m1`'s high north
   wing). A 2× detour looks like a side route on a plan and gets ignored in play.
@@ -388,14 +389,15 @@ mid, yet one central vantage sees both).
   (`flags_mutual_los = false`, `mid_sees_flag = false`).
 * **Calibrate scale, verticality, and hook vs. walk together.** Across the playable full-scale
   Threewave classics (`ctf1`, `ctf5`, `ctf2m1`), flag-to-flag walking runs cluster tightly at
-  **~5,900–6,700 units** (`~18.5–21 s` on the walk/swim/tele graph; `travel_median ~2,400–3,020`),
+  **~5,900–6,700 units** (`~18.8–21.6 s` on the walk/swim/tele graph; `travel_median ~2,400–3,020`),
   while `ctfprofile.py`'s kinematic grapple model (`650 u/s` pull + `0.35 s` latch — an uncalibrated
   model estimate, not demo-timed play, though its ~430–510 u/s effective pace sits near the ~460 u/s
-  solo hook pace from demos) shortens flag runs by **~1.1–1.5×** (`~12.8–16.6 s` model time) and
-  opens additional vertical crossings (`ctf5`, `ctf2m3`). Avoid tiny straight-spine runs (`ctf3`:
-  `2,720u` / `8.5 s` walk, `6.8 s` model hook) or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep
-  real height play rather than flat side tubes: the playable classics maintain `eff_levels 4.7–6.0`,
-  `stacked_share 0.24–0.34`, and `route_vert_per_1000 127–207`.
+  solo hook pace from demos) shortens flag runs by **~1.1–1.5×** (`~13.1–16.7 s` model time) and
+  opens an additional LOS-independent crossing on `ctf2m3` (and bridges lift-gated flags on
+  `ctf2m4`). Avoid tiny straight-spine runs (`ctf3`: `2,720u` / `8.6 s` walk, `6.8 s` model hook)
+  or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep real height play rather than flat side tubes:
+  the playable classics maintain `eff_levels 4.7–6.0`, `stacked_share 0.24–0.34`, and
+  `route_vert_per_1000 127–207`.
 * **Diagnose every CTF blockout with `qmap/ctfprofile.py`.** Run
   `python3 qmap/ctfprofile.py map.bsp --png-dir figs/` to measure walk (hook-off) and grapple
   (hook-on) flag times, LOS-independent route counts and length ratios, sampled single-vantage
