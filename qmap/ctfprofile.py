@@ -1,9 +1,10 @@
 """CTF layout and route-independence diagnostics on compiled Quake maps (BSP29).
 
-Measures flag-to-flag distance/symmetry, visually independent (LOS-separated) routes,
-single-vantage midfield chokes, base-mouth vs. midfield bottlenecks, flag room exits,
-flag sightline exposure, and both hook-off (walk/jump/tele/pad/swim) and hook-on
-(grapple swing/climb) flag routes on the compiled BSP29 collision hulls.
+Measures flag-to-flag distance/symmetry, visually independent (LOS-separated) routes
+across midfield (0.30..0.70) and base-to-base (0.15..0.85) geodesic bands, sampled
+single-vantage midfield chokes, heuristic flag-room exits, flag sightline exposure, and
+both hook-off (walk/jump/tele/pad/swim) and hook-on (grapple swing/climb) flag routes on
+the compiled BSP29 collision hulls.
 
     python3 ctfprofile.py map.bsp [more.bsp ...] [--json out.json] [--png-dir figs/] [--no-hook]
 

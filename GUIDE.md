@@ -375,9 +375,13 @@ mid, yet one central vantage sees both).
   the shortest flag-to-flag run (up to ~1.5× for a safer third flank like `ctf2m1`'s high north
   wing). A 2× detour looks like a side route on a plan and gets ignored in play.
 * **Separate base-mouth exits from midfield lanes.** Multiple mid crossings lose much of their
-  value if they merge into a single doorway or corridor right outside each base — `ctf1` (*McKinley
-  Base*) and `ctf5` (*Da Ancient War Grounds*) both feature memorable midfights (`ctf1`'s wide N/S
-  kiting loops, `ctf5`'s three-tier chasm), yet still funnel into one base-entry neck. Give
+  value if they merge into a single doorway or corridor right outside each base — comparing
+  `ctfprofile.py`'s midfield (`0.30..0.70`) and base-to-base (`0.15..0.85`) bands flags when
+  multiple mid lanes collapse near the bases (e.g., `ctf2m1` drops from 3 midfield routes to 2
+  base-to-base), and inspecting the floor plans/route plots shows the same lesson on `ctf1`
+  (*McKinley Base*) and `ctf5` (*Da Ancient War Grounds*), where memorable midfights (`ctf1`'s
+  wide N/S kiting loops, `ctf5`'s three-tier chasm) still report 1 walk route in both bands and
+  funnel into one base-entry neck. Give
   **both** the flag room (2–3 exits, verified visually on the plan — `ctfprofile.py`'s
   `flag_exits` is a heuristic outward-shell estimate) **and** the base perimeter distinct connections into the
   midfield lanes, and keep flags out of mutual LOS and out of central-mid LOS
