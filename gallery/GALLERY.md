@@ -112,8 +112,8 @@ profiled **ten classic Threewave CTF maps** (`ctf1`, `ctf2`, `ctf3`, `ctf4`, `ct
 | **ctf3** (DySpHoRiA) | 1712 (2663) | 5.95 / 0.42 / 0.34 | 305 | 2720u (8.5s) | 1 | 6.8s (1.25×) | 1 | Yes / Yes | Narrow straight spine (`mid_sees_flag = true`) |
 | **ctf4** (Forgotten Mines) | 777 (1793) | 5.59 / 0.40 / 0.12 | 234 | 6234u (19.5s) | 1 | 17.7s (1.10×) | 1 | Yes / Yes | Narrow linear mine tunnel with single center choke |
 | **ctf6** (Vertigo) | 2125 (5624) | 8.86 / 0.26 / 0.30 | 248 | 7121 / 2084u | 1 | 18.3 / 5.5s (1.22×) | 1 | Yes / Yes | Extreme `3.42×` one-way asymmetry, close flags (`1572u`), `mid_sees_flag = true` |
-| **ctf2** (The Kiln) | 830 (1690) | 4.53 / 0.46 / 0.54 | 254 | 1-way (2310u) | — | 1-way (4.8s) | — | — | 8 `func_door` + 4 `func_plat` gate the return path in static hull model |
-| **ctf2m4** (Ruins of NeoMinonk) | 2527 (5383) | 6.29 / 0.38 / 0.23 | 164 | Disconnected | — | 25.5s (hook unlocks) | 1 | — / Yes | 20 `func_plat` + 8 `func_door`; hook bypasses lifts (`unlocks_flags = true`) |
+| **ctf2** (The Kiln) | 830 (1690) | 4.53 / 0.46 / 0.54 | 254 | 1-way (2310u) | — | 1-way (4.8s) | — | — | Missing `func_plat` lifts (4) cut the return path in static hull model (`func_door` counts as open) |
+| **ctf2m4** (Ruins of NeoMinonk) | 2527 (5383) | 6.29 / 0.38 / 0.23 | 164 | Disconnected | — | 25.5s (hook unlocks) | 1 | — / Yes | Missing `func_plat` lifts (20) disconnect walk; hook bypasses lifts (`unlocks_flags = true`) |
 
 Takeaways: many early Threewave Episode 1 maps funnel through a single central room (`ctf8`), a
 linear spine (`ctf3`, `ctf4`), or a single base-mouth neck (`ctf1`, `ctf5`), which is why

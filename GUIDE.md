@@ -398,8 +398,10 @@ mid, yet one central vantage sees both).
   mid chokes (128-unit grid across the band, not an exhaustive proof over every 16u cell),
   flag-room exits, flag sightlines, and whether the grapple unlocks otherwise walk-disconnected
   flags (as on lift-heavy `ctf2m4`). Treat the output as a diagnostic, not a rigid gate; its
-  movement model covers walk/jump/teleporter/pad/swim and solid/sky grapple swings, and does not
-  simulate button- or lift-gated paths (`func_plat` / triggered `func_door`).
+  movement model covers walk/jump/teleporter/pad/swim and solid/sky grapple swings, and omits
+  moving brush entities (matching `vprofile.py`): `func_door` brushes count as always open
+  (optimistic for button-locked doors), while `func_plat` lifts are absent (pessimistic for
+  lift-dependent climbs).
 
 **Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
 (`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet

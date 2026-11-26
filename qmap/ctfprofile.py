@@ -10,8 +10,9 @@ flag sightline exposure, and both hook-off (walk/jump/tele/pad/swim) and hook-on
 Treats outputs as design diagnostics, not release gates. Movement model: walk/step 18,
 jump 44, running gaps up to 128, drops, teleporters (0.15 s), push pads, and water swimming
 (220 u/s) for hook-off, plus uncalibrated kinematic grapple swings/climbs anchored to solid
-or sky (650 u/s pull + 0.35 s latch) for hook-on. Button- and lift-gated paths (func_plat /
-triggered doors) are not simulated.
+or sky (650 u/s pull + 0.35 s latch) for hook-on. Moving brush entities are omitted from
+static collision (matching vprofile.py): func_door brushes count as always open (optimistic
+for button-locked doors), while func_plat lifts are absent (pessimistic for lift climbs).
 """
 import argparse
 import heapq
