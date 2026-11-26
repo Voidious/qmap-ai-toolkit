@@ -41,13 +41,15 @@ qmap/                   shared tools - reuse or extend as needed
   routes.py             walking routes and times between flags (or any two points), per run
   sightlines.py         longest straight sightline per floor level
   contact.py            Clan Arena pacing proxy (compare against a map the group likes)
-  collide_cmp.py        prove a visual-only build didn't change collision (player + hull-0 voxel compare)
+  collide_cmp.py        audit visual-pass collision diffs (player + hull-0 voxel compare)
   render.py             software BSP renderer (lightmaps + textures) for preview images
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
   fsq.py                error-diffusion quantising for colours the palette lacks (cream, ivory)
   makewad.py            palette PNGs -> WAD2;  quake_palette.lmp (LibreQuake, BSD-3)
   vprofile.py           compiled BSP29 player-hull check (--check: connectivity, traps, narrow
                         passages, blind pockets) + verticality & travel-distance profile (--targets)
+  ctfprofile.py         compiled BSP29 CTF route-independence diagnostics: walk (hook-off) & grapple
+                        (hook-on) flag routes, LOS-separated lanes, single-vantage chokes, flag exits
   itemprofile.py, itemcheck.py, ITEMS.md   BSP29 item-economy diagnostics (inventories, directed
                         routes, RL/LG/resource trios, hypothetical --move) and MVDSV edict verification
   section.py, iso.py    side-on slices and isometric cutaways of a map from its JSON
@@ -60,7 +62,7 @@ examples/               four finished maps whose Python sources rebuild cleanly 
                         diffusion, a sky oculus, columns with bases and capitals
   ctf_strata/           CTF, rotation; two stacked levels, covered side lanes, light wells;
                         stratified walls, team lights by half, direction signs, a sun
-gallery/                plan + preview sheet of the nine maps, GALLERY.md; profiles/: height
+gallery/                plan + preview sheet of the nine maps, GALLERY.md; profiles/: height & CTF
                         surveys (JSON + comparison figures); items/: reference item-placement survey
 demos/                  MVD demo reader (mvd.py), in-play verticality (vert.py), and reference
                         CA / CTF analysis scripts (ca_run.py, ctf_run.py)
@@ -96,16 +98,20 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
 ## 2. Working with the human (the process that worked)
 
 1. **Spec.** Mode (CA / FFA / TDM / CTF), player count (target and soft max), favourite and
-   disliked maps, symmetric or not — plus any theme or gimmick the human already has in mind. Keep
-   the kickoff brief instead of interrogating the human with a long questionnaire before sketching.
-   Size the map for its mode and player count by **travel distance**, not floor area (section 3,
-   *Sizing a map*).
+   disliked maps, symmetric or not — plus any layout ideas, sketches, theme, or gimmick the human
+   already has in mind. Keep the kickoff brief instead of interrogating the human with a long
+   questionnaire before sketching, and mention briefly that if they'd rather co-design hands-on
+   (bringing their own sketch, room ideas, or pacing) instead of picking from pitched concepts, you
+   can adapt the loop to their lead while keeping the same checks, renders, and `_bN` build
+   hygiene. Size the map for its mode and player count by **travel distance**, not floor area
+   (section 3, *Sizing a map*).
 2. **Concept.** Before any blockout, draw two or three *structurally different* overall shapes
-   as a one-page sketch (see section 3), with a recommendation and rough route lengths. Compare
-   them with the gallery. The human picks. This step is cheap and it is the one that decides
-   whether a map is a fresh take or a repeat. **Draw each one in section (side-on) as well as in
-   plan**: where the levels are, what looks down on what, which routes climb. A plan alone hides
-   exactly the thing our maps were short of (section 3, *Design for height*).
+   as a one-page sketch (see section 3), with a recommendation and rough route lengths. Use the
+   gallery as reference rather than a veto list — overlapping a fundamental form is fine as long
+   as the design is built fresh rather than copied from a previous map. The human picks. **Draw
+   each one in section (side-on) as well as in plan**: where the levels are, what looks down on
+   what, which routes climb. A plan alone hides exactly the thing our maps were short of
+   (section 3, *Design for height*).
 3. **Layout blockout** with the blockout textures. Deliver `.bsp`, `.map`, `.wad`, a top-down
    **plan image**, **sections** and an **iso cutaway** (`section.py`, `iso.py`), **preview
    renders**, a README. The human runs around in game and reports.
@@ -113,9 +119,19 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
    profile (`build.sh` prints it) each build. **Settle the layout before the visual pass**: signs,
    inlays, bands and lamps are anchored to the geometry, so a structural change after the visual
    pass costs a texture round as well.
-5. **Visual pass** — ask the human to pick a style: 3–4 concrete options with a recommendation,
-   each *different from the group's existing maps* (name them). Collision must stay identical;
-   prove it with `collide_cmp.py` — and read gotcha 31 for what counts as solid.
+5. **Visual pass** — ask the human to pick a style: pitch 3–4 concrete, distinct options with a
+   recommendation. Don't rule out a broad theme category (gothic stone, industrial base, runic
+   foundry, temple, etc.) just because a gallery map used it — original Quake made dozens of
+   distinctive maps from only a few broad visual styles. Aim for original textures, lighting, and
+   room-by-room identity rather than avoiding category overlap. Structural changes (rooms, doors,
+   main floor heights, routes) stay in step 4, but **bounded decorative architecture is welcome**
+   — raised item plinths (≤ 16 units so players step right up, or with their own steps), column
+   bases and capitals, door/arch frames, buttresses, wall reliefs/statues, railings, overhead
+   beams, and cupolas — as long as movement lanes stay smooth and snag-free. Still run
+   `collide_cmp.py` as an audit (exit 0 on pure texture rounds; otherwise confirm every diff is
+   declared and catch silent contents bugs — see section 5 and gotcha 31), list every collision
+   change by location in the build notes, and re-run the full check suite whenever collision
+   changes.
 6. **Texture touch-up rounds** driven by the human's in-client screenshots. They find what your
    renderer can't: palette tints, lightmap seams, misaligned edges. Fix the whole *class* of
    problem each time, not just the pictured spot.
@@ -125,8 +141,10 @@ ctf_bastion and ctf_strata: see their build notes in section 13.)
 8. **Every build gets a new filename** (`name_bN`). QuakeWorld clients cache maps by name and
    will not re-download a changed map that kept its name.
 9. For each fix, send a **before/after render** of the exact spot and say what caused it.
-10. Small additions (perches, banners, a cupola) can ride along with a visual pass — list every
-    change that touches collision separately so the human knows what to re-test.
+10. Small decorative or gameplay-neutral additions (item plinths, frames, statues, perches,
+    banners, a cupola) can ride along with a visual pass — list every change that touches
+    collision by location in the build notes and re-run the full check suite so the human knows
+    exactly what to re-test (section 5, *Visual-pass collision audit*).
 
 ---
 
@@ -139,29 +157,37 @@ started by copying the previous map's files, the copied layout and heights becam
 and the demo finding "hub + satellite rooms" read as a recipe that confirmed the habit. The
 textures differed; the maps still felt alike. The group noticed before the builder did.
 
-**What "fresh" means — and what it doesn't.** Freshness lives in the map's *skeleton* (how the
-big spaces connect, where the levels are, how routes loop) and in its *identity* (one strong
-idea per room, a distinct look). It does **not** mean avoiding proven building blocks. Hubs,
-balconies, loops, broad stairs, a high ground with two ways up, a low route with cover, a
-contested powerup room — these are the vocabulary of every good map, and they should be reused
-freely. Chasing novelty at the level of every room leads straight to wacky, unplayable design.
-Aim for *a fresh take on a classic form*, not for something no one has seen.
+**What "fresh" means — and what it doesn't.** Freshness lives in designing deliberately from
+scratch — how the spaces connect, where the levels sit, how routes loop, and each room's visual
+and architectural identity — rather than sleepwalking into a copy-pasted template. It does **not**
+mean banning proven building blocks *or* broad layout archetypes (hub + satellites, central court,
+cruciform hall, twin forts, multi-arc loop) just because an earlier map in `gallery/GALLERY.md`
+used one. Hubs, balconies, loops, broad stairs, high ground with two ways up, low routes with
+cover, and contested powerup rooms are the vocabulary of every good map, and two maps sharing a
+broad form can play completely differently once their elevations, sightlines, and focal spaces
+differ. Chasing novelty for its own sake leads straight to wacky, unplayable design. Aim for *a
+fresh take on a classic form*, not for something no one has seen.
 
-**The concept step (do it every time):**
-1. Read the gallery (`gallery/GALLERY.md`): nine skeletons already built for this group, and
-   their height profiles.
-2. Sketch two or three candidates that differ *in skeleton* from each other and from the
-   gallery's — not just in room shapes. Ask: where is the high ground, where is the low ground,
+**The concept step:**
+1. Skim the gallery (`gallery/GALLERY.md`) as reference for what has worked well (and its height
+   profiles) — not as a blacklist of off-limits layouts.
+2. Sketch two or three candidates that genuinely differ *in skeleton* **from each other** — not
+   minor variations of one room plan. (If the human already brought a specific layout or wants to
+   co-design hands-on, sketch and refine that concept in plan and section instead of forcing
+   unrelated alternatives.) Revisiting a broad form seen in the gallery with a fresh elevation
+   plan, loop structure, or twist is fine; what to avoid is accidentally repeating an earlier
+   map's room-by-room layout out of habit. Ask: where is the high ground, where is the low ground,
    how many loops, what is the middle (a hall? solid? a courtyard? a bridge?), where do players
    meet first?
 3. Measure before drawing conclusions: route lengths (`routes.py` on a quick blockout, or grid
    distance on the sketch), likely longest sightlines.
-4. Recommend one, say in a line what is new about it and what classic it riffs on.
+4. Recommend one, say in a line what makes it distinct and what classic it riffs on.
 
-**Skeletons not tried yet** (starting points, not prescriptions): a figure-8 (two loops sharing a
-courtyard); two hubs joined by parallel routes; a ring of rooms round an open court; one huge room
-broken by structure; a vertical map (a tower, a shaft with rooms opening off it at many heights);
-diagonal halls or octagonal rooms (buildable since v3). Strata did two full levels stacked.
+**Other skeletons worth exploring** (ideas, not prescriptions — revisiting a gallery archetype
+with a fresh elevation plan or twist is fine too): a figure-8 (two loops sharing a courtyard); two
+hubs joined by parallel routes; a ring of rooms round an open court; one huge room broken by
+structure; a vertical map (a tower, a shaft with rooms opening off it at many heights); diagonal
+halls or octagonal rooms (buildable since v3). Strata did two full levels stacked.
 
 **Starting from a copy anchors you.** Start a new map's layout from `template/` (an empty demo) —
 not by copying the previous map's room coordinates. Reuse techniques and custom primitives freely
@@ -328,6 +354,61 @@ verticality changes when the key-item set changes: adding GA can lower that
 metric without flattening any geometry. Keep the item-set change explicit and
 do not move good resources simply to maximize a height statistic.
 
+### CTF layout & route structure
+
+**Don't funnel every route through one open center.** A frequent first-layout failure in CTF is
+putting both bases on opposite sides of a single open central hall or courtyard — even with
+multiple bridges, pillars, or ramps inside it, **one mid defender has line of sight on every
+crossing** (classic `ctf8` Strongbox is the textbook example: two spatially distinct paths across
+mid, yet one central vantage sees both).
+
+* **Build 2–3 genuinely distinct flag-to-flag routes, with at least one visually isolated bypass.**
+  Give attackers and carriers a route that is walled off from the central room — an outer wing or
+  arc, a covered side tunnel, or an enclosed underpass — so a single standing defender in mid
+  cannot watch or spam every flag run at once. Among the ten established Threewave CTF maps
+  profiled in [`gallery/profiles/ctf_refs.json`](gallery/profiles/ctf_refs.json) (table in
+  [`gallery/GALLERY.md`](gallery/GALLERY.md)), `ctf2m1` (*McKinley Station*) is the clear
+  route-topology standout: **3 LOS-independent midfield routes** on both walk (`6,220u` / `7,188u`
+  `1.16×` / `9,313u` `1.50×`, `1,154u` lateral and `492u` vertical separation) and grapple hook
+  (`14.4s` / `16.3s` `1.14×` / `20.5s` `1.43×` model times), with no single sampled mid vantage
+  cutting all routes.
+* **Keep alternate routes competitive in length.** Aim for secondary routes around **~1.05×–1.35×**
+  the shortest flag-to-flag run (up to ~1.5× for a safer third flank like `ctf2m1`'s high north
+  wing). A 2× detour looks like a side route on a plan and gets ignored in play.
+* **Separate base-mouth exits from midfield lanes.** Multiple mid crossings lose much of their
+  value if they merge into a single doorway or corridor right outside each base — comparing
+  `ctfprofile.py`'s midfield (`0.30..0.70`) and base-to-base (`0.15..0.85`) bands flags when
+  multiple mid lanes collapse near the bases (e.g., `ctf2m1` drops from 3 midfield routes to 2
+  base-to-base), and inspecting the floor plans/route plots shows the same lesson on `ctf1`
+  (*McKinley Base*) and `ctf5` (*Da Ancient War Grounds*), where memorable midfights (`ctf1`'s
+  wide N/S kiting loops, `ctf5`'s three-tier chasm) still report 1 walk route in both bands and
+  funnel into one base-entry neck. Give
+  **both** the flag room (2–3 exits, verified visually on the plan — `ctfprofile.py`'s
+  `flag_exits` is a heuristic outward-shell estimate) **and** the base perimeter distinct connections into the
+  midfield lanes, and keep flags out of mutual LOS and out of central-mid LOS
+  (`flags_mutual_los = false`, `mid_sees_flag = false`).
+* **Calibrate scale, verticality, and hook vs. walk together.** Across the playable full-scale
+  Threewave classics (`ctf1`, `ctf5`, `ctf2m1`), flag-to-flag walking runs cluster tightly at
+  **~5,900–6,700 units** (`~18.8–21.6 s` on the walk/swim/tele graph; `travel_median ~2,400–3,020`),
+  while `ctfprofile.py`'s kinematic grapple model (`650 u/s` pull + `0.35 s` latch — an uncalibrated
+  model estimate, not demo-timed play, though its ~430–490 u/s effective pace sits near the ~460 u/s
+  solo hook pace from demos) shortens flag runs by **~1.1–1.5×** (`~13.1–16.7 s` model time) and
+  opens an additional LOS-independent crossing on `ctf2m3` (and bridges lift-gated flags on
+  `ctf2m4`). Avoid tiny straight-spine runs (`ctf3`: `2,720u` / `8.6 s` walk, `6.8 s` model hook)
+  or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep real height play rather than flat side tubes:
+  the playable classics maintain `eff_levels 4.7–6.0`, `stacked_share 0.24–0.34`, and
+  `route_vert_per_1000 127–207`.
+* **Diagnose every CTF blockout with `qmap/ctfprofile.py`.** Run
+  `python3 qmap/ctfprofile.py map.bsp --png-dir figs/` to measure walk (hook-off) and grapple
+  (hook-on) flag times, LOS-independent route counts and length ratios, sampled single-vantage
+  mid chokes (128-unit grid across the band, not an exhaustive proof over every 16u cell),
+  flag-room exits, flag sightlines, and whether the grapple unlocks otherwise walk-disconnected
+  flags (as on lift-heavy `ctf2m4`). Treat the output as a diagnostic, not a rigid gate; its
+  movement model covers walk/jump/teleporter/pad/swim and solid/sky grapple swings, and omits
+  moving brush entities (matching `vprofile.py`): `func_door` brushes count as always open
+  (optimistic for button-locked doors), while `func_plat` lifts are absent (pessimistic for
+  lift-dependent climbs).
+
 **Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
 (`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet
 play at duel/compact travel speed (`797` and `905`): stacked floor adds area, not distance, and
@@ -341,7 +422,7 @@ drops included) — and `build.sh` prints a size line.
 | 966–1160 (1478–2283) | bravado, naked4, spinev2, dapak12, crucible, lyceum, ultrav, dm6, cistern, ztndm3 | duel / FFA 4–8; Clan Arena 6–12; compact 4v4 TDM |
 | 1200–1400 (2095–2260) | agora, vigil | Clan Arena / FFA / TDM 8–12+ |
 | 1600–2300 (2896–4828) | schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2 | full 4v4 TDM / large FFA (too slow for 8–12p CA) |
-| 1831–3045 (3506–5373) | bastion, strata, circuit | CTF (8–12+) |
+| 1831–3045 (3506–6655) | ctf8, ctf2m3, ctf5, ctf1, ctf2m1; bastion, strata, circuit | CTF (8–12+) |
 
 **Mode changes the right travel band.** `travel_median` 1,600–2,300 is canonical 4v4 TDM territory
 (`schloss` 1,616, `cmt4` 1,738, `dm3` 1,939, `e2m2tdm` 2,162, `cmt3` 2,189, `e1m2` 2,277) because
@@ -350,8 +431,9 @@ end on elimination, that same scale drags: in our group's demos, 8-player CA on 
 a **74 s** median round (longer than `ctf1` at 70 s), while `spinev2` (1,014), `dm6` (1,097),
 `ztndm3` (1,148), and `ca_agora` (1,273) sat cleanly in the **35–45 s** sweet spot. For an 8–12p
 CA map with strong verticality, aim travel at ~1,050–1,350 even if total floor area reaches
-2,200k–2,800k, using teleporters, drops, and compact loops to keep transit brisk. Adjust these
-bands as your own group plays more.
+2,200k–2,800k, using teleporters, drops, and compact loops to keep transit brisk. For CTF, size
+routes to play well with both hook off (clean on-foot travel) and hook on (big enough that grapple
+runs don't turn into instant caps; see section 8). Adjust these bands as your own group plays more.
 
 **In real play** (`demos/vert.py` on the group's demos): floor height changed per 1000 units
 travelled was ~100–125 on dm6, 148 dm2, 91 dm4, ~150–165 ctf1, 159 ctf3, 138 ctf6, and ~100–118 on
@@ -391,9 +473,10 @@ Measure our new maps the same way once the group has played them.
   climbing beside stairs. These bands are a default, not a requirement: outdoor areas, caverns, or
   custom visual passes can omit strips (`strip=10**6`), skip caps/architraves (`nocap`, `noarch`),
   or replace `_out.py`'s banding logic.
-* **Detail is non-solid** (`func_detail_illusionary`): wall lamps, panels, banners. It never
-  changes player collision (though avoid `*` liquids or `sky*` on illusionary brushes — see
-  gotcha 31).
+* **Non-solid fixtures** (`func_detail_illusionary`): wall lamps, panels, banners, and light trim
+  that should never snag movement or block rockets (avoid `*` liquids or `sky*` on illusionary
+  brushes — see gotcha 31). Substantial decorative architecture within reach (item plinths, column
+  bases, statues, arch frames) may be solid when kept snag-free; see section 5.
 * **Ramps** (v3): `ramp(rect, axis, z0, z1, rev=False)` — the floor over rect rises from z0 to z1
   along +axis (`rev`: along −axis), as one wedge brush. Rise ≤ run (45°, QW's walkable limit);
   15–35° plays best. The grid holds a stepped stand-in (mat `'ramp'`, never written) so the checks
@@ -477,23 +560,56 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   edge, not on a spawn. **Perches** must need the hook (not reachable with a plain jump).
 * **Routes** (`routes.py`): measure every distinct run between the flags with `--run`. Report
   units and seconds at 320 u/s (real carriers in our demos) and 460 u/s (a solo hook run).
+* **CTF route independence & hook/walk travel** (`ctfprofile.py map.bsp --png-dir figs/`): on
+  compiled CTF BSPs, checks bidirectional flag-to-flag time with **hook off** (walk/jump/tele/pad/swim)
+  and **hook on** (grapple swings/climbs), counts visually independent (LOS-separated) midfield
+  routes, tests whether a single standing defender can watch every crossing, and reports flag-room
+  exits and flag sightlines (see section 3, *CTF layout & route structure*).
 * **Sightlines** (`sightlines.py`): a clear line the length of a route is usually a problem.
   On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
   lanes cut the longest to ~2,100 units within one half.
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
-* **Visual-only builds**: `collide_cmp.py old.map new.map` must **exit 0**, or explain.
-  Check the exit code, not the text: it compares both the player hull (hulls 1/2) and hull 0
-  (projectile solid, sky, and water/slime/lava contents), so stdout can say "collision identical"
-  on the player pass while `PROJECTILE COLLISION DIFFERS`, `SKY CONTENTS DIFFER`, or
-  `LAVA CONTENTS DIFFER` on a later pass takes the exit code to 1. `echo $?` after it, or run it
-  under `set -e`.
-  It counts every brush qbsp puts in the world hulls — `worldspawn`, `func_group` and the whole
-  `func_detail` / `func_detail_wall` / `func_detail_fence` family, plus `func_detail_illusionary`
-  liquids/sky and `func_illusionary_visblocker` `clip`, with face textures read for contents — so
-  retexturing a wall to `clip`, `sky*`, or `*lava`, or swapping a `*water` pool for `*lava`, is
-  reported instead of passing silently. It prints a `note:` line accounting for every brush it
-  ignored, so a flavour it does not know about is named rather than dropped. Gotcha 31 has the
-  full solidity rules — several are not what you would guess.
+* **Visual-pass collision audit** (`collide_cmp.py old.map new.map`): the old "zero collision
+  change" rule protected three real things — keeping the playtested layout intact, preventing
+  movement snags from solid detail, and catching silent contents changes (retexturing to `clip`,
+  `sky*`, or `*liquid` changes what rockets and players hit). You don't need zero change to protect
+  all three; you need changes to be **bounded, snag-free, and declared**:
+  - **Pure texture / lighting builds** (such as texture touch-up rounds): `collide_cmp.py` must
+    **exit 0**.
+  - **Visual passes with decorative architecture**: small, gameplay-neutral solid additions are
+    allowed — raised item plinths/daises (keep a single step `≤ 16` units since QW's step height
+    is `18`, or build steps onto it so pickups don't become jumps), column bases and capitals,
+    door/arch frames, buttresses, wall reliefs/statues/niches, railings, skylight beams, and
+    cupolas. Structural layout changes (rooms, connections, main floor heights, routes, major
+    cover) still belong in layout rounds.
+  - **Solid vs. non-solid boundary**: substantial detail within player reach (plinths, column
+    bases, statues, sturdy frames) should usually be **solid** so players don't walk or shoot
+    straight through solid-looking geometry — *provided* active strafe lanes stay smooth at player
+    height (`0..72` units: recess wall ornaments, and avoid protruding pilasters, 16-unit notches,
+    catch-lips, or squeezes). Keep thin surface trim, plaques/banners, low-profile detail along
+    tight lanes, and light out-of-reach filigree/cornices **non-solid** (`func_detail_illusionary`,
+    never with `*` or `sky*` textures) so they can't snag jumps or block rockets; structural
+    overhead beams and arch lintels (`≥ 96` units above floor) may be solid when you want real
+    cast shadows and solid rocket collision.
+  - **Audit and re-verify every collision change**: run `collide_cmp.py` on every visual build and
+    verify that every reported diff corresponds to a declared addition (any undeclared diff —
+    especially hull-0 projectile, sky, or liquid contents — is a bug to fix). **List every
+    intentional collision change by location** in the build notes so the human knows what to
+    re-test, and **re-run the full check suite** whenever collision changes: `check.py` (traps,
+    pockets, 16-unit slots, stair feet, prism separation, item margins, and spawn sightlines —
+    re-solving spawns if needed), `vprofile.py --check` (real 32×32×56 player hull: narrow
+    passages, traps, pockets, unreachable items), plus `itemprofile.py` / `sightlines.py` if
+    pickups or major sightlines moved.
+  - **Reading `collide_cmp.py` output**: check the exit code, not just the first stdout line — it
+    compares both the player hull (hulls 1/2) and hull 0 (projectile solid, sky, and
+    water/slime/lava contents), so stdout can say "collision identical" on the player pass while
+    `PROJECTILE COLLISION DIFFERS`, `SKY CONTENTS DIFFER`, or `LAVA CONTENTS DIFFER` on a later
+    pass takes the exit code to 1 (`echo $?` or run under `set -e`). It counts every brush qbsp
+    puts in the world hulls — `worldspawn`, `func_group`, `func_detail` / `func_detail_wall` /
+    `func_detail_fence`, plus `func_detail_illusionary` liquids/sky and
+    `func_illusionary_visblocker` `clip`, with face textures read for contents — and prints a
+    `note:` line accounting for every ignored brush. Gotcha 31 has the full solidity rules —
+    several are not what you would guess.
 * **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
@@ -542,8 +658,12 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   (`STRIP_SHIFT`) when clamps should land on step corners.
 * Pictures (`panel`): emblems and banners on non-solid panels, the right way round from both
   sides; size them about two thirds of first instinct.
-* **Each map needs its own look** — palette, materials, one idea per room. Before proposing
-  styles, list the group's existing maps' looks and stay clear of them.
+* **Original look, not off-limits categories** — give each map its own synthesized textures,
+  material palette, lighting mood, and room-by-room identity, and still pitch 3–4 concrete style
+  options for the human to pick from. Don't veto a broad theme category (gothic stone, industrial
+  base, runic lava foundry, temple, etc.) just because a gallery or earlier map already used it:
+  original Quake built dozens of memorable, distinct-looking maps out of only a handful of visual
+  themes.
 
 ---
 
@@ -580,8 +700,16 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   spots. KTX `ctf` defaults: deathmatch 3 (weapons stay), based spawn 1, hook off, runes off, GA
   on spawn. Check in game: `status1`, `status2`. KTX names demos by mode — a demo called `ca_...`
   on a CTF map is a Clan Arena game.
-* **Hook-only perches** are a good second layer in CTF: slabs too high to jump to, stocked with
-  ammo or small health, not armour.
+* **Support both hook on and hook off in CTF**: KTX defaults to hook off, yet many groups play CTF
+  with the grapple on — design every CTF layout to play well under **both** settings unless the
+  human explicitly asks otherwise. For **hook off**, every flag route, base exit, and core resource
+  must be cleanly traversable on foot (stairs, ramps, jumps, pads, or teleporters — no
+  hook-required gaps or traps). For **hook on**, size flag-to-flag runs big enough that grapple
+  carriers don't score instant caps (see section 3's CTF travel band and the carrier vs. solo hook
+  paces below), leave headroom and clean swing lines in mid/lanes, and account for grapple sticking
+  to sky (section 7).
+* **Hook-only perches** are a good optional second layer when hook is on: slabs too high to jump
+  to, stocked with ammo or small health — never flags, armour, or key weapons needed with hook off.
 
 ### What real demos showed (group CA, TDM, FFA, and CTF games)
 
@@ -600,10 +728,12 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   floor height change sits around ~98–110 per 1,000 units travelled across modes (16–18% airborne).
 * **CTF**: real carriers move ~250–350 u/s; solo hook runs are much faster — don't panic about
   fast solo times. Captures convert ~1 in 5 pickups. About half of carrier deaths happen at or
-  near the enemy flag: give flag rooms 2–3 exits. Loops let carriers kite (ctf1); a single
-  straight spine makes mid irrelevant (ctf3); a maze with close flags is disliked (ctf6). Our maps:
-  Bastion ~5,500 units flag to flag (~12–14 s for the group's fast runs), Circuit 6,100–7,300 by
-  three runs (~13–16 s solo, ~19–23 s carrier pace); ctf1 caps took 20–21 s.
+  near the enemy flag: give flag rooms 2–3 exits, and keep at least one route visually separated
+  from the central room (section 3, *CTF layout & route structure*, verified with `ctfprofile.py`).
+  Loops let carriers kite (ctf1); a single straight spine makes mid irrelevant (ctf3); a maze with
+  close flags is disliked (ctf6). Our maps: Bastion ~5,500 units flag to flag (~12–14 s for the
+  group's fast runs), Circuit 6,100–7,300 by three runs (~13–16 s solo, ~19–23 s carrier pace);
+  ctf1 caps took 20–21 s.
 * **In a "theta" (two arcs plus a middle route)**, a cross-over through the middle can never be a
   shortcut between arcs — it adds the distance between them. Make the middle its own direct run.
 
@@ -787,8 +917,9 @@ maps with their `.map` source.
 ## 12. Starting a new map
 
 1. Copy `template/` to a new folder. Set `NAME`, `TITLE`, `SYM`, bounds in `_core.py`.
-2. Do the **concept step** (section 3) — plan *and* section for each candidate, with where the
-   items sit in height — and get the human's pick.
+2. Do the **concept step** (section 3) — plan *and* section for each candidate (or for the
+   human's own concept if co-designing hands-on), with where the items sit in height — and align
+   before building.
 3. Delete the demo in `_layout.py` and `_items.py`; write the layout.
 4. Blockout textures and build:
    ```
@@ -806,8 +937,11 @@ maps with their `.map` source.
 5. Solve spawns (`pick_spawns.py` or `pick_spawns_sym.py`), measure routes and sightlines, fix,
    rebuild, deliver with the plan, sections, views, README.
 6. Visual pass: write `texgen_<style>.py` (borrow techniques from the examples' generators),
-   replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, verify with
-   `collide_cmp.py` (gotcha 31: what counts as solid).
+   replace `textures()` / `fixture_tex()` / `light_color()` in `_core.py`, and add any bounded
+   decorative architecture (plinths, frames, columns, wall reliefs, overhead beams — see section
+   5). Audit diffs with `collide_cmp.py` (gotcha 31: what counts as solid), list every intentional
+   collision change by location in the build notes, and re-run the full check suite if collision
+   changed.
 
 High-leverage habits worth keeping: render and check before delivering; a new filename every build
 (`_bN`) so QW clients don't serve cached copies; and in-client screenshots from the human for every

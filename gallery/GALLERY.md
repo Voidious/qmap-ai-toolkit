@@ -2,11 +2,13 @@
 
 Each map has a plan (`*_plan.jpg`) and a sheet of preview renders (`*_views.jpg`).
 
-**How to use this.** It is a reference, not a blacklist. Reuse the building blocks you see here
-freely — hubs, balconies, loops, broad stairs, a high ground with two ways up, a contested
-powerup room are the vocabulary of every good map. What to avoid is *defaulting* to the same
-overall skeleton or the same look as a map already in this list. Aim for a fresh take on a
-classic form (GUIDE section 3).
+**How to use this.** It is a reference, not a blacklist. Reuse the building blocks and broad
+archetypes you see here freely — hubs, courts, cruciform halls, balconies, loops, broad stairs,
+and high ground with two ways up are the vocabulary of every good map, and original Quake built
+dozens of distinctive maps from just a few broad visual themes (base, gothic, runic, elder). What
+to avoid is *copy-pasting* a previous map's room plan or textures out of habit — start fresh from
+`template/`, pitch multiple genuinely distinct options, and aim for a fresh take on a classic form
+(GUIDE section 3).
 
 | Map | Mode | Symmetry | Skeleton | Look |
 |---|---|---|---|---|
@@ -91,3 +93,33 @@ adds more effective levels (`4.30–8.98`), uses angled walls (`0.03–0.30`) an
 and keeps `route_level_pairs` high (`0.75–0.98`), while `route_vert_per_1000` naturally drops to
 `87–215` as horizontal item-to-item runs lengthen. `dm2` is omitted from the table because ~20% of
 its floor is button/swim/rocket-jump-gated in `vprofile`'s walk+jump model.
+
+### Classic CTF reference maps (`profiles/ctf_refs.json`)
+
+To calibrate CTF scale, verticality, side-route independence, and hook-off vs. hook-on flag runs
+from established maps only (omitting our own unplaytested CTF prototypes), `qmap/ctfprofile.py`
+profiled **ten classic Threewave CTF maps** (`ctf1`, `ctf2`, `ctf3`, `ctf4`, `ctf5`, `ctf6`,
+`ctf8`, `ctf2m1`, `ctf2m3`, `ctf2m4`). Original BSPs are not included; full JSON is in
+`profiles/ctf_refs.json`.
+
+| Map | Travel med (p90) | Eff levels / dom / stacked | Route vert /1000 | Flag walk (s) | Walk mid LOS routes | Flag hook model (s, speedup) | Hook mid LOS routes | Single mid vantage cuts all? (walk / hook) | Notes |
+|---|---:|---|---:|---:|---:|---:|---:|---|---|
+| **ctf2m1** (McKinley Station) | 3019 (6655) | 5.77 / 0.34 / 0.34 | 127 | 6220u (20.2s) | **3** (1.0 / 1.16 / 1.50×) | 14.4s (1.40×) | **3** (1.0 / 1.14 / 1.43×) | **No / No** (bypass 1.16× / 1.14×) | Gold-standard 3-lane split: mid + south wing + high north (`12` teles) |
+| **ctf1** (McKinley Base) | 2620 (6316) | 5.94 / 0.32 / 0.31 | 159 | 5965u (19.0s) | 1 | 16.7s (1.13×) | 1 | Yes / Yes | Open central room + wide N/S kiting loops, single base-entry neck on plan |
+| **ctf5** (Da Ancient War Grounds) | 2407 (4458) | 4.74 / 0.51 / 0.24 | 207 | 6096u (19.0s) | 1 | 13.1s (1.46×) | 1 | Yes / Yes | Open three-tier chasm (big hook speedup); single base gate on plan |
+| **ctf2m3** (Spill the Blood) | 2031 (4465) | 3.70 / 0.51 / 0.29 | 140 | 7408u (23.2s) | 1 | 16.7s (1.39×) | **2** (1.0 / 1.03×) | Yes / **No** (bypass 1.11×) | Horseshoe U-layout (`5.3×` winding); hook splits upper/lower east crossing |
+| **ctf8** (Strongbox) | 1919 (3583) | 3.14 / 0.52 / 0.17 | 119 | 4248u (13.3s) | 1 (2 spatial) | 11.0s (1.20×) | 1 | Yes / Yes | Open central court — two physical paths, one mid vantage sees both |
+| **ctf3** (DySpHoRiA) | 1712 (2663) | 5.95 / 0.42 / 0.34 | 305 | 2720u (8.6s) | 1 | 6.8s (1.27×) | 1 | Yes / Yes | Narrow straight spine (`mid_sees_flag = true`) |
+| **ctf4** (Forgotten Mines) | 777 (1793) | 5.59 / 0.40 / 0.12 | 234 | 6234u (20.3s) | 1 | 17.7s (1.15×) | 1 | Yes / Yes | Narrow linear mine tunnel with single center choke |
+| **ctf6** (Vertigo) | 2125 (5624) | 8.86 / 0.26 / 0.30 | 248 | 7121 / 2084u | 1 | 18.4 / 5.5s (1.22×) | 1 | Yes / Yes | Extreme `3.42×` one-way asymmetry, close flags (`1572u`), `mid_sees_flag = true` |
+| **ctf2** (The Kiln) | 830 (1690) | 4.53 / 0.46 / 0.54 | 254 | 1-way (2310u) | — | 1-way (4.8s) | — | — | Missing `func_plat` lifts (4) cut the return path in static hull model (`func_door` counts as open) |
+| **ctf2m4** (Ruins of NeoMinonk) | 2527 (5383) | 6.29 / 0.38 / 0.23 | 164 | Disconnected | — | 25.5s (hook unlocks) | 1 | — / Yes | Missing `func_plat` lifts (20) disconnect walk; hook bypasses lifts (`unlocks_flags = true`) |
+
+Takeaways: many early Threewave Episode 1 maps funnel through a single central room (`ctf8`), a
+linear spine (`ctf3`, `ctf4`), or a single base-mouth neck (`ctf1`, `ctf5`), which is why
+`ctf2m1` (*McKinley Station*) stands out cleanly with 3 visually isolated routes on both walk and
+hook (`1.0 / 1.16 / 1.50×` walk, `1.0 / 1.14 / 1.43×` hook). Full-scale playable classics cluster at
+**~5,900–6,700u flag-to-flag walking** (`~19–22 s`), **~13.1–16.7 s `ctfprofile.py` hook model time**
+(`1.1–1.5×` speedup; uncalibrated `650 u/s` pull + `0.35 s` latch model), and real multi-level
+verticality (`eff_levels 4.7–6.0`, `route_vert 127–207`). See [`GUIDE.md` Section 3](../GUIDE.md#3-design-fresh-takes-on-classics)
+(*CTF layout & route structure*).

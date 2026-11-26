@@ -1,0 +1,958 @@
+[
+ {
+  "map": "ctf1",
+  "title": "McKinley Base",
+  "floor_area_k": 3090,
+  "travel_median": 2620,
+  "travel_p90": 6316,
+  "eff_levels": 5.94,
+  "dominant_level": 0.32,
+  "stacked_share": 0.31,
+  "overlook_share": 0.29,
+  "cross_level_sight": 0.23,
+  "route_vert_per_1000": 159,
+  "angled_walls": 0.0,
+  "teleporters": 1,
+  "pads": 0,
+  "swim_edges": 144,
+  "func_doors": 0,
+  "func_plats": 2,
+  "spawns": {
+   "team1": 9,
+   "team2": 9,
+   "dm": 14
+  },
+  "items": {
+   "RL": 3,
+   "LG": 1,
+   "GL": 1,
+   "RA": 1,
+   "YA": 2,
+   "GA": 2,
+   "MH": 0,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 2805,
+  "flag_gap_3d": 2805,
+  "flag_exits": [
+   3,
+   2
+  ],
+  "flag_max_los": [
+   1428,
+   1397
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 5965,
+   "f2_to_f1": 6362,
+   "f1_to_f2_s": 19.0,
+   "f2_to_f1_s": 20.2,
+   "asymmetry_ratio": 1.07,
+   "winding": 2.13,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    5965
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    5965
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    5965
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 816,
+   "f1_to_f2_s": 16.7,
+   "f2_to_f1_s": 16.5,
+   "f1_to_f2_units": 7225,
+   "swings_on_shortest": 6,
+   "speedup_vs_walk": 1.13,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    16.7
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf2",
+  "title": "The Kiln",
+  "floor_area_k": 1408,
+  "travel_median": 830,
+  "travel_p90": 1690,
+  "eff_levels": 4.53,
+  "dominant_level": 0.46,
+  "stacked_share": 0.54,
+  "overlook_share": 0.3,
+  "cross_level_sight": 0.18,
+  "route_vert_per_1000": 254,
+  "angled_walls": 0.0,
+  "teleporters": 2,
+  "pads": 0,
+  "swim_edges": 0,
+  "func_doors": 8,
+  "func_plats": 4,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 12
+  },
+  "items": {
+   "RL": 0,
+   "LG": 0,
+   "GL": 1,
+   "RA": 0,
+   "YA": 2,
+   "GA": 0,
+   "MH": 0,
+   "Quad": 0,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 1632,
+  "flag_gap_3d": 1632,
+  "flag_exits": [
+   3,
+   3
+  ],
+  "flag_max_los": [
+   508,
+   508
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": false,
+   "f1_to_f2": 2310,
+   "f2_to_f1": null,
+   "f1_to_f2_s": 7.4,
+   "f2_to_f1_s": null,
+   "asymmetry_ratio": null,
+   "winding": null
+  },
+  "hook": {
+   "connected": false,
+   "unlocks_flags": false,
+   "hook_edges": 340,
+   "f1_to_f2_s": 4.8,
+   "f2_to_f1_s": null
+  }
+ },
+ {
+  "map": "ctf3",
+  "title": "DySpHoRiA",
+  "floor_area_k": 4269,
+  "travel_median": 1712,
+  "travel_p90": 2663,
+  "eff_levels": 5.95,
+  "dominant_level": 0.42,
+  "stacked_share": 0.34,
+  "overlook_share": 0.33,
+  "cross_level_sight": 0.24,
+  "route_vert_per_1000": 305,
+  "angled_walls": 0.06,
+  "teleporters": 5,
+  "pads": 12,
+  "swim_edges": 222,
+  "func_doors": 8,
+  "func_plats": 4,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 18
+  },
+  "items": {
+   "RL": 1,
+   "LG": 2,
+   "GL": 1,
+   "RA": 2,
+   "YA": 2,
+   "GA": 2,
+   "MH": 2,
+   "Quad": 1,
+   "Pent": 1,
+   "Ring": 1
+  },
+  "flag_gap_2d": 3776,
+  "flag_gap_3d": 3776,
+  "flag_exits": [
+   3,
+   3
+  ],
+  "flag_max_los": [
+   1235,
+   1219
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": true,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 2720,
+   "f2_to_f1": 2720,
+   "f1_to_f2_s": 8.6,
+   "f2_to_f1_s": 8.6,
+   "asymmetry_ratio": 1.0,
+   "winding": 0.72,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    2720
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    2720
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    2720
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 1157,
+   "f1_to_f2_s": 6.8,
+   "f2_to_f1_s": 6.8,
+   "f1_to_f2_units": 2984,
+   "swings_on_shortest": 3,
+   "speedup_vs_walk": 1.27,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    6.8
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf4",
+  "title": "The Forgotten Mines",
+  "floor_area_k": 2430,
+  "travel_median": 777,
+  "travel_p90": 1793,
+  "eff_levels": 5.59,
+  "dominant_level": 0.4,
+  "stacked_share": 0.12,
+  "overlook_share": 0.12,
+  "cross_level_sight": 0.11,
+  "route_vert_per_1000": 234,
+  "angled_walls": 0.08,
+  "teleporters": 0,
+  "pads": 0,
+  "swim_edges": 472,
+  "func_doors": 4,
+  "func_plats": 2,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 20
+  },
+  "items": {
+   "RL": 2,
+   "LG": 0,
+   "GL": 6,
+   "RA": 2,
+   "YA": 4,
+   "GA": 2,
+   "MH": 2,
+   "Quad": 4,
+   "Pent": 0,
+   "Ring": 2
+  },
+  "flag_gap_2d": 4832,
+  "flag_gap_3d": 4832,
+  "flag_exits": [
+   1,
+   1
+  ],
+  "flag_max_los": [
+   772,
+   756
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 6234,
+   "f2_to_f1": 6228,
+   "f1_to_f2_s": 20.3,
+   "f2_to_f1_s": 20.3,
+   "asymmetry_ratio": 1.0,
+   "winding": 1.29,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    6234
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    6234
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    6234
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 546,
+   "f1_to_f2_s": 17.7,
+   "f2_to_f1_s": 17.5,
+   "f1_to_f2_units": 6482,
+   "swings_on_shortest": 4,
+   "speedup_vs_walk": 1.15,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    17.7
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf5",
+  "title": "Da Ancient War Grounds",
+  "floor_area_k": 4887,
+  "travel_median": 2407,
+  "travel_p90": 4458,
+  "eff_levels": 4.74,
+  "dominant_level": 0.51,
+  "stacked_share": 0.24,
+  "overlook_share": 0.33,
+  "cross_level_sight": 0.22,
+  "route_vert_per_1000": 207,
+  "angled_walls": 0.34,
+  "teleporters": 3,
+  "pads": 2,
+  "swim_edges": 897,
+  "func_doors": 5,
+  "func_plats": 0,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 12
+  },
+  "items": {
+   "RL": 3,
+   "LG": 2,
+   "GL": 3,
+   "RA": 2,
+   "YA": 3,
+   "GA": 2,
+   "MH": 3,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 4416,
+  "flag_gap_3d": 4416,
+  "flag_exits": [
+   1,
+   1
+  ],
+  "flag_max_los": [
+   766,
+   750
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 6096,
+   "f2_to_f1": 6030,
+   "f1_to_f2_s": 19.0,
+   "f2_to_f1_s": 18.8,
+   "asymmetry_ratio": 1.01,
+   "winding": 1.37,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    6096
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    6096
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    6096
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 1832,
+   "f1_to_f2_s": 13.1,
+   "f2_to_f1_s": 13.0,
+   "f1_to_f2_units": 5682,
+   "swings_on_shortest": 6,
+   "speedup_vs_walk": 1.46,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    13.1
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf6",
+  "title": "Vertigo - By Midiguy",
+  "floor_area_k": 5628,
+  "travel_median": 2125,
+  "travel_p90": 5624,
+  "eff_levels": 8.86,
+  "dominant_level": 0.26,
+  "stacked_share": 0.3,
+  "overlook_share": 0.29,
+  "cross_level_sight": 0.29,
+  "route_vert_per_1000": 248,
+  "angled_walls": 0.01,
+  "teleporters": 6,
+  "pads": 2,
+  "swim_edges": 39,
+  "func_doors": 23,
+  "func_plats": 1,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 18
+  },
+  "items": {
+   "RL": 1,
+   "LG": 0,
+   "GL": 4,
+   "RA": 0,
+   "YA": 0,
+   "GA": 1,
+   "MH": 0,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 1572,
+  "flag_gap_3d": 1787,
+  "flag_exits": [
+   2,
+   1
+  ],
+  "flag_max_los": [
+   1603,
+   1715
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": true,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 7121,
+   "f2_to_f1": 2084,
+   "f1_to_f2_s": 22.4,
+   "f2_to_f1_s": 6.5,
+   "asymmetry_ratio": 3.42,
+   "winding": 1.33,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    7121
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    7121
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    7121
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 2598,
+   "f1_to_f2_s": 18.4,
+   "f2_to_f1_s": 5.5,
+   "f1_to_f2_units": 7807,
+   "swings_on_shortest": 7,
+   "speedup_vs_walk": 1.22,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    18.4
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf8",
+  "title": "The Strongbox",
+  "floor_area_k": 3273,
+  "travel_median": 1919,
+  "travel_p90": 3583,
+  "eff_levels": 3.14,
+  "dominant_level": 0.52,
+  "stacked_share": 0.17,
+  "overlook_share": 0.33,
+  "cross_level_sight": 0.4,
+  "route_vert_per_1000": 119,
+  "angled_walls": 0.02,
+  "teleporters": 0,
+  "pads": 4,
+  "swim_edges": 0,
+  "func_doors": 2,
+  "func_plats": 2,
+  "spawns": {
+   "team1": 7,
+   "team2": 7,
+   "dm": 9
+  },
+  "items": {
+   "RL": 2,
+   "LG": 1,
+   "GL": 2,
+   "RA": 1,
+   "YA": 2,
+   "GA": 1,
+   "MH": 1,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 3268,
+  "flag_gap_3d": 3268,
+  "flag_exits": [
+   2,
+   2
+  ],
+  "flag_max_los": [
+   648,
+   967
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 4248,
+   "f2_to_f1": 4240,
+   "f1_to_f2_s": 13.3,
+   "f2_to_f1_s": 13.2,
+   "asymmetry_ratio": 1.0,
+   "winding": 1.3,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    4248
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 2,
+   "mid_sp384_route_lens": [
+    4248,
+    6418
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    4248
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 1622,
+   "f1_to_f2_s": 11.0,
+   "f2_to_f1_s": 10.8,
+   "f1_to_f2_units": 4431,
+   "swings_on_shortest": 4,
+   "speedup_vs_walk": 1.2,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    11.0
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ },
+ {
+  "map": "ctf2m1",
+  "title": "McKinley Station",
+  "floor_area_k": 7344,
+  "travel_median": 3019,
+  "travel_p90": 6655,
+  "eff_levels": 5.77,
+  "dominant_level": 0.34,
+  "stacked_share": 0.34,
+  "overlook_share": 0.32,
+  "cross_level_sight": 0.22,
+  "route_vert_per_1000": 127,
+  "angled_walls": 0.03,
+  "teleporters": 12,
+  "pads": 0,
+  "swim_edges": 921,
+  "func_doors": 15,
+  "func_plats": 4,
+  "spawns": {
+   "team1": 8,
+   "team2": 9,
+   "dm": 20
+  },
+  "items": {
+   "RL": 2,
+   "LG": 2,
+   "GL": 3,
+   "RA": 1,
+   "YA": 2,
+   "GA": 2,
+   "MH": 2,
+   "Quad": 1,
+   "Pent": 1,
+   "Ring": 0
+  },
+  "flag_gap_2d": 4656,
+  "flag_gap_3d": 4656,
+  "flag_exits": [
+   2,
+   3
+  ],
+  "flag_max_los": [
+   1641,
+   1004
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 6220,
+   "f2_to_f1": 6676,
+   "f1_to_f2_s": 20.2,
+   "f2_to_f1_s": 21.6,
+   "asymmetry_ratio": 1.07,
+   "winding": 1.34,
+   "mid_los_route_count": 3,
+   "mid_los_route_lens": [
+    6220,
+    7188,
+    9313
+   ],
+   "mid_los_route_ratios": [
+    1.0,
+    1.16,
+    1.5
+   ],
+   "mid_sp384_route_count": 2,
+   "mid_sp384_route_lens": [
+    6220,
+    7188
+   ],
+   "mid_single_vantage_cuts_all": false,
+   "mid_single_vantage_bypass_L": 7188,
+   "mid_single_vantage_bypass_ratio": 1.16,
+   "mid_lat_sep": 1154,
+   "mid_vert_sep": 492,
+   "full_los_route_count": 2,
+   "full_los_route_lens": [
+    6220,
+    7188
+   ],
+   "full_single_vantage_cuts_all": false,
+   "full_single_vantage_bypass_ratio": 1.16
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 2523,
+   "f1_to_f2_s": 14.4,
+   "f2_to_f1_s": 14.6,
+   "f1_to_f2_units": 7072,
+   "swings_on_shortest": 9,
+   "speedup_vs_walk": 1.4,
+   "mid_los_route_count": 3,
+   "mid_los_route_s": [
+    14.4,
+    16.3,
+    20.5
+   ],
+   "mid_los_route_ratios": [
+    1.0,
+    1.14,
+    1.43
+   ],
+   "mid_single_vantage_cuts_all": false,
+   "mid_single_vantage_bypass_s": 16.3,
+   "mid_single_vantage_bypass_ratio": 1.14
+  }
+ },
+ {
+  "map": "ctf2m3",
+  "title": "Spill the Blood",
+  "floor_area_k": 3622,
+  "travel_median": 2031,
+  "travel_p90": 4465,
+  "eff_levels": 3.7,
+  "dominant_level": 0.51,
+  "stacked_share": 0.29,
+  "overlook_share": 0.37,
+  "cross_level_sight": 0.15,
+  "route_vert_per_1000": 140,
+  "angled_walls": 0.15,
+  "teleporters": 3,
+  "pads": 4,
+  "swim_edges": 0,
+  "func_doors": 18,
+  "func_plats": 0,
+  "spawns": {
+   "team1": 8,
+   "team2": 8,
+   "dm": 18
+  },
+  "items": {
+   "RL": 2,
+   "LG": 1,
+   "GL": 3,
+   "RA": 2,
+   "YA": 1,
+   "GA": 2,
+   "MH": 0,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 1392,
+  "flag_gap_3d": 1392,
+  "flag_exits": [
+   1,
+   1
+  ],
+  "flag_max_los": [
+   1102,
+   1099
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": true,
+   "f1_to_f2": 7408,
+   "f2_to_f1": 7376,
+   "f1_to_f2_s": 23.2,
+   "f2_to_f1_s": 23.0,
+   "asymmetry_ratio": 1.0,
+   "winding": 5.3,
+   "mid_los_route_count": 1,
+   "mid_los_route_lens": [
+    7408
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_sp384_route_count": 1,
+   "mid_sp384_route_lens": [
+    7408
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_L": null,
+   "mid_single_vantage_bypass_ratio": null,
+   "mid_lat_sep": 0,
+   "mid_vert_sep": 0,
+   "full_los_route_count": 1,
+   "full_los_route_lens": [
+    7408
+   ],
+   "full_single_vantage_cuts_all": true,
+   "full_single_vantage_bypass_ratio": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": false,
+   "hook_edges": 1531,
+   "f1_to_f2_s": 16.7,
+   "f2_to_f1_s": 16.5,
+   "f1_to_f2_units": 7162,
+   "swings_on_shortest": 7,
+   "speedup_vs_walk": 1.39,
+   "mid_los_route_count": 2,
+   "mid_los_route_s": [
+    16.7,
+    17.2
+   ],
+   "mid_los_route_ratios": [
+    1.0,
+    1.03
+   ],
+   "mid_single_vantage_cuts_all": false,
+   "mid_single_vantage_bypass_s": 18.5,
+   "mid_single_vantage_bypass_ratio": 1.11
+  }
+ },
+ {
+  "map": "ctf2m4",
+  "title": "The Ruins of NeoMinonk",
+  "floor_area_k": 6542,
+  "travel_median": 2527,
+  "travel_p90": 5383,
+  "eff_levels": 6.29,
+  "dominant_level": 0.38,
+  "stacked_share": 0.23,
+  "overlook_share": 0.33,
+  "cross_level_sight": 0.35,
+  "route_vert_per_1000": 164,
+  "angled_walls": 0.25,
+  "teleporters": 0,
+  "pads": 0,
+  "swim_edges": 230,
+  "func_doors": 8,
+  "func_plats": 20,
+  "spawns": {
+   "team1": 9,
+   "team2": 7,
+   "dm": 14
+  },
+  "items": {
+   "RL": 2,
+   "LG": 1,
+   "GL": 2,
+   "RA": 2,
+   "YA": 2,
+   "GA": 2,
+   "MH": 2,
+   "Quad": 1,
+   "Pent": 0,
+   "Ring": 0
+  },
+  "flag_gap_2d": 6888,
+  "flag_gap_3d": 6889,
+  "flag_exits": [
+   2,
+   2
+  ],
+  "flag_max_los": [
+   950,
+   925
+  ],
+  "flags_mutual_los": false,
+  "mid_sees_flag": false,
+  "vantage_grid": 128,
+  "walk": {
+   "connected": false,
+   "f1_to_f2": null,
+   "f2_to_f1": null,
+   "f1_to_f2_s": null,
+   "f2_to_f1_s": null,
+   "asymmetry_ratio": null,
+   "winding": null
+  },
+  "hook": {
+   "connected": true,
+   "unlocks_flags": true,
+   "hook_edges": 2279,
+   "f1_to_f2_s": 25.5,
+   "f2_to_f1_s": 26.3,
+   "f1_to_f2_units": 10458,
+   "swings_on_shortest": 11,
+   "speedup_vs_walk": null,
+   "mid_los_route_count": 1,
+   "mid_los_route_s": [
+    25.5
+   ],
+   "mid_los_route_ratios": [
+    1.0
+   ],
+   "mid_single_vantage_cuts_all": true,
+   "mid_single_vantage_bypass_s": null,
+   "mid_single_vantage_bypass_ratio": null
+  }
+ }
+]
