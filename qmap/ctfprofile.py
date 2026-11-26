@@ -1028,8 +1028,19 @@ def draw(res, out):
     walk_mid = D['walk_mid']
     hook_draw = D['hook_draw']
 
+    pts_mask = R_walk | (hook_draw['R_hook'] if hook_draw is not None else False)
+    pts_xy = P[pts_mask, :2] if np.any(pts_mask) else P[:, :2]
+    if len(pts_xy):
+        span_x = max(float(pts_xy[:, 0].max() - pts_xy[:, 0].min()), 1.0)
+        span_y = max(float(pts_xy[:, 1].max() - pts_xy[:, 1].min()), 1.0)
+        aspect = span_y / span_x
+    else:
+        aspect = 0.65
+    panel_w = 8.5
+    fig_h = max(3.6, min(7.2, panel_w * aspect + 1.2))
+
     ncols = 2 if hook_draw is not None else 1
-    fig, axes = plt.subplots(1, ncols, figsize=(8.5 * ncols, 6.2), facecolor='#18191b')
+    fig, axes = plt.subplots(1, ncols, figsize=(panel_w * ncols, fig_h), facecolor='#18191b')
     if ncols == 1:
         axes = [axes]
     colors = ['#ffffff', '#ff55ff', '#00ff88', '#ffaa00']
