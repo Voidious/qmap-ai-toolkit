@@ -102,7 +102,7 @@ profiled **ten classic Threewave CTF maps** (`ctf1`, `ctf2`, `ctf3`, `ctf4`, `ct
 `ctf8`, `ctf2m1`, `ctf2m3`, `ctf2m4`). Original BSPs are not included; full JSON is in
 `profiles/ctf_refs.json`.
 
-| Map | Travel med (p90) | Eff levels / dom / stacked | Route vert /1000 | Flag walk (s) | Walk mid LOS routes | Flag hook (s, speedup) | Hook mid LOS routes | Single mid vantage cuts all? (walk / hook) | Notes |
+| Map | Travel med (p90) | Eff levels / dom / stacked | Route vert /1000 | Flag walk (s) | Walk mid LOS routes | Flag hook model (s, speedup) | Hook mid LOS routes | Single mid vantage cuts all? (walk / hook) | Notes |
 |---|---:|---|---:|---:|---:|---:|---:|---|---|
 | **ctf2m1** (McKinley Station) | 3019 (6655) | 5.77 / 0.34 / 0.34 | 127 | 6220u (19.4s) | **3** (1.0 / 1.16 / 1.50×) | 13.9s (1.39×) | **3** (1.0 / 1.05 / 1.48×) | **No / No** (bypass 1.16× / 1.05×) | Gold-standard 3-lane split: mid + south wing + high north (`12` teles) |
 | **ctf1** (McKinley Base) | 2620 (6316) | 5.94 / 0.32 / 0.31 | 159 | 5965u (18.6s) | 1 | 16.6s (1.12×) | 1 | Yes / Yes | Huge N/S kiting loops off mid, 3–4 flag exits, but single base-entry neck |
@@ -119,6 +119,7 @@ Takeaways: many early Threewave Episode 1 maps funnel through a single central r
 linear spine (`ctf3`, `ctf4`), or a single base-mouth neck (`ctf1`, `ctf5`), which is why
 `ctf2m1` (*McKinley Station*) stands out cleanly with 3 visually isolated routes on both walk and
 hook (`1.0 / 1.16 / 1.50×`). Full-scale playable classics cluster at **~5,900–6,700u flag-to-flag
-walking** (`~18.5–21 s`), **~12.8–16.6 s with hook** (`1.1–1.5×` speedup), and real multi-level
+walking** (`~18.5–21 s`), **~12.8–16.6 s `ctfprofile.py` hook model time** (`1.1–1.5×` speedup;
+uncalibrated `650 u/s` pull + `0.35 s` latch model), and real multi-level
 verticality (`eff_levels 4.7–6.0`, `route_vert 127–207`). See [`GUIDE.md` Section 3](../GUIDE.md#3-design-fresh-takes-on-classics)
 (*CTF layout & route structure*).

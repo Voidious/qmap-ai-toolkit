@@ -8,9 +8,10 @@ flag sightline exposure, and both hook-off (walk/jump/tele/pad/swim) and hook-on
     python3 ctfprofile.py map.bsp [more.bsp ...] [--json out.json] [--png-dir figs/] [--no-hook]
 
 Treats outputs as design diagnostics, not release gates. Movement model: walk/step 18,
-jump 44, running gaps up to 128, drops, teleporters, push pads, and water swimming
-(hook-off), plus straight-line grapple swings/climbs anchored to solid or sky (hook-on).
-Button- and lift-gated paths (func_plat / triggered doors) are not simulated.
+jump 44, running gaps up to 128, drops, teleporters (0.15 s), push pads, and water swimming
+(220 u/s) for hook-off, plus uncalibrated kinematic grapple swings/climbs anchored to solid
+or sky (650 u/s pull + 0.35 s latch) for hook-on. Button- and lift-gated paths (func_plat /
+triggered doors) are not simulated.
 """
 import argparse
 import heapq
@@ -963,7 +964,7 @@ def format_report(res):
             note = ' [HOOK UNLOCKS FLAGS - check hook-off playability!]' if h['unlocks_flags'] else ''
             sp_txt = f", {h['speedup_vs_walk']}x faster than walk" if h['speedup_vs_walk'] else ''
             lines.append(
-                f"   hook (hook on):  {h['f1_to_f2_s']}s / {h['f2_to_f1_s']}s "
+                f"   hook (model):    {h['f1_to_f2_s']}s / {h['f2_to_f1_s']}s "
                 f"({h['f1_to_f2_units']}u, {h['swings_on_shortest']} swings{sp_txt}){note}"
             )
             lines.append(

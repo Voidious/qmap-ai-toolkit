@@ -384,12 +384,14 @@ mid, yet one central vantage sees both).
   (`flags_mutual_los = false`, `mid_sees_flag = false`).
 * **Calibrate scale, verticality, and hook vs. walk together.** Across the playable full-scale
   Threewave classics (`ctf1`, `ctf5`, `ctf2m1`), flag-to-flag walking runs cluster tightly at
-  **~5,900–6,700 units** (`~18.5–21 s` at 320 u/s; `travel_median ~2,400–3,020`), while grapple
-  hook shortens flag runs by **~1.1–1.5×** (`~12.8–16.6 s`) and opens additional vertical crossings
-  (`ctf5`, `ctf2m3`). Avoid tiny straight-spine runs (`ctf3`: `2,720u` / `8.5 s` walk, `6.8 s` hook)
-  or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep real height play rather than flat side
-  tubes: the playable classics maintain `eff_levels 4.7–6.0`, `stacked_share 0.24–0.34`, and
-  `route_vert_per_1000 127–207`.
+  **~5,900–6,700 units** (`~18.5–21 s` on the walk/swim/tele graph; `travel_median ~2,400–3,020`),
+  while `ctfprofile.py`'s kinematic grapple model (`650 u/s` pull + `0.35 s` latch — an uncalibrated
+  model estimate, not demo-timed play, though its ~430–510 u/s effective pace sits near the ~460 u/s
+  solo hook pace from demos) shortens flag runs by **~1.1–1.5×** (`~12.8–16.6 s` model time) and
+  opens additional vertical crossings (`ctf5`, `ctf2m3`). Avoid tiny straight-spine runs (`ctf3`:
+  `2,720u` / `8.5 s` walk, `6.8 s` model hook) or extreme one-way asymmetry (`ctf6`: `3.42×`). Keep
+  real height play rather than flat side tubes: the playable classics maintain `eff_levels 4.7–6.0`,
+  `stacked_share 0.24–0.34`, and `route_vert_per_1000 127–207`.
 * **Diagnose every CTF blockout with `qmap/ctfprofile.py`.** Run
   `python3 qmap/ctfprofile.py map.bsp --png-dir figs/` to measure walk (hook-off) and grapple
   (hook-on) flag times, LOS-independent route counts and length ratios, sampled single-vantage
