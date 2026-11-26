@@ -355,6 +355,24 @@ class TestCtfRouteIndependence(unittest.TestCase):
             self.assertIn('flags:', txt)
             self.assertNotIn('Nones', txt)
 
+    def test_walk_time_graph_accounts_for_swim_and_teleport_costs(self):
+        # 0 --(walk 320u)--> 1 --(swim 220u)--> 2 --(tele 0u)--> 3
+        adj_walk = {
+            0: [(1, 320.0, 'walk')],
+            1: [(2, 220.0, 'swim')],
+            2: [(3, 0.0, 'tele')],
+            3: [],
+        }
+        adj_t = ctfprofile._build_walk_time_graph(adj_walk)
+        wt, _, _ = ctfprofile._dijk_single(adj_t, 0, 3)
+        # 320/320 + 220/220 + 0.15 = 2.15s (vs naive distance/320 = 540/320 = 1.6875s)
+        self.assertAlmostEqual(wt, 1.0 + 1.0 + ctfprofile.TELE_COST_S, places=6)
+        # Adding no-op/slower hook edge on top of adj_t never drops speedup below 1.0
+        adj_hook = defaultdict(list, {u: list(es) for u, es in adj_t.items()})
+        adj_hook[0].append((3, 5.0, 'hook'))
+        ht, _, _ = ctfprofile._dijk_single(adj_hook, 0, 3)
+        self.assertAlmostEqual(wt / ht, 1.0, places=6)
+
 
 if __name__ == '__main__':
     unittest.main()

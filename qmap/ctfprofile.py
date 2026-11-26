@@ -567,11 +567,9 @@ def _find_flag_node(B, cl, P, R_mask):
     return None, None
 
 
-def _build_hook_time_graph(adj_walk, nodes, P, R_walk, f1, f2,
-                           roots, B, root0):
-    """Build a time-weighted (seconds) graph combining walk+jump+tele+pad+swim
-    with grapple hook swings/climbs between spatial waypoints."""
-    N = len(nodes)
+def _build_walk_time_graph(adj_walk):
+    """Build a time-weighted (seconds) graph for walk/jump/drop/pad (320 u/s),
+    water swimming (220 u/s), and teleporters (0.15 s)."""
     adj_t = defaultdict(list)
     for u, edges in adj_walk.items():
         for v, c, k in edges:
@@ -582,6 +580,14 @@ def _build_hook_time_graph(adj_walk, nodes, P, R_walk, f1, f2,
             else:
                 t = c / WALK_SPEED
             adj_t[u].append((v, t, k))
+    return adj_t
+
+
+def _build_hook_time_graph(adj_walk_t, nodes, P, R_walk, f1, f2,
+                           roots, B, root0):
+    """Extend a walk+swim+tele time graph (seconds) with grapple hook swings/climbs
+    between spatial waypoints."""
+    adj_t = defaultdict(list, {u: list(edges) for u, edges in adj_walk_t.items()})
 
     # Select waypoints: ~128u spatial stride across all floor nodes (including ledges
     # unreachable on foot so hook-only climbs and hook-gated routes are modeled),
@@ -687,6 +693,10 @@ def ctf_profile(path, name=None, with_hook=True):
     L21, path21, _ = _dijk_single(adj_walk, f2, f1)
     walk_connected = (L12 is not None) and (L21 is not None)
 
+    adj_walk_t = _build_walk_time_graph(adj_walk)
+    WT12, _, _ = _dijk_single(adj_walk_t, f1, f2)
+    WT21, _, _ = _dijk_single(adj_walk_t, f2, f1)
+
     exits1 = _count_flag_exits(adj_u_notele, f1, target_node=f2)
     exits2 = _count_flag_exits(adj_u_notele, f2, target_node=f1)
 
@@ -741,7 +751,7 @@ def ctf_profile(path, name=None, with_hook=True):
     hook_draw = None
     if with_hook:
         adj_hook, hook_edge_count = _build_hook_time_graph(
-            adj_walk, nodes, P, R_walk, f1, f2, roots, B, root0
+            adj_walk_t, nodes, P, R_walk, f1, f2, roots, B, root0
         )
         T12, hpath12, hkinds12 = _dijk_single(adj_hook, f1, f2)
         T21, hpath21, hkinds21 = _dijk_single(adj_hook, f2, f1)
@@ -789,7 +799,7 @@ def ctf_profile(path, name=None, with_hook=True):
                 f2_to_f1_s=round(T21, 1),
                 f1_to_f2_units=round(h1_len),
                 swings_on_shortest=h1_swings,
-                speedup_vs_walk=round((L12 / WALK_SPEED) / T12, 2) if (walk_connected and T12 > 0) else None,
+                speedup_vs_walk=(round(WT12 / T12, 2) if (walk_connected and WT12 is not None and T12 > 0) else None),
                 mid_los_route_count=len(hook_mid['los_routes']),
                 mid_los_route_s=hlens,
                 mid_los_route_ratios=hratios,
@@ -823,8 +833,8 @@ def ctf_profile(path, name=None, with_hook=True):
         connected=walk_connected,
         f1_to_f2=None if L12 is None else round(L12),
         f2_to_f1=None if L21 is None else round(L21),
-        f1_to_f2_s=None if L12 is None else round(L12 / WALK_SPEED, 1),
-        f2_to_f1_s=None if L21 is None else round(L21 / WALK_SPEED, 1),
+        f1_to_f2_s=None if WT12 is None else round(WT12, 1),
+        f2_to_f1_s=None if WT21 is None else round(WT21, 1),
         asymmetry_ratio=(round(max(L12, L21) / max(min(L12, L21), 1.0), 2) if walk_connected else None),
         winding=(round(min(L12, L21) / max(gap2d, 1.0), 2) if walk_connected else None),
     )
