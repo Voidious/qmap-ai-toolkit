@@ -1107,8 +1107,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     results = []
+    skipped = 0
     for p in args.maps:
-        r = ctf_profile(p, with_hook=not args.no_hook)
+        try:
+            r = ctf_profile(p, with_hook=not args.no_hook)
+        except ValueError as exc:
+            print(f'warning: skipping {exc}', file=sys.stderr)
+            skipped += 1
+            continue
         if args.png_dir:
             os.makedirs(args.png_dir, exist_ok=True)
             draw(r, os.path.join(args.png_dir, r['map'] + '.ctf.png'))
@@ -1121,6 +1127,10 @@ def main(argv=None):
             json.dump(results, f, indent=1)
             f.write('\n')
 
+    if skipped and not results:
+        return 1
+    return 0
+
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

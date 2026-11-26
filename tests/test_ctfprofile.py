@@ -4,11 +4,15 @@ Run from the repository root:
     python3 -m unittest discover -s tests -v
 """
 import importlib.util
+import io
 import json
 import pathlib
 import sys
+import tempfile
 import unittest
 from collections import defaultdict
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 QMAP_DIR = REPO_ROOT / 'qmap'
@@ -445,6 +449,38 @@ class TestCtfRouteIndependence(unittest.TestCase):
         adj_hook[0].append((3, 5.0, 'hook'))
         ht, _, _ = ctfprofile._dijk_single(adj_hook, 0, 3)
         self.assertAlmostEqual(wt / ht, 1.0, places=6)
+
+    def test_cli_batch_skips_maps_without_flags_and_continues(self):
+        sample = json.loads((REPO_ROOT / 'gallery' / 'profiles' / 'ctf_refs.json').read_text(encoding='utf-8'))
+        ok_row = dict(sample[0])
+
+        def fake_profile(path, with_hook=True):
+            if 'noflag' in path:
+                raise ValueError(f'{path}: missing item_flag_team1 or item_flag_team2')
+            row = dict(ok_row)
+            row['_draw'] = {}
+            return row
+
+        with mock.patch.object(ctfprofile, 'ctf_profile', side_effect=fake_profile):
+            # Batch run: skips non-CTF map with warning on stderr and succeeds on valid map
+            with tempfile.TemporaryDirectory() as td:
+                out_json = pathlib.Path(td) / 'out.json'
+                buf_out, buf_err = io.StringIO(), io.StringIO()
+                with redirect_stdout(buf_out), redirect_stderr(buf_err):
+                    rc = ctfprofile.main(['noflag.bsp', 'ctf1.bsp', '--json', str(out_json)])
+                self.assertEqual(rc, 0)
+                self.assertIn('warning: skipping', buf_err.getvalue())
+                self.assertIn('ctf1', buf_out.getvalue())
+                written = json.loads(out_json.read_text(encoding='utf-8'))
+                self.assertEqual(len(written), 1)
+                self.assertEqual(written[0]['map'], 'ctf1')
+
+            # All maps missing flags -> returns non-zero
+            buf_out, buf_err = io.StringIO(), io.StringIO()
+            with redirect_stdout(buf_out), redirect_stderr(buf_err):
+                rc_fail = ctfprofile.main(['noflag.bsp'])
+            self.assertEqual(rc_fail, 1)
+            self.assertIn('warning: skipping', buf_err.getvalue())
 
 
 if __name__ == '__main__':
