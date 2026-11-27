@@ -159,6 +159,18 @@ class TestRenderer(RendererFixture):
         with self.assertRaisesRegex(ValueError, 'exceed lighting lump'):
             render.build_lightmap(samples, 1, 3, 3, (0, 1, 255, 255))
 
+    def test_lightmode_zero_uses_128_rgb_limit_512_scale_and_original_palette(self):
+        write_bsp(self.path, lighting=bytes([255] * 9))
+        write_lit(self.path, [255, 16, 8] * 9)
+        samples = render.light_samples(render.BSP(self.path), lightmode=0)
+        np.testing.assert_array_equal(samples, [[128, 8, 4]] * 9)
+        shade = render.build_lightmap(np.full((9, 3), 64), 0, 3, 3, (0, 255, 255, 255), lightmode=0)
+        np.testing.assert_array_equal(shade, np.full((3, 3, 3), 132 / 255))
+        write_bsp(self.path)
+        bsp = render.BSP(self.path, use_lit=False)
+        expected = (render.PAL[16] * 132 / 255).astype(np.uint8)
+        np.testing.assert_array_equal(self.image(bsp, lightmode=0)[16, 16], expected)
+
     def test_gamma_contrast_are_applied_once_after_lighting(self):
         raw = self.image()
         corrected = self.image(gamma=0.5, contrast=1.2)
@@ -252,6 +264,33 @@ class TestRenderer(RendererFixture):
             arguments.update(options)
             with self.assertRaises(ValueError):
                 render.check_camera(render.BSP(self.path), **arguments)
+
+    def test_renderer_cli_saves_negative_coordinates_and_display_options(self):
+        output = self.path.with_suffix('.png')
+        self.path.with_suffix('.lit').write_bytes(b'bad companion ignored by --no-lit')
+        arguments = [str(self.path), str(output), '16', '-4', '-3', '-180', '-5', '90',
+                     '--width', '32', '--height', '24', '--gamma', '0.5', '--contrast', '1.2',
+                     '--lightmode', '0', '--modulate', '1.5', '--no-lit', '--strict-cameras']
+        with contextlib.redirect_stdout(io.StringIO()) as stdout:
+            render.main(arguments)
+        self.assertIn('BSP monochrome; gamma=0.5, contrast=1.2, lightmode=0', stdout.getvalue())
+        with Image.open(output) as image:
+            self.assertEqual(image.size, (32, 24))
+            self.assertGreater(np.asarray(image).max(), 0)
+
+    def test_renderer_cli_refuses_unsafe_or_invalid_views_without_saving(self):
+        output = self.path.with_suffix('.png')
+        base = [str(self.path), str(output), '-16', '-4', '-3', '-180', '-5']
+        cases = [(base + ['--strict-cameras'], 'inside solid'),
+                 (base + ['--gamma', '0'], 'positive finite gamma'),
+                 (base + ['0'], '0 < fov < 180')]
+        for arguments, diagnostic in cases:
+            with self.subTest(arguments=arguments):
+                with contextlib.redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit) as caught:
+                    render.main(arguments)
+                self.assertEqual(caught.exception.code, 2)
+                self.assertIn(diagnostic, stderr.getvalue())
+                self.assertFalse(output.exists())
 
 
 class TestViewSheet(RendererFixture):

@@ -79,8 +79,8 @@ surrounding file and keep diffs clean and scoped.
   - Root `VERSION` holds 3-part SemVer (`MAJOR.MINOR.PATCH`, trailing newline required).
   - The top heading in `CHANGES.md` must match `VERSION` (`# v<VERSION> ...`). Keep ticket IDs
     out of `CHANGES.md` bullets.
-  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`) and `template/` file
-    banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
+  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`)
+    and `template/` file banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
     hardcode release numbers or the old name `qmap-toolkit`. `tests/test_version.py` enforces
     all of these plus valid relative links/anchors in `README.md`.
 - **CLI exit-code vs stdout conventions**:

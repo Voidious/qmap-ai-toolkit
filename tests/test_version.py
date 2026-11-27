@@ -36,6 +36,7 @@ class TestVersioning(unittest.TestCase):
             REPO_ROOT / 'README.md',
             REPO_ROOT / 'GUIDE.md',
             REPO_ROOT / 'qmap' / 'ITEMS.md',
+            REPO_ROOT / 'qmap' / 'RENDERING.md',
         ]
         for path in title_files:
             first_line = path.read_text(encoding='utf-8').splitlines()[0]

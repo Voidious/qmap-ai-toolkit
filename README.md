@@ -239,7 +239,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 | | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map |
 | **Item Economy** | `itemprofile.py` | BSP29 pickup inventory, directed RL/LG/armor/MH route matrices on the player-hull graph, RL/LG/resource trio diagnostics, and non-destructive `--move` what-if evaluation (see [`qmap/ITEMS.md`](qmap/ITEMS.md)) |
 | | `itemcheck.py` | Offline verification of generated pickups against a captured MVDSV `edicts` dump after item settling |
-| **Visualization** | `render.py` | Software z-buffered BSP29 renderer (textures + compiled lightmaps) calibrated to ezQuake brightness |
+| **Visualization** | `render.py`, `view_sheet.py` | BSP29 previews with RGB `.lit` lightmaps, ezQuake lighting controls, camera diagnostics, and shared-camera before/after sheets (see [`qmap/RENDERING.md`](qmap/RENDERING.md)) |
 | | `section.py`, `iso.py` | Vertical slice diagrams and multi-height isometric "dollhouse" cutaways from the generator's JSON |
 | **Textures & WADs** | `fsq.py` | 3×3-tiled serpentine Floyd-Steinberg error-diffusion quantizer over Quake palette subsets (synthesizes cream marble, plaster, and warm wood that nearest-colour quantization cannot hit) |
 | | `makewad.py` | Packs palette-quantized PNGs (with `_fbr` fullbright support) into a Quake WAD2 using `quake_palette.lmp` |

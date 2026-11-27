@@ -42,7 +42,8 @@ qmap/                   shared tools - reuse or extend as needed
   sightlines.py         longest straight sightline per floor level
   contact.py            Clan Arena pacing proxy (compare against a map the group likes)
   collide_cmp.py        audit visual-pass collision diffs (player + hull-0 voxel compare)
-  render.py             software BSP renderer (lightmaps + textures) for preview images
+  render.py, view_sheet.py, RENDERING.md   BSP previews with RGB lightmaps, ezQuake calibration,
+                        camera checks, and shared-camera before/after sheets
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
   fsq.py                error-diffusion quantising for colours the palette lacks (cream, ivory)
   makewad.py            palette PNGs -> WAD2;  quake_palette.lmp (LibreQuake, BSD-3)
@@ -610,7 +611,9 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
     `func_illusionary_visblocker` `clip`, with face textures read for contents — and prints a
     `note:` line accounting for every ignored brush. Gotcha 31 has the full solidity rules —
     several are not what you would guess.
-* **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
+* **Brightness**: `views.py` prints an overall safe-camera mean for each build to stdout;
+  per-view means appear on tile captions and in `--report` JSON. Unsafe cameras are excluded.
+  Compare with the group's maps using the same explicit render settings.
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
   to spare on axial walls, reporting `(x, y, z)` and the two opposing solids), **blind pockets**,
