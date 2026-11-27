@@ -183,13 +183,14 @@ def check_camera(bsp, cam, yaw, pitch, fov=95, W=960, H=540, near=2):
     issues = []
     if not bsp.models or not bsp.leaves:
         issues.append('camera contents unavailable (missing BSP models/leaves)')
-    for model_index in range(len(bsp.models)):
-        if model_index in bsp.hidden_models:
-            continue
-        contents = bsp.contents_at(camera, model_index)
-        if contents in (-2, -6):
-            contents_name = 'solid' if contents == -2 else 'sky'
-            issues.append(f'camera inside {contents_name} (model *{model_index}, eye {tuple(cam)})')
+    else:
+        for model_index in range(len(bsp.models)):
+            if model_index in bsp.hidden_models:
+                continue
+            contents = bsp.contents_at(camera, model_index)
+            if contents in (-2, -6):
+                contents_name = 'solid' if contents == -2 else 'sky'
+                issues.append(f'camera inside {contents_name} (model *{model_index}, eye {tuple(cam)})')
     forward, right, up = camera_basis(yaw, pitch)
     horizontal = math.tan(math.radians(fov) / 2)
     vertical = horizontal * H / W

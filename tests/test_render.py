@@ -181,6 +181,21 @@ class TestRenderer(RendererFixture):
                 write_bsp(self.path, back_contents=contents)
                 self.assertEqual(render.check_camera(render.BSP(self.path), (-8, 0, 0), 0, 0), [])
 
+    def test_missing_models_or_leaves_warns_without_traversing_contents(self):
+        for missing in ('models', 'leaves'):
+            with self.subTest(missing=missing):
+                bsp = render.BSP(self.path)
+                setattr(bsp, missing, [])
+                with patch.object(bsp, 'contents_at', side_effect=AssertionError('contents unavailable')):
+                    issues = render.check_camera(bsp, (16, 0, 0), 180, 0)
+                self.assertEqual(issues, ['camera contents unavailable (missing BSP models/leaves)'])
+                with self.assertRaisesRegex(ValueError, 'UNSAFE CAMERA.*contents unavailable'):
+                    render.render(bsp, (16, 0, 0), 180, 0, W=16, H=16, camera_check='error')
+                with contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.image(bsp)
+                self.assertIn('WARNING: UNSAFE CAMERA', stderr.getvalue())
+                self.assertTrue(any('near-clip' in issue for issue in render.check_camera(bsp, (1, 0, 0), 180, 0)))
+
     def test_trigger_models_are_neither_solid_cameras_nor_visible(self):
         write_bsp(self.path, hidden=True)
         bsp = render.BSP(self.path)
