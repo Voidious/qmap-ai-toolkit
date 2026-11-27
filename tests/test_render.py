@@ -281,6 +281,29 @@ class TestViewSheet(RendererFixture):
             view_sheet.main([], [str(self.path), str(output), '--cameras', str(cameras), '--views', '-1'])
         self.assertEqual(caught.exception.code, 2)
 
+    def test_strict_mode_reports_all_unsafe_build_camera_pairs_before_rendering(self):
+        before = write_bsp(self.path.with_name('test_b1.bsp'))
+        output = self.path.with_suffix('.png')
+        cameras = [('inside', (-8, 0, 0), 0, 0), ('near wall', (1, 0, 0), 180, 0),
+                   ('safe', (16, 0, 0), 180, 0)]
+        for existing_output in (False, True):
+            with self.subTest(existing_output=existing_output):
+                if existing_output:
+                    output.write_bytes(b'keep existing output')
+                with patch.object(view_sheet, 'render') as recorded:
+                    with self.assertRaises(ValueError) as caught:
+                        view_sheet.make_sheet(self.path, output, cameras, before=before, strict=True)
+                recorded.assert_not_called()
+                message = str(caught.exception)
+                for build in (before, self.path):
+                    self.assertIn(f'{build.name} / inside: camera inside solid', message)
+                    self.assertIn(f'{build.name} / near wall: near-clip obstruction', message)
+                self.assertNotIn('/ safe:', message)
+                if existing_output:
+                    self.assertEqual(output.read_bytes(), b'keep existing output')
+                else:
+                    self.assertFalse(output.exists())
+
     def test_both_companions_and_before_camera_are_checked(self):
         before = write_bsp(self.path.with_name('test_b1.bsp'))
         write_lit(before, [100, 20, 10] * 9)

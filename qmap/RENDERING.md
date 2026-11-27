@@ -45,7 +45,8 @@ door/platform movement or entity rotations.
 Warnings go to stderr with the build and camera. Unsafe tiles have a red border
 and warning label; their brightness is excluded from the mean. `--strict-cameras`
 exits with code 2 before saving the sheet if any selected camera is unsafe in
-either build. Cameras are never moved automatically. A safe camera can still
+either build, reporting every unsafe build/camera pair in one run. Cameras are
+never moved automatically. A safe camera can still
 face a wall or give a poor composition; these checks establish clearance, not
 whether a screenshot is useful. The optional JSON report records the exact
 cameras, render settings, warnings, and per-view brightness (`null` for unsafe

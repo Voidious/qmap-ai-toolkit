@@ -49,13 +49,20 @@ def make_sheet(bsp, out, cameras, *, before=None, fov=105, width=640, height=360
         raise ValueError('sheet output must not overwrite an input BSP')
     builds = [BSP(path, use_lit=use_lit) for path in paths]
     diagnostics = []
+    unsafe_cameras = []
     for build in builds:
         build_issues = []
         for label, position, yaw, pitch in cameras:
             issues = check_camera(build, position, yaw, pitch, fov, width, height, options.get('near', 2))
-            report_camera(issues, f'{build.path.name} / {label}', strict)
+            camera_label = f'{build.path.name} / {label}'
+            if strict and issues:
+                unsafe_cameras.append(f'UNSAFE CAMERA {camera_label}: ' + '; '.join(issues))
+            else:
+                report_camera(issues, camera_label)
             build_issues.append(issues)
         diagnostics.append(build_issues)
+    if unsafe_cameras:
+        raise ValueError('\n'.join(unsafe_cameras))
     header_height = 52
     label_height = 42
     tile_height = height + label_height
