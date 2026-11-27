@@ -39,12 +39,13 @@ class BSP:
         self.light = np.frombuffer(lump(8), np.uint8)
         self.light_rgb = load_lit(self.path.with_suffix('.lit'), len(self.light)) if use_lit else None
         self.lighting = 'RGB .lit' if self.light_rgb is not None else 'BSP monochrome'
-        self.nodes = [struct.unpack_from('<i2h', lump(5), offset)
-                      for offset in range(0, len(lump(5)), 24)]
-        self.leaves = [struct.unpack_from('<i', lump(10), offset)[0]
-                       for offset in range(0, len(lump(10)), 28)]
-        self.models = [struct.unpack_from('<9f7i', lump(14), offset)
-                       for offset in range(0, len(lump(14)), 64)]
+        nd, lf, md = lump(5), lump(10), lump(14)
+        self.nodes = [struct.unpack_from('<i2h', nd, offset)
+                      for offset in range(0, len(nd), 24)]
+        self.leaves = [struct.unpack_from('<i', lf, offset)[0]
+                       for offset in range(0, len(lf), 28)]
+        self.models = [struct.unpack_from('<9f7i', md, offset)
+                       for offset in range(0, len(md), 64)]
         mt = lump(2)
         n, = struct.unpack_from('<i', mt, 0)
         offs = struct.unpack_from('<%di' % n, mt, 4)
@@ -62,7 +63,6 @@ class BSP:
             self.tex.append((name, data))
         # v3.3: trigger brushes (teleports, pushes) are invisible in game - don't draw them
         ents = lump(0).decode('latin1')
-        md = lump(14)
         self.hidden = set()
         self.hidden_models = set()
         for blk in re.findall(r'\{([^}]*)\}', ents):

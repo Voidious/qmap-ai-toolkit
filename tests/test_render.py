@@ -20,7 +20,8 @@ import view_sheet
 
 
 def write_bsp(path, *, lighting=None, light_offset=0, styles=(0, 255, 255, 255),
-              texture='stone', indices=None, shifts=(0, 0), hidden=False, back_contents=-2):
+              texture='stone', indices=None, shifts=(0, 0), hidden=False, back_contents=-2,
+              tree_copies=1):
     """A textured wall at x=0, solid behind it, air in front; 3x3 luxels."""
     lumps = [b''] * 15
     lumps[0] = b'{"classname" "worldspawn"}\0'
@@ -42,6 +43,8 @@ def write_bsp(path, *, lighting=None, light_offset=0, styles=(0, 255, 255, 255),
     lumps[14] = model
     if hidden:
         lumps[14] = struct.pack('<9f7i', -32, -32, -32, 32, 32, 32, 0, 0, 0, -2, -1, -1, -1, 1, 0, 0) + model
+    for lump_index in (5, 10, 14):
+        lumps[lump_index] *= tree_copies
     offset = 124
     header = struct.pack('<i', 29)
     for lump in lumps:
@@ -67,6 +70,27 @@ class RendererFixture(unittest.TestCase):
 
 
 class TestRenderer(RendererFixture):
+    def test_large_tree_parsing_copies_at_most_one_file_of_lump_bytes(self):
+        class CountedBytes(bytes):
+            copied = 0
+
+            def __getitem__(self, key):
+                result = super().__getitem__(key)
+                if isinstance(key, slice):
+                    self.copied += len(result)
+                return result
+
+        write_bsp(self.path, tree_copies=256, hidden=True)
+        data = CountedBytes(self.path.read_bytes())
+        with patch.object(Path, 'read_bytes', return_value=data):
+            bsp = render.BSP(self.path, use_lit=False)
+        self.assertEqual(len(bsp.nodes), 256)
+        self.assertEqual(len(bsp.leaves), 512)
+        self.assertEqual(len(bsp.models), 512)
+        self.assertEqual(bsp.hidden_models, {1})
+        self.assertEqual(bsp.hidden, {0})
+        self.assertLessEqual(data.copied, len(data))
+
     def test_missing_lit_uses_monochrome_and_client_palette(self):
         bsp = render.BSP(self.path)
         self.assertIsNone(bsp.light_rgb)
