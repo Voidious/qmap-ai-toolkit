@@ -162,6 +162,9 @@ For TDM and FFA maps, `qmap/itemprofile.py` computes embedded inventories, direc
 
 ## Doing Your Own Map & Demo Analysis
 
+For compiled BSP previews, RGB `.lit` lighting, camera-clearance warnings, and same-camera
+before/after build sheets, see [Rendering and camera comparisons](qmap/RENDERING.md).
+
 The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorld group's 29 MVD demos and five classic reference maps (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`). If your group plays different maps, player counts, or mods (like CTF classics, 2v2/4v4 TDM, or FFA), you can run the same analysis on **your own `.bsp` maps and `.mvd` match demos** — both to calibrate design targets before building and to evaluate real playtests afterward.
 
 ### Profiling Your Favourite Maps (`.bsp`)

@@ -670,10 +670,16 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 ## 7. Lighting
 
 * ericw `light` with `-extra4 -minlight 5 -minlight_dirt 0`; floors get their own minlight.
-* The human's eye is the reference. Calibrate your renderer to their screenshots once (client
-  brightness ≈ 255·(raw/255)^0.55). Our group's taste sat around ~45–60 on preferred maps (DM2 ~35,
-  gothic map ~32–43): "as dark as gameplay allows; no black floors; not fiesta-bright." Calibrate
-  the target band to your own group's preferred maps and client gamma.
+* The human's eye is the reference. `render.py` loads companion `.lit` colors and exposes
+  ezQuake gamma, contrast, lightmode, and modulation; see [preview calibration](qmap/RENDERING.md).
+  Match the client's settings explicitly (for example `--gamma 0.5 --contrast 1.2`) and measure
+  preferred maps again with those settings. The old monochrome `**0.55` fit and its ~45–60
+  target band are historical, not universal defaults. Our group's preference remains
+  "as dark as gameplay allows; no black floors; not fiesta-bright."
+* For a visual pass, `views.py new_bN.bsp diff.png --before old_bN.bsp` renders the same
+  camera list on both builds. Camera-in-solid and near-clip warnings appear on stderr and
+  in red on sheets; `--strict-cameras` refuses unsafe views rather than saving misleading
+  comparisons. See [camera lists and diff sheets](qmap/RENDERING.md#shared-cameras-and-safe-sheets).
 * **Material changes brightness**: pale marble needed the global lamp scale cut by a third to
   sit with the other maps; black-painted walls needed lamps raised. Re-measure after a visual
   pass, not only after layout changes.
@@ -797,9 +803,10 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
     exit landing pad. Exclude teleporter gates in `torches()` so wall lamps never clip behind the
     lintel.
 25. **ezQuake ignores `texinfo` translation offsets on `*` turbulent liquids** (`ca_saddle`):
-    `render.py` honors texture offsets on `*` surfaces, so a teleporter swirl can look centered in
-    offline renders while rendering shifted in ezQuake (`EmitWaterPolys` computes UVs from world
-    coordinates). Align 64-wide teleporter portals so `(cx - 32) % 64 == 0` and verify in-client.
+    `render.py` now matches that world-coordinate projection, retaining the texture axes but
+    ignoring shifts, with a 64-unit repeat. Earlier previews could falsely center a shifted
+    swirl. Align 64-wide teleporter portals so `(cx - 32) % 64 == 0` and verify the animated
+    result in-client; the preview shows the unwarped surface.
 26. **Multi-tier wings with ramps need per-level sub-themes** (`ca_saddle`): the first `carve()`
     of a theme pins `STRIPE_Z` to that floor, so a climbing flank sharing one theme drops its
     light strip into upper floors and breaks sloped ramp strips. Split tiers into sub-themes
