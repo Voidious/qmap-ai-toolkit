@@ -20,7 +20,7 @@ import view_sheet
 
 
 def write_bsp(path, *, lighting=None, light_offset=0, styles=(0, 255, 255, 255),
-              texture='stone', indices=None, shifts=(0, 0), hidden=False):
+              texture='stone', indices=None, shifts=(0, 0), hidden=False, back_contents=-2):
     """A textured wall at x=0, solid behind it, air in front; 3x3 luxels."""
     lumps = [b''] * 15
     lumps[0] = b'{"classname" "worldspawn"}\0'
@@ -35,7 +35,7 @@ def write_bsp(path, *, lighting=None, light_offset=0, styles=(0, 255, 255, 255),
     lumps[7] = struct.pack('<hhihh4Bi', 0, 0, 0, 4, 0, *styles, light_offset)
     lumps[8] = bytes([64] * 9) if lighting is None else lighting
     lumps[10] = b''.join(struct.pack('<ii6h2H4B', contents, -1, -32, -32, -32, 32, 32, 32, 0, 0, 0, 0, 0, 0)
-                         for contents in (-2, -1))
+                         for contents in (back_contents, -1))
     lumps[12] = b''.join(struct.pack('<HH', index, (index + 1) % 4) for index in range(4))
     lumps[13] = struct.pack('<4i', 0, 1, 2, 3)
     model = struct.pack('<9f7i', -32, -32, -32, 32, 32, 32, 0, 0, 0, 0, -1, -1, -1, 1, 0, 1)
@@ -168,6 +168,18 @@ class TestRenderer(RendererFixture):
         self.assertTrue(any('near-clip' in issue for issue in render.check_camera(bsp, (1, 0, 0), 180, 0)))
         bsp.verts[:, 1] += 10
         self.assertEqual(render.check_camera(bsp, (1, 0, 0), 180, 0), [])
+
+    def test_sky_contents_are_unsafe_but_air_and_liquids_are_allowed(self):
+        write_bsp(self.path, back_contents=-6)
+        bsp = render.BSP(self.path)
+        self.assertEqual(bsp.contents_at((-8, 0, 0)), -6)
+        self.assertTrue(any('inside sky' in issue for issue in render.check_camera(bsp, (-8, 0, 0), 0, 0)))
+        with self.assertRaisesRegex(ValueError, 'UNSAFE CAMERA.*inside sky'):
+            render.render(bsp, (-8, 0, 0), 0, 0, W=16, H=16, camera_check='error')
+        for contents in (-1, -3, -4, -5):
+            with self.subTest(contents=contents):
+                write_bsp(self.path, back_contents=contents)
+                self.assertEqual(render.check_camera(render.BSP(self.path), (-8, 0, 0), 0, 0), [])
 
     def test_trigger_models_are_neither_solid_cameras_nor_visible(self):
         write_bsp(self.path, hidden=True)

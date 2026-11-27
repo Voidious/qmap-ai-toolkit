@@ -34,7 +34,7 @@ cameras. Each BSP independently loads its own `.lit` companion. `--before` with
 no value looks for `_b(N-1).bsp` beside `_bN.bsp`; use an explicit path when builds
 are in separate directories.
 
-The renderer checks the eye against solid hull-0 leaves, including visible
+The renderer checks the eye against solid and sky hull-0 leaves, including visible
 brush submodels, excluding invisible triggers. It also clips every visible
 face against the whole eye-to-near-plane viewing volume, catching thin
 obstructions that can fall between sampled rays. The default near plane is 2u,
