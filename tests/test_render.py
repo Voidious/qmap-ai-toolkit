@@ -123,6 +123,24 @@ class TestRenderer(RendererFixture):
         self.assertEqual(caught, [])
         self.assertIsNone(bsp.light_rgb)
 
+    def test_unlit_bsp_ignores_empty_or_invalid_lit_companions(self):
+        write_bsp(self.path, light_offset=-1, lighting=b'')
+        for companion in (b'QLIT' + struct.pack('<I', 1), b'bad'):
+            with self.subTest(companion=companion):
+                self.path.with_suffix('.lit').write_bytes(companion)
+                with warnings.catch_warnings(record=True) as caught:
+                    bsp = render.BSP(self.path)
+                self.assertEqual(caught, [])
+                self.assertIsNone(bsp.light_rgb)
+                self.assertEqual(bsp.lighting, 'BSP monochrome')
+                self.assertGreater(self.image(bsp).max(), 0)
+
+    def test_sky_names_are_case_insensitive_and_use_unbrightened_palette(self):
+        for texture in ('sky1', 'SKY1', 'sKy1'):
+            with self.subTest(texture=texture):
+                write_bsp(self.path, texture=texture, lighting=bytes(9))
+                np.testing.assert_array_equal(self.image()[16, 16], render.PAL[16])
+
     def test_black_rgb_falls_back_and_saturation_preserves_hue(self):
         write_lit(self.path, [0, 0, 0, 255, 16, 8] + [255, 16, 8] * 7)
         samples = render.light_samples(render.BSP(self.path))
@@ -303,6 +321,27 @@ class TestViewSheet(RendererFixture):
                     self.assertEqual(output.read_bytes(), b'keep existing output')
                 else:
                     self.assertFalse(output.exists())
+
+    def test_previous_build_cli_supports_options_before_and_after_positionals(self):
+        before = write_bsp(self.path.with_name('test_b1.bsp'))
+        output = self.path.with_suffix('.png')
+        report = self.path.with_suffix('.json')
+        cameras = [('wall', (16, 0, 0), 180, 0)]
+        current_and_output = [str(self.path), str(output)]
+        forms = [current_and_output + ['--before'],
+                 current_and_output + ['--previous'],
+                 ['--previous'] + current_and_output,
+                 ['--before', str(before)] + current_and_output,
+                 [f'--before={before}'] + current_and_output]
+        for arguments in forms:
+            with self.subTest(arguments=arguments):
+                view_sheet.main(cameras, arguments + ['--width', '32', '--height', '32', '--report', str(report)])
+                self.assertEqual(json.loads(report.read_text())['builds'], [str(before), str(self.path)])
+                with Image.open(output) as image:
+                    self.assertEqual(image.size, (64, 126))
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            view_sheet.main(cameras, current_and_output + ['--previous', '--before', str(before)])
+        self.assertEqual(caught.exception.code, 2)
 
     def test_both_companions_and_before_camera_are_checked(self):
         before = write_bsp(self.path.with_name('test_b1.bsp'))

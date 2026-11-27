@@ -107,7 +107,11 @@ def main(cameras, argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bsp', help='current build')
     parser.add_argument('out', help='output sheet PNG')
-    parser.add_argument('--before', nargs='?', const='previous', help='older BSP; omit value to infer _b(N-1).bsp')
+    comparison = parser.add_mutually_exclusive_group()
+    comparison.add_argument('--before', nargs='?', const='previous',
+                            help='older BSP; put bare --before after bsp/out to infer _b(N-1).bsp')
+    comparison.add_argument('--previous', dest='before', action='store_const', const='previous',
+                            help='infer _b(N-1).bsp; may appear before or after bsp/out')
     parser.add_argument('--cameras', help='JSON array of [label, [x,y,z], yaw, pitch]; overrides CAMS')
     parser.add_argument('--views', type=int, nargs='+', help='zero-based camera indices, in desired order')
     parser.add_argument('--fov', type=float, default=105, help='horizontal field of view')

@@ -37,7 +37,7 @@ class BSP:
         fc = lump(7)
         self.faces = [struct.unpack_from('<hhihh4Bi', fc, i) for i in range(0, len(fc), 20)]
         self.light = np.frombuffer(lump(8), np.uint8)
-        self.light_rgb = load_lit(self.path.with_suffix('.lit'), len(self.light)) if use_lit else None
+        self.light_rgb = load_lit(self.path.with_suffix('.lit'), len(self.light)) if use_lit and len(self.light) else None
         self.lighting = 'RGB .lit' if self.light_rgb is not None else 'BSP monochrome'
         nd, lf, md = lump(5), lump(10), lump(14)
         self.nodes = [struct.unpack_from('<i2h', nd, offset)
@@ -309,6 +309,7 @@ def render(bsp, cam, yaw, pitch, fov=95, W=960, H=540, *, gamma=1, contrast=1,
         T = P @ tv + vs[7]
         name, tex = bsp.tex[vs[8]] or ('missing', None)
         liquid = name.startswith('*')
+        sky = name.lower().startswith('sky')
         if tex is None:
             col = np.full(S.shape + (3,), 128.0)
             idxs = np.zeros(S.shape, np.uint8)
@@ -316,8 +317,8 @@ def render(bsp, cam, yaw, pitch, fov=95, W=960, H=540, *, gamma=1, contrast=1,
             h, w = tex.shape
             texture_s, texture_t = liquid_uv(P, vs, w, h) if liquid else (S, T)
             idxs = tex[np.floor(texture_t).astype(int) % h, np.floor(texture_s).astype(int) % w]
-            col = PAL[idxs] if liquid or name.startswith('sky') else palette[idxs]
-        if name.startswith('sky'):
+            col = PAL[idxs] if liquid or sky else palette[idxs]
+        if sky:
             shade = np.ones(S.shape + (3,))
         elif lofs >= 0 and s0 != 255:
             ps = poly @ sv + vs[3]

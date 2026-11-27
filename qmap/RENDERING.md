@@ -3,7 +3,8 @@
 `render.py` loads BSP29 textures and the companion `<map>.lit` automatically.
 QLIT version 1 files must contain exactly three RGB bytes for every sample in
 the BSP lighting lump. A missing companion uses monochrome lighting; an invalid
-or unreadable companion emits a warning and falls back to monochrome. Use
+or unreadable companion emits a warning and falls back to monochrome. An empty
+BSP lighting lump skips companion loading. Use
 `--no-lit` to check how the map reads without colored lighting.
 
 ```bash
@@ -30,9 +31,12 @@ looks down. `--views 0 1` selects an ordered subset. Both builds are rendered
 afresh with the same camera list, FOV, image size, gamma, contrast, and lighting
 settings. Each row places the old build on the left and the new build on the
 right; neither image is taken from an earlier sheet with potentially different
-cameras. Each BSP independently loads its own `.lit` companion. `--before` with
-no value looks for `_b(N-1).bsp` beside `_bN.bsp`; use an explicit path when builds
-are in separate directories.
+cameras. Each BSP independently loads its own `.lit` companion. `--previous`
+looks for `_b(N-1).bsp` beside `_bN.bsp` and may appear before or after the
+positional paths. Bare `--before` also infers the previous build when placed
+after `bsp out`; before those paths its optional value consumes the next path.
+Use `--before older.bsp` or `--before=older.bsp` when builds are in separate
+directories.
 
 The renderer checks the eye against solid and sky hull-0 leaves, including visible
 brush submodels, excluding invisible triggers. It also clips every visible
