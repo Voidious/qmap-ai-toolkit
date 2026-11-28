@@ -18,7 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'qmap'))
 sys.path.insert(0, str(ROOT / 'demos'))
 HAS_NUMBA = importlib.util.find_spec('numba') is not None
-if HAS_NUMBA:
+HAS_SCIPY = importlib.util.find_spec('scipy') is not None
+HAS_MATPLOTLIB = importlib.util.find_spec('matplotlib') is not None
+HAS_TRAFFIC_DEPS = HAS_NUMBA and HAS_SCIPY
+if HAS_TRAFFIC_DEPS:
     import trafficprofile as traffic
     import traffic as demo_traffic
     from test_combatprofile import _write_synthetic_arena_bsp
@@ -51,7 +54,7 @@ class TestTrafficEvidence(unittest.TestCase):
         self.assertEqual((checked, omitted), (38, 2))
 
 
-@unittest.skipUnless(HAS_NUMBA, 'numba required for player-hull traffic analysis')
+@unittest.skipUnless(HAS_TRAFFIC_DEPS, 'numba and scipy required for player-hull traffic analysis')
 class TestTraffic(unittest.TestCase):
     def graph(self, links, count):
         adjacency = defaultdict(list)
@@ -218,12 +221,16 @@ class TestTraffic(unittest.TestCase):
             _write_synthetic_arena_bsp(first, with_balcony=True)
             _write_synthetic_arena_bsp(second, with_balcony=False)
             output, image = directory / 'json' / 'traffic.json', directory / 'png' / 'traffic.png'
+            cli_args = ['--diff', str(first), str(second), '--mode', 'ca', '--json', str(output)]
+            if HAS_MATPLOTLIB:
+                cli_args += ['--png', str(image)]
             with redirect_stdout(io.StringIO()):
-                self.assertEqual(traffic.main(['--diff', str(first), str(second), '--mode', 'ca', '--json', str(output), '--png', str(image)]), 0)
+                self.assertEqual(traffic.main(cli_args), 0)
             report = json.loads(output.read_text())
             self.assertGreater(report['diff']['removed_cells'], 0)
             self.assertGreater(report['diff']['matched_cells'], 0)
-            self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
+            if HAS_MATPLOTLIB:
+                self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
             measured = traffic.traffic_profile(first, mode='ca')
             self.assertEqual(traffic.compare(measured, measured)['mean_absolute_shift'], 0)
             renamed = json.loads(json.dumps(measured))
@@ -253,6 +260,7 @@ class TestTraffic(unittest.TestCase):
             with self.assertRaises(ValueError):
                 traffic.traffic_profile(path, seed=-1)
 
+    @unittest.skipUnless(HAS_MATPLOTLIB, 'matplotlib required for traffic PNG rendering')
     def test_draw_computes_an_omitted_before_after_comparison(self):
         report = dict(map='floor', mode='ca', sha256='0' * 64, settings={}, endpoints=[], pairs=[],
                       cells=dict(points=[[8, 8, 0]], reachable=[True], route_share=[0.25]))
@@ -273,6 +281,7 @@ class TestTraffic(unittest.TestCase):
             self.assertEqual(report['dead_wings'], [])
             json.dumps(report, allow_nan=False)
 
+    @unittest.skipUnless(HAS_MATPLOTLIB, 'matplotlib required for traffic PNG rendering')
     def test_z_shifted_floor_keeps_both_added_and_removed_markers_visible(self):
         from matplotlib.axes import Axes
 
@@ -296,6 +305,7 @@ class TestTraffic(unittest.TestCase):
         self.assertEqual(removed[1]['marker'], 'x')
         self.assertGreater(added[1]['s'], removed[1]['s'])
 
+    @unittest.skipUnless(HAS_MATPLOTLIB, 'matplotlib required for traffic PNG rendering')
     def test_heatmap_gamma_is_display_only_and_can_restore_linear_colors(self):
         from matplotlib.axes import Axes
 
@@ -342,7 +352,7 @@ class TestTraffic(unittest.TestCase):
         self.assertNotIn('None', output.getvalue())
 
 
-@unittest.skipUnless(HAS_NUMBA, 'numba required for demo/traffic integration')
+@unittest.skipUnless(HAS_TRAFFIC_DEPS, 'numba and scipy required for demo/traffic integration')
 class TestDemoTraffic(unittest.TestCase):
     def test_windows_exclude_warmup_and_refuse_silent_whole_demo_fallback(self):
         prints = [(5, 'round [1] starts in 5'), (20, 'sco  damg'), (23, 'round [2] starts in 5'), (40, 'sco damg')]
@@ -401,10 +411,11 @@ class TestDemoTraffic(unittest.TestCase):
             encoded += block(message('match is over'))
             demo.write_bytes(encoded)
             report = traffic.traffic_profile(bsp, mode='ctf')
-            result = demo_traffic.validate(report, [demo], png=directory / 'observed.png')
+            result = demo_traffic.validate(report, [demo], png=directory / 'observed.png' if HAS_MATPLOTLIB else None)
             self.assertEqual(result['demos'][0]['status'], 'checked')
             self.assertGreater(result['demos'][0]['coverage']['matched_player_seconds'], 0)
-            self.assertTrue((directory / 'observed.png').read_bytes().startswith(b'\x89PNG'))
+            if HAS_MATPLOTLIB:
+                self.assertTrue((directory / 'observed.png').read_bytes().startswith(b'\x89PNG'))
             with self.assertRaisesRegex(ValueError, 'duplicate demo'):
                 demo_traffic.validate(report, [demo, demo])
             incomplete = directory / 'incomplete.mvd'
@@ -412,11 +423,15 @@ class TestDemoTraffic(unittest.TestCase):
             skipped = demo_traffic.validate(report, [incomplete], skip_incomplete=True)
             self.assertEqual(skipped['demos'][0]['status'], 'not_checked')
             output, image = directory / 'json' / 'validation.json', directory / 'png' / 'validation.png'
+            cli_args = [str(bsp), str(demo), '--mode', 'ctf', '--teams', 'ReD', '--json', str(output)]
+            if HAS_MATPLOTLIB:
+                cli_args += ['--png', str(image)]
             with redirect_stdout(io.StringIO()):
-                self.assertEqual(demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--teams', 'ReD', '--json', str(output), '--png', str(image)]), 0)
+                self.assertEqual(demo_traffic.main(cli_args), 0)
             self.assertEqual(json.loads(output.read_text())['demos'][0]['status'], 'checked')
             self.assertEqual(json.loads(output.read_text())['team_filter'], ['red'])
-            self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
+            if HAS_MATPLOTLIB:
+                self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
             incomplete.write_bytes(bytes([0, 6, 0]))
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 demo_traffic.main([str(bsp), str(incomplete), '--mode', 'ctf', '--json', str(output)])
