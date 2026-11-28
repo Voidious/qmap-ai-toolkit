@@ -203,10 +203,11 @@ generator altogether when a concept wants one.
 design wanted it: mirror symmetry, light strips that follow stairs, floor and ceiling inlays,
 picture panels, a sky oculus, columns with bases and capitals, hook-only perches, teleporters,
 jump pads, liquids, team colours by half, stratified walls, signs, true ramps, angled walls
-(chamfers, diagonal walls, octagonal pillars), overhang architraves, and exposed-ramp veneers.
-Known gaps today: curved walls (beyond prism approximations), diagonal ramps, sloped ceilings,
-doors, lifts, and moving brushes. If a design needs one, build it (see section 4, *Extending the
-toolkit*).
+(chamfers, diagonal walls, octagonal pillars), overhang architraves, exposed-ramp veneers,
+sloped/gabled/vaulted ceilings with lamp-placement awareness, arched doorways, overhead trusses,
+wall buttresses/corbels, curved walls/rotundas/circular columns with continuous Valve 220 UV
+wrapping, and diagonal/elevated ramps. Known gaps today: doors, lifts, and moving brushes. If a
+design needs one, build it (see section 4, *Extending the toolkit*).
 
 ### Design for height
 
@@ -293,7 +294,9 @@ and section rather than chasing height statistics in the abstract.
 4. **Links inside rooms, not only between them.** Ramps and broad stairs within a room; drops
    (one-way down, cheap and fun); jump-ups to ledges (≤ 44 standing, more with a run); pads.
 5. **Teleporters** as vertical links where the mode suits (2–5 in the classics).
-6. **Angled walls** break the boxy read: chamfered corners, diagonal walls, octagonal pillars.
+6. **Non-box architecture** breaks the procedural grid read: chamfered corners, diagonal walls,
+   diagonal ramps, curved walls/rotundas, circular columns, arched doorways, sloped/gabled/vaulted
+   ceilings, overhead trusses, and tapered buttresses.
 
 **Section first.** Sketch a concept in section before the plan, and check every blockout with
 `section.py` (side-on slices) and `iso.py` (an isometric cutaway per level); `gallery/profiles/`
@@ -491,24 +494,75 @@ Measure our new maps the same way once the group has played them.
   that should never snag movement or block rockets (avoid `*` liquids or `sky*` on illusionary
   brushes — see gotcha 31). Substantial decorative architecture within reach (item plinths, column
   bases, statues, arch frames) may be solid when kept snag-free; see section 5.
-* **Ramps** (v3): `ramp(rect, axis, z0, z1, rev=False)` — the floor over rect rises from z0 to z1
-  along +axis (`rev`: along −axis), as one wedge brush. Rise ≤ run (45°, QW's walkable limit);
-  15–35° plays best. The grid holds a stepped stand-in (mat `'ramp'`, never written) so the checks
-  see something walkable, and the ramp's foot is registered for the stair-feet check. Walls beside
-  a ramp get a **sloped kickplate and strip** (illusionary overlays) from the foot room's strip to
-  the head room's strip; give the head room its own `strip_ramp` / strip height so they meet. When
-  a ramp's lateral side faces a differently themed room, `_out.py` slices off a 1-unit `worldspawn`
-  veneer with that room's bands while keeping the walking wedge in the minlight floor skin.
-* **Prisms** (v3): `prism(points, z0, z1, kind=None)` — solid on a convex footprint, points
-  counter-clockwise from above; `chamfer(rect, corner, size, z0, z1)` cuts a room corner at 45°
-  (four make an octagon); `diag_wall(x0, y0, x1, y1, thick, z0, z1)`. Faces are written with
-  **Valve 220 texture axes** (qbsp reads the format per face, so they mix with standard faces),
-  so stone runs along an angled face without stretching. `kind=None`: each face is banded like
-  the room it faces (outward air probes march in 8-unit steps past `'diag'` cells so kickplate,
-  strip, and cornice continue round chamfers without reading through thin walls); other kinds
-  (`'pillar'`...) take that kind's textures. Every cell the prism overlaps gets grid stand-in
-  `'diag'` (replacing only air so floors underneath never leak; never written, never given a lamp),
-  while cells wholly inside a named-kind prism (`kind not in (None, 'ledge')`) keep that mat.
+* **Ramps & diagonal ramps**: `ramp(rect, axis, z0, z1, rev=False)` — the floor over rect rises
+  from z0 to z1 along +axis (`rev`: along −axis), as one wedge brush. Rise ≤ run (45°, QW's
+  walkable limit); 15–35° plays best. The grid holds a stepped stand-in (mat `'ramp'`, never
+  written) so the checks see something walkable, and the ramp's foot is registered for the
+  stair-feet check. Walls beside an axial ramp get a **sloped kickplate and strip** (illusionary
+  overlays) from the foot room's strip to the head room's strip; give the head room its own
+  `strip_ramp` / strip height so they meet. When an axial ramp's lateral side faces a differently
+  themed room, `_out.py` slices off a 1-unit `worldspawn` veneer with that room's bands while
+  keeping the walking wedge in the minlight floor skin. **`diag_ramp(x0, y0, x1, y1, width, z0, z1,
+  base=None, thick=None)`** generalizes ramps to arbitrary angles (from low centre `(x0, y0, z0)` to
+  high centre `(x1, y1, z1)`, Valve 220 walking surface in `EXTRA['skin']`, angled foot check in
+  `check.py`). Pass `thick=` (e.g. `16` or `24`) for an elevated sloped walkway slab that players can
+  pass underneath at the high end.
+* **Prisms, curved walls, rotundas & circular columns**: `prism(points, z0, z1, kind=None,
+  wrap_u=False, fit_u=False)` — solid on a convex footprint, points counter-clockwise from above;
+  `chamfer(rect, corner, size, z0, z1)` cuts a room corner at 45° (four make an octagon);
+  `diag_wall(x0, y0, x1, y1, thick, z0, z1)`. Faces are written with **Valve 220 texture axes**
+  (qbsp reads the format per face, so they mix with standard faces), so stone runs along an angled
+  face without stretching. `kind=None`: each face is banded like the room it faces (outward air
+  probes march in 8-unit steps past `'diag'` cells so kickplate, strip, and cornice continue round
+  chamfers without reading through thin walls); axis-aligned faces on `kind=None` prisms use
+  world-aligned `sface` so doorway jambs align seamlessly with adjoining walls. Set `wrap_u=True`
+  (and `fit_u=True` on closed loops) to wrap U continuously by cumulative chord length around every
+  facet. Built-in curved primitives use this automatically:
+  - `cylinder(cx, cy, radius, z0, z1, sides=12, kind='pillar', parts=None, fit_u=True)` —
+    multi-sided circular column with continuous UV wrap (and optional 32u base/shaft/capital when
+    `PILLAR_PARTS` is on).
+  - `curved_wall(cx, cy, r_in, r_out, a0, a1, z0, z1, segs=8, kind=None, fit_u=False)` —
+    segmented curved wall arc with continuous UV wrapping on both inner and outer arcs; its
+    segments share a `prism_groups` ID so `check.py` skips internal facet-to-facet pairs while
+    still enforcing `< 64` separation against other solids. Leave `≥ ~80u` radial clearance
+    between concentric curved walls (or between a curved baffle and its enclosing `rotunda()` wall)
+    so the 32×32 axial player box still has `≥ 64u` effective width against angled facets in
+    `vprofile.py --check`.
+  - `rotunda(cx, cy, radius, z0, z1, th, sides=12, openings=(), fit_u=True)` — leak-safe circular
+    room: carves the enclosing 16-grid box and tiles the outer spandrels with exact disjoint convex
+    perimeter wedges (no hollow cavities behind the curved wall), clipping any cardinal or
+    arbitrary-angle doorway `openings` cleanly (`(side_or_angle, width, z_top)`).
+* **Sloped, pitched & vaulted ceilings (lamp-aware)**: carve the room up to its **maximum height**
+  (`top_z` / ridge / crown) first so the grid shell seals the void leak-free, then add ceiling
+  wedges inside the carved air (all support `SYM='none'|'rotate'|'mirror'`, write `'ceil_slope'`
+  grid stand-ins, and automatically suppress jagged stepped cornices on adjacent walls):
+  - `sloped_ceil(r, axis, z_lo, z_hi, rev=False, top_z=None, tex=None)` — single-plane sloped
+    ceiling or slanted overhang (`top_z > z_hi` extends solidly up to the room ceiling).
+  - `gable_ceil(r, axis, z_eave, z_ridge, ridge=None, top_z=None, tex=None)` — pitched double-slope
+    gable roof spanning across `axis`.
+  - `barrel_vault(r, axis, z_spring, z_crown, segs=6, top_z=None, tex=None)` — segmented arched
+    vault spanning across `axis` with continuous Valve 220 UV wrapping across facets.
+  - **Lamp awareness**: call `room_lamps()` (or `lamp()`) *after* sloped ceilings and trusses.
+    `ceil_height_at()` queries `SLOPED_CEILS` over the lamp's 32×32 footprint; beneath angled roofs,
+    `lamp()` lowers the mount to a non-solid (`func_detail_illusionary`) pendant fixture + hanger
+    stem tucked cleanly into the slope and puts the light entity 40u below the lowest roof corner.
+    Truss dodging and the `≥ 96u` headroom filter are enforced by `room_lamps()` / `_lamp_spot()`,
+    not by direct `lamp()` calls (a direct `lamp()` under a `< 96u` eave still emits the pendant
+    and prints a stderr note), so prefer `room_lamps()` under sloped roofs or check
+    `ceil_height_at()` before calling `lamp()` directly.
+* **Arched doorways, ceiling trusses & buttresses** (following section 5's bounded decorative
+  collision policy):
+  - `arch_door(r, axis, z0, z1, th, arch_h=None, segs=6, trim=False)` — carves a `door=True`
+    passage and fills the upper spandrels via `barrel_vault`, enforcing jamb spring height
+    `z_spring >= z0 + 56` so players never snag. `trim=True` adds thin non-solid
+    (`func_detail_illusionary`) arch-ring trim proud of both doorway faces.
+  - `truss(r, axis, z_bot, z_top=None, beam_h=16, knee=0, tie=True, solid=None)` — flat overhead
+    beam or pitched king-post truss with optional diagonal knee braces. With `solid=None` (default),
+    trusses whose lowest underside sits `≥ 96u` above the floor compile as solid `worldspawn`
+    (real cast shadows and rocket collision), while lower beams drop to `func_detail_illusionary`.
+  - `buttress(r, side, z0, z1, top_depth=0, taper='top', solid=True)` — wall-mounted sloped
+    buttress (`taper='top'`, wide at bottom) or overhead cantilevered corbel (`taper='bottom'`, wide
+    at top). Set `solid=False` along tight strafe lanes for snag-free non-solid ribs.
 * **Team halves** (v3, Strata): `split_halves(themes)` at the end of the layout renames each
   listed theme to `<theme>_r` on the copy half (x < 0) and copies its heights, so `textures()`,
   `fixture_tex()` and `light_color()` can colour strips and lamps by team: `side_of(th)` gives
@@ -516,22 +570,23 @@ Measure our new maps the same way once the group has played them.
 * **More wall bands** (v3): `TRIM_Z[theme]` adds a string course `TRIM_H` tall (role `'band'`);
   `SPLIT_Z[theme]` gives walls below that height a second stone (role `'wall_lo'`), for tall
   rooms in layers. `SUN` holds the worldspawn sunlight keys for maps with sky. `room_lamps()`
-  nudges ceiling lamps off pillars/baffles and skips flush or recessed sky oculi.
+  nudges ceiling lamps off pillars/baffles/trusses, hangs pendants cleanly under sloped roofs, and
+  skips flush or recessed sky oculi.
 * **Floor minlight**: walkable tops get a 16-unit skin brush in a `func_group` with `_minlight`
-  so floors never go black while walls stay moody. Free-standing blocks (crates, columns) get it
-  too, so their sides aren't black.
+  so floors never go black while walls stay moody. Free-standing blocks (crates, columns —
+  including `cylinder` and `'pillar'` prisms) get it too, so their sides aren't black.
 * The generator writes a **JSON** (grid, themes, spawns, team spawns, items, perches, stair feet,
-  lights, labels, teleports, pushes, liquids, decals, ramps, prisms) that the checker, solvers,
-  route tools, and plan/section/iso renderers read.
+  lights, labels, teleports, pushes, liquids, decals, ramps, prisms, prism groups, sloped ceilings,
+  trusses, buttresses, diagonal ramps) that the checker, solvers, route tools, and plan/section/iso
+  renderers read.
 
 ### Extending the toolkit & evolving this guide
 
 Treat `template/` and `qmap/` as an evolving workshop, not a frozen specification:
 
 * **Let the map design lead.** When a layout wants geometry or mechanics the template lacks
-  (curved walls, diagonal ramps, sloped ceilings, doors, lifts, moving platforms, non-grid arches,
-  or custom lighting/banding), prototype it directly in that map's generator rather than bending
-  the design to fit the grid.
+  (doors, lifts, moving platforms, domed ceilings, or custom lighting/banding), prototype it
+  directly in that map's generator rather than bending the design to fit the grid.
 * **Add new checks and analyzers when real play reveals a blind spot.** Almost every tool in
   `qmap/` (`vprofile.py`, `itemprofile.py`, `collide_cmp.py`, `section.py`, `iso.py`, prism
   separation, passage width, blind pockets) was built because a real playtest caught something
@@ -566,7 +621,9 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   `fill()` rect, and wall at walkable height (`check.py`, fails below 64; configurable via
   `--min-prism-sep N`). Walkable `'bridge'` slabs are skipped; wall-attached structural prisms
   (`chamfer`, `diag_wall`) are allowed flush contact with their mounting wall; freestanding prisms
-  (pillars, cover blocks) must stay clear of every solid.
+  (pillars, cover blocks) must stay clear of every solid. Because an axis-aligned 32×32 player
+  box loses effective width against angled facets, keep `≥ ~80u` radial clearance between
+  concentric curved walls so `vprofile.py --check` (`--min-passage 64`) stays clear too.
 * **Stair feet**: the floor in front of every stair's bottom step must be clear across its full
   width — catches stairs running into a pillar or a wall stub.
 * **16-unit slots**: gaps a player can see but not fit into (a notch between a stub and a step).
@@ -923,6 +980,28 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
     enforces prism separation (`< 64`, `--min-prism-sep`) and empty blind pockets (`depth > width`),
     and `vprofile.py --check` reports narrow passages (`--min-passage`, default `64`) with both
     opposing solids as well as real-hull blind pockets.
+33. **Sloped ceilings, trusses, perches & lamp placement order.** Always `carve()` a room up to its
+    maximum ridge/crown height (`top_z`) first, add `sloped_ceil` / `gable_ceil` / `barrel_vault`
+    wedges and `truss` beams inside that carved air, and call `room_lamps()` *last*. Calling
+    `room_lamps()` earlier lets lamps clip into sloped roofs or trusses; placing a hook `perch()`
+    under a gable eave with `< 56u` clearance above it (`z_eave - perch_z < 56`) leaves zero
+    standing room (`check.py` catches it via `'ceil_slope'` grid stand-ins). Also remember
+    `info()`'s ramp early-return path in `_out.py` must suppress cornices under `'ceil_slope'`,
+    otherwise a wall beside a ramp under a barrel vault grows a jagged stepped cornice.
+34. **Diagonal ramps meeting axis-aligned cliffs form acute `< 64u` pinches.** Running a solid
+    `diag_ramp()` obliquely into a straight platform wall creates a sharp triangular pocket where
+    the ramp's side approaches the cliff wall — triggering both `check.py` 16-unit slots and
+    `vprofile.py --check` narrow-passage failures. Land diagonal ramps onto an open platform corner
+    (obtuse angles on both sides), meet a 45° chamfered landing, fill the acute wedge solidly, or
+    use `thick=` for an elevated sloped walkway slab with clear headroom underneath.
+35. **Continuous Valve 220 UVs on curved walls and coplanar trim faces.** Resetting `u = 0` at each
+    facet vertex creates a visible vertical seam on every chord of a curved wall, rotunda, or
+    circular column. Accumulate chord length around the arc (`wrap_u=True`, and `fit_u=True` on
+    closed rings like `cylinder` and `rotunda` so even the closing seam wraps modulo texture
+    width), keep axis-aligned structural prism faces (such as rotunda doorway jambs) on world-aligned
+    `sface` so they match adjoining walls, and keep coplanar vertical side faces on multi-member
+    trusses and arch trim world-aligned rather than projecting per-rafter tilted UVs onto shared
+    side planes (`texcheck.py` flags tilted coplanar seams immediately).
 
 ---
 

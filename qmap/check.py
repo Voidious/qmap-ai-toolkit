@@ -156,6 +156,8 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
     prisms = d.get('prisms', [])
     if not prisms:
         return []
+    prism_groups = d.get('prism_groups') or []
+    groups = [prism_groups[k] if k < len(prism_groups) else None for k in range(len(prisms))]
     C, XMIN, YMIN, NX, NY, BOT = (d[k] for k in ('C', 'XMIN', 'YMIN', 'NX', 'NY', 'BOT'))
     cols = d['cols']
     probs = []
@@ -164,6 +166,53 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
         xs = [p[0] for p in P]
         ys = [p[1] for p in P]
         meta.append((min(xs), min(ys), max(xs), max(ys), sum(xs) / len(xs), sum(ys) / len(ys)))
+
+    def _collect_edge_mounts(P, i0_, i1_, j0_, j1_):
+        mounts = []
+        n_v = len(P)
+        for k in range(n_v):
+            ax, ay = P[k]
+            bx, by = P[(k + 1) % n_v]
+            L = math.hypot(bx - ax, by - ay)
+            if L <= 1e-9:
+                continue
+            tx, ty = (bx - ax) / L, (by - ay) / L
+            enx, eny = ty, -tx
+            ei0 = max(i0_, int((min(ax, bx) - C - XMIN) // C))
+            ei1 = min(i1_, int((max(ax, bx) + C - XMIN) // C) + 1)
+            ej0 = max(j0_, int((min(ay, by) - C - YMIN) // C))
+            ej1 = min(j1_, int((max(ay, by) + C - YMIN) // C) + 1)
+            mcells = []
+            for i in range(ei0, ei1):
+                bx0 = XMIN + i * C
+                for j in range(ej0, ej1):
+                    by0 = YMIN + j * C
+                    box = [(bx0, by0), (bx0 + C, by0), (bx0 + C, by0 + C), (bx0, by0 + C)]
+                    sd = [(u - ax) * enx + (v - ay) * eny for u, v in box]
+                    if min(sd) < -1e-6:
+                        continue
+                    on_edge = [(u - ax) * tx + (v - ay) * ty for (u, v), s in zip(box, sd) if s <= 1e-6]
+                    if len(on_edge) >= 2 and min(max(on_edge), L) - max(min(on_edge), 0.0) > 1e-3:
+                        mcells.append((i, j))
+            if mcells:
+                mounts.append((ax, ay, enx, eny, mcells))
+        return mounts
+
+    # Precompute per-prism edge mounts for structural (kind=None) prisms so multi-segment curved
+    # walls / rotundas sharing a group can pool their outer backing-wall planes per floor band.
+    all_edge_mounts = {}
+    group_members = {}
+    for idx, (P, z0, z1, kind) in enumerate(prisms):
+        if kind is None:
+            x0_, y0_, x1_, y1_, _, _ = meta[idx]
+            pad_ = min_sep + C
+            all_edge_mounts[idx] = _collect_edge_mounts(
+                P,
+                max(0, int((x0_ - pad_ - XMIN) // C)), min(NX, int((x1_ + pad_ - XMIN) // C) + 1),
+                max(0, int((y0_ - pad_ - YMIN) // C)), min(NY, int((y1_ + pad_ - YMIN) // C) + 1),
+            )
+            if groups[idx] is not None:
+                group_members.setdefault(groups[idx], []).append(idx)
 
     for idx, (P, z0, z1, kind) in enumerate(prisms):
         if kind == 'bridge':
@@ -190,6 +239,8 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
             Q, qz0, qz1, qkind = prisms[jdx]
             if qkind == 'bridge':
                 continue
+            if groups[idx] is not None and groups[idx] == groups[jdx]:
+                continue
             if qz1 <= z0 or qz0 >= z1:
                 continue
             qx0, qy0, qx1, qy1, qcx, qcy = meta[jdx]
@@ -209,53 +260,35 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                 )
 
         # 2. Prism vs non-prism grid solids (walls, fill() rects, stairs) at each nearby floor.
-        # Wall-attached structural prisms (kind=None, e.g. chamfers) may sit flush on backing
-        # walls: an edge is mounted on a floor band only when a plain grid wall cell (m is None)
-        # overlapping that band lies completely on its outward side with positive-length
-        # collinear face contact.
+        # Wall-attached structural prisms (kind=None, e.g. chamfers, rotunda wedges) may sit flush
+        # on backing walls: an edge is mounted on a floor band only when a plain grid wall cell
+        # (m is None) overlapping that band lies completely on its outward side with positive-length
+        # collinear face contact. Grouped structural walls (curved_wall / rotunda) share their
+        # group's active backing-wall planes on the same floor band.
         floor_bands = [(f, max(f + STEP, z0), min(f + HEAD, z1)) for f in sorted(floors)]
-        edge_mounts = []
         if attached_kind:
-            n_v = len(P)
-            for k in range(n_v):
-                ax, ay = P[k]
-                bx, by = P[(k + 1) % n_v]
-                L = math.hypot(bx - ax, by - ay)
-                if L <= 1e-9:
-                    continue
-                tx, ty = (bx - ax) / L, (by - ay) / L
-                enx, eny = ty, -tx
-                ei0 = max(i0, int((min(ax, bx) - C - XMIN) // C))
-                ei1 = min(i1, int((max(ax, bx) + C - XMIN) // C) + 1)
-                ej0 = max(j0, int((min(ay, by) - C - YMIN) // C))
-                ej1 = min(j1, int((max(ay, by) + C - YMIN) // C) + 1)
-                mcells = []
-                for i in range(ei0, ei1):
-                    bx0 = XMIN + i * C
-                    for j in range(ej0, ej1):
-                        by0 = YMIN + j * C
-                        box = [(bx0, by0), (bx0 + C, by0), (bx0 + C, by0 + C), (bx0, by0 + C)]
-                        sd = [(u - ax) * enx + (v - ay) * eny for u, v in box]
-                        if min(sd) < -1e-6:
-                            continue
-                        on_edge = [(u - ax) * tx + (v - ay) * ty for (u, v), s in zip(box, sd) if s <= 1e-6]
-                        if len(on_edge) >= 2 and min(max(on_edge), L) - max(min(on_edge), 0.0) > 1e-3:
-                            mcells.append((i, j))
-                if mcells:
-                    edge_mounts.append((ax, ay, enx, eny, mcells))
+            if groups[idx] is not None:
+                mount_sources = group_members.get(groups[idx], [idx])
+            else:
+                mount_sources = [idx]
+        else:
+            mount_sources = []
 
         backing_mats = ('wall', 'ramp', 'stair', 'flank')
         best_grid = None
         for f, zlo, zhi in floor_bands:
-            mounted_planes = [
-                (ax, ay, enx, eny)
-                for ax, ay, enx, eny, mcells in edge_mounts
-                if any(
-                    m is None and b > zlo and a < zhi
-                    for i, j in mcells
-                    for a, b, m in cols[i][j]
-                )
-            ]
+            mounted_planes = []
+            for m_idx in mount_sources:
+                _, mz0, mz1, _ = prisms[m_idx]
+                if mz1 <= zlo or mz0 >= zhi:
+                    continue
+                for ax, ay, enx, eny, mcells in all_edge_mounts.get(m_idx, ()):
+                    if any(
+                        m is None and b > zlo and a < zhi
+                        for i, j in mcells
+                        for a, b, m in cols[i][j]
+                    ):
+                        mounted_planes.append((ax, ay, enx, eny))
             solid_cells = {}
             for i in range(i0, i1):
                 for j in range(j0, j1):
@@ -264,7 +297,7 @@ def check_prism_separation(d, AIR, min_sep=DEFAULT_MIN_PRISM_SEP):
                     for a, b, m in cols[i][j]:
                         if b <= zlo or a >= zhi:
                             continue
-                        if m == 'diag':
+                        if m in ('diag', 'ceil_slope'):
                             continue
                         # Skip interior stand-in cells wholly inside any prism of matching kind
                         is_prism_cell = False
@@ -764,6 +797,34 @@ def check_map(d, min_prism_sep=DEFAULT_MIN_PRISM_SEP, quiet=False):
         b = floor_cells(rect, z)
         if b:
             foot_bad.append(f'stair foot {rect} @ {z}: {len(b)} of {((rect[2]-rect[0])//C)*((rect[3]-rect[1])//C)} cells blocked, e.g. {b[:3]}')
+    diag_ramps = d.get('diag_ramps', [])
+    for dr in diag_ramps:
+        ax0, ay0, ax1, ay1, w, z0 = dr[:6]
+        L = math.hypot(ax1 - ax0, ay1 - ay0)
+        if L <= 1e-6:
+            continue
+        fx, fy = (ax1 - ax0) / L, (ay1 - ay0) / L
+        lx, ly = -fy, fx
+        hw = w / 2.0
+        foot_poly = [
+            (ax0 - fx * 32 - lx * hw, ay0 - fy * 32 - ly * hw),
+            (ax0 - lx * hw, ay0 - ly * hw),
+            (ax0 + lx * hw, ay0 + ly * hw),
+            (ax0 - fx * 32 + lx * hw, ay0 - fy * 32 + ly * hw),
+        ]
+        xs, ys = [p[0] for p in foot_poly], [p[1] for p in foot_poly]
+        tot_c, bad_c = 0, []
+        for i in range(max(0, int(math.floor((min(xs) - XMIN) / C))), min(NX, int(math.ceil((max(xs) - XMIN) / C)))):
+            cx_ = XMIN + i * C + C / 2.0
+            for j in range(max(0, int(math.floor((min(ys) - YMIN) / C))), min(NY, int(math.ceil((max(ys) - YMIN) / C)))):
+                cy_ = YMIN + j * C + C / 2.0
+                if poly_pt_dist(foot_poly, cx_, cy_) > 1e-6:
+                    continue
+                tot_c += 1
+                if not any(a == z0 and b - a >= HEAD for a, b in AIR[i][j]):
+                    bad_c.append((XMIN + i * C, YMIN + j * C))
+        if bad_c:
+            foot_bad.append(f'diag_ramp foot ({ax0:.0f},{ay0:.0f})->({ax1:.0f},{ay1:.0f}) @ {z0}: {len(bad_c)} of {tot_c} cells blocked, e.g. {bad_c[:3]}')
 
     def wall_at(i, j, z):
         if not (0 <= i < NX and 0 <= j < NY):
@@ -774,7 +835,8 @@ def check_map(d, min_prism_sep=DEFAULT_MIN_PRISM_SEP, quiet=False):
     for (i, j, z) in nodes:
         if any(wall_at(i + di, j + dj, z) and wall_at(i - di, j - dj, z) for di, dj in ((1, 0), (0, 1))):
             slots.add((XMIN + i * C, YMIN + j * C, z))
-    out('stair feet: ' + (f'{len(foot_bad)} PROBLEMS' if foot_bad else f'all {len(d.get("feet", []))} clear'))
+    n_feet = len(d.get('feet', [])) + len(diag_ramps)
+    out('stair feet: ' + (f'{len(foot_bad)} PROBLEMS' if foot_bad else f'all {n_feet} clear'))
     for t in foot_bad:
         out('  - ' + t)
     out('16-unit slots: ' + (f'{len(slots)} PROBLEM cells, e.g. {sorted(slots)[:6]}' if slots else 'none'))

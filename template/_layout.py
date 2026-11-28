@@ -14,15 +14,21 @@
 #   spawn(x, y, floor, angle, label) / team_spawn(x, y, floor, angle, team)
 #   perch(rect, z) / teleporter(...) / jumppad(...) / liquid(...) / panel(...) / inlay(...) / oculus(...)
 #   strip_ramp(...) / strip_ramp_pos(...)  light strips that follow stairs (see GUIDE section 6)
-#   ramp(rect, axis, z0, z1, rev=False)    v3: a true slope; walls beside it get sloped bands
+#   ramp(rect, axis, z0, z1, rev=False)    true slope; walls beside it get sloped bands
+#   diag_ramp(x0, y0, x1, y1, width, z0, z1, base=None, thick=None)  diagonal / non-axial ramp
 #   prism(points, z0, z1) / chamfer(rect, corner, size, z0, z1) / diag_wall(x0, y0, x1, y1, thick, z0, z1)
-#                                          v3: angled walls, cut corners, many-sided pillars
+#                                          angled walls, cut corners, many-sided pillars
+#   sloped_ceil / gable_ceil / barrel_vault  sloped, pitched & vaulted ceilings (lamp-aware)
+#   arch_door / truss / buttress           arched doorways, overhead trusses, wall buttresses
+#   curved_wall / rotunda / cylinder       curved arcs, circular rooms & columns (continuous UVs)
 #   label(x, y, text, z)                   names on the plan image
 # =========================================================================
 
-# --- DEMO (delete): an octagonal central hall with a plinth, an east wing with a raised gallery,
-#     and a sunken room to the north down a broad stair, with a ramp up to a ledge and an octagonal
-#     pillar. Builds in all three SYM modes.
+# --- DEMO (delete): an octagonal central hall with a plinth, an east wing with a gabled roof,
+#     trusses, buttresses, an arched doorway, and a diagonal ramp, a symmetric NE vaulted annex
+#     with an off-axis rotunda, curved baffle, circular column, and sloped alcove, a sunken north
+#     room with a barrel vault, slanted alcove, axial ramp, and 12-sided column, and a south
+#     rotunda with a curved baffle wall. Builds cleanly in all three SYM modes.
 
 # central hall, straddling x = 0: written once
 carve((-384, -384, 384, 384), 0, 384, 'hall', sym=False)
@@ -33,38 +39,67 @@ fill((128, 128, 192, 192), 0, 384, 'pillar')                            # column
 fill((128, -192, 192, -128), 0, 384, 'pillar')
 room_lamps((-384, -384, 384, 384), 384, step=256, value=520, sym=False)
 for _c in ('ne', 'nw', 'se', 'sw'):
-    chamfer((-384, -384, 384, 384), _c, 128, 0, 384, sym=False)           # v3: octagonal hall
+    chamfer((-384, -384, 384, 384), _c, 128, 0, 384, sym=False)           # octagonal hall
 label(0, -150, 'HALL 0')
 
-# east wing (+ copy): a doorway, a room, a raised gallery with broad steps, a hook perch
-carve((384, -64, 512, 64), 0, 128, 'hall', door=True)
-carve((512, -320, 1024, 320), 0, 352, 'wing')
-fill((832, -320, 1024, 320), BOT, 128, None)                            # gallery (128)
-terrace((832, -320, 1024, 320), 128, '-x')                             # 7 broad steps down its west side
-perch((576, 288, 704, 320), 224)
-room_lamps((512, -320, 1024, 320), 352, step=256, value=480)
+# east wing (+ copy): arched doorway, gabled roof with trusses & buttresses, gallery, diagonal ramp
+arch_door((384, -64, 512, 64), 'y', 0, 160, 'hall', arch_h=48, trim=True)
+carve((512, -320, 1024, 320), 0, 384, 'wing')
+fill((832, -320, 1024, 64), BOT, 128, None)                             # gallery (128)
+terrace((832, -320, 1024, -128), 128, '-x')                             # broad steps on south side
+diag_ramp(640, 224, 864, 0, 96, 0, 128)                                 # 45-deg ramp onto open gallery corner
+perch((704, 288, 800, 320), 224)
+gable_ceil((512, -320, 1024, 320), 'y', 288, 384)                       # pitched gable ceiling (eave 288 >= perch+64)
+truss((640, -320, 664, 320), 'y', 288, 384, beam_h=16, knee=32)         # solid overhead king-post trusses
+truss((800, -320, 824, 320), 'y', 288, 384, beam_h=16, knee=32)
+buttress((608, -320, 640, -288), '-y', 0, 288, top_depth=8)             # sloped wall buttresses
+buttress((608, 288, 640, 320), '+y', 0, 288, top_depth=8)
+room_lamps((512, -320, 1024, 320), 384, step=256, value=480)            # pendant lamps clear gable & trusses
 label(640, -200, 'WING 0'), label(928, -200, 'gallery 128', 128)
 
-# sunken room to the north, straddling x = 0: down a broad stair from a doorway in the hall
+# NE annex (+ copy): exercises sym=True barrel_vault, rotunda, curved_wall, cylinder & sloped_ceil
+carve((864, 320, 992, 448), 0, 192, 'wing', door=True, nocap=True, noarch=True)
+barrel_vault((864, 320, 992, 448), 'x', 128, 192, segs=4)
+_annex_box = rotunda(928, 704, 256, 0, 288, 'rotunda', sides=12,
+                     openings=[('-y', 128, 192), ('+x', 128, 160)])
+curved_wall(928, 704, 80, 112, 30, 150, 0, 96, segs=4)
+cylinder(832, 624, 28, 0, 288, sides=10, kind='pillar')
+carve((1184, 640, 1312, 768), 0, 192, 'alcove_e', strip=10 ** 6)
+sloped_ceil((1184, 640, 1312, 768), 'x', 128, 192, rev=True)
+room_lamps(_annex_box, 288, step=256, value=460)
+room_lamps((1184, 640, 1312, 768), 192, step=128, value=320)
+label(928, 704, 'ANNEX 0')
+
+# sunken room to the north, straddling x = 0: barrel vault, slanted alcove, axial ramp, circular column
 carve((-128, 384, 128, 512), 0, 128, 'hall', door=True, sym=False)
 carve((-128, 512, 128, 704), -96, 224, 'low', sym=False)
 stairs(-128, 512, 128, 704, 'y', -96, 0, rev=True, sym=False)          # rises toward the hall
 carve((-384, 704, 384, 1088), -96, 224, 'low', sym=False)
 strip_ramp((-128, 512, 128, 704), 48, 144, 144, sym=False)             # strip follows the stairs
-room_lamps((-384, 704, 384, 1088), 224, step=256, value=420, sym=False)
 panel((-64, 1080, 64, 1088), 64, 192, 'bk_panel', tex_px=256, sym=False)  # placeholder picture, 128 wide, thin in y
-fill((-384, 960, 384, 1088), BOT, 0, None, sym=False)                  # v3: a ledge along the north wall (0)
-strip_ramp((-384, 960, 384, 1088), 144, 144, 144, sym=False)          # the ledge's strip 144 above it
-ramp((-384, 768, -256, 960), 'y', -96, 0, sym=False)                   # v3: ramp up to it along the west wall (foot clear)
-carve((-512, 704, -384, 960), -96, 160, 'alcove', strip=-48, sym=False) # v3.5: alcove beside ramp (exercises veneer + architrave)
+fill((-384, 960, 384, 1088), BOT, 0, None, sym=False)                  # a ledge along the north wall (0)
+strip_ramp((-384, 960, 384, 1088), 144, 144, 144, sym=False)           # the ledge's strip 144 above it
+ramp((-384, 768, -256, 960), 'y', -96, 0, sym=False)                   # axial ramp up to it (foot clear)
+carve((-512, 704, -384, 960), -96, 160, 'alcove', strip=-48, sym=False) # alcove beside ramp (veneer + architrave)
+sloped_ceil((-512, 704, -384, 960), 'x', 112, 160, sym=False)          # slanted ceiling over alcove
+barrel_vault((-384, 704, 384, 960), 'y', 144, 224, segs=6, sym=False)  # barrel vault over sunken bay
+cylinder(192, 832, 40, -96, 224, sides=12, kind='pillar', sym=False)   # 12-sided circular column (continuous UV)
+room_lamps((-384, 704, 384, 1088), 224, step=256, value=420, sym=False)
 room_lamps((-512, 704, -384, 960), 160, step=256, value=340, sym=False)
-_oct = [(192 + 40 * math.cos(math.radians(22.5 + 45 * k)), 832 + 40 * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
-prism([(round(x), round(y)) for x, y in _oct], -96, 224, 'pillar', sym=False)   # v3: octagonal pillar
 label(0, 900, 'LOW -96', -96), label(0, 1024, 'ledge 0', 0)
+
+# south rotunda, straddling x = 0: arched entry, 12-sided circular room, curved cover wall
+arch_door((-64, -512, 64, -384), 'x', 0, 160, 'hall', arch_h=48, trim=True, sym=False)
+_rot_box = rotunda(0, -736, 224, 0, 288, 'rotunda', sides=12, openings=[('+y', 128, 160)], sym=False)
+curved_wall(0, -736, 64, 96, 210, 330, 0, 96, segs=4, sym=False)        # curved cover baffle inside rotunda
+room_lamps(_rot_box, 288, step=256, value=460, sym=False)
+label(0, -736, 'ROTUNDA 0')
 
 # spawns (+ copies)
 spawn(-256, -256, 0, 45, 'hall')
 spawn(640, 64, 0, 180, 'wing')
 spawn(960, -192, 128, 180, 'gallery')
+spawn(928, 864, 0, 270, 'annex')
 spawn(-128, 800, -96, 0, 'low', sym=False)
 spawn(320, 760, -96, 180, 'low', sym=False)
+spawn(128, -736, 0, 180, 'rotunda', sym=False)
