@@ -59,6 +59,13 @@ across a band up to `--band-gap 32` units high. Set `--band-gap 0` to restrict
 these comparisons to touching surfaces. Disconnected walls are not compared
 against a whole-map zero-offset rule.
 
+The band-gap check is a geometric proximity heuristic, not a room/storey
+classifier. Coplanar walls in separate storeys across a 16-32-unit slab can
+therefore be compared when their material names match. Use `--band-gap 0` for
+such maps if independent storey anchors are intentional; shared-edge checks
+remain enabled, but separated decorative-band checks are then disabled.
+Automatic storey separation is not implemented.
+
 V courses are checked across corners by default. U phases on independent
 non-coplanar projections are not directly comparable: ordinary QuakeEd walls
 can project X on one wall and Y on the next without a design error. Use
