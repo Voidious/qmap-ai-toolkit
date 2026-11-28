@@ -343,12 +343,19 @@ def _truss_hits(px, py, z_lo, z_hi, half=16):
 
 def lamp(x, y, ceil, value=380, sym=True):
     """Ceiling lamp: flush fixture at z = ceil on flat ceilings, or a non-solid pendant fixture
-    hung safely below sloped/vaulted roofs so lamps never clip into angled ceilings."""
+    hung below sloped/vaulted roofs so lamps never clip into angled ceilings.
+    Note: direct lamp() calls do not skip low eaves or dodge trusses — use room_lamps() for
+    automatic >= 96u headroom and truss-avoidance checks (a stderr note is emitted if a direct
+    sloped pendant has < 96u headroom)."""
     pts = [(x, y)] + ([sym_pt(x, y)] if symmetric(sym) else [])
     for px, py in pts:
         z_box = ceil_height_at(px, py, ceil, half=16)
         if z_box < ceil - 1e-3:
             z_mount = int(math.floor(z_box))
+            fl = _floor_below_rect((px - 16, py - 16, px + 16, py + 16), z_mount)
+            if z_mount - fl < 96:
+                print(f'note: lamp({px}, {py}, ceil={ceil}) under slope has only {z_mount - fl}u headroom (< 96); '
+                      f'prefer room_lamps() or raise eave', file=sys.stderr)
             z_ctr = int(math.ceil(ceil_height_at(px, py, ceil, half=0)))
             PENDANT_LAMPS.append((px, py, z_mount, max(z_mount, z_ctr)))
             lights.append((px, py, z_mount - 40, round(value * LIGHT_SCALE)))

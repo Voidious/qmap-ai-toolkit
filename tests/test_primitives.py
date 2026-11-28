@@ -141,6 +141,31 @@ spawn(576, 0, 0, 180, 'w')
                 chk = check.check_map(data, quiet=True)
                 self.assertEqual(chk['problems'], [])
 
+    def test_direct_lamp_under_low_slope_warns_while_room_lamps_skips(self):
+        # room_lamps() skips spots with < 96u headroom under a low eave; direct lamp() still places
+        # the pendant but emits a stderr note so low-eave mistakes aren't silent.
+        layout_room = """
+carve((-128, -128, 128, 128), 0, 128, 'low', sym=False)
+sloped_ceil((-128, -128, 128, 128), 'x', 64, 96, top_z=128, sym=False)
+room_lamps((-128, -128, 128, 128), 128, step=128, value=300, sym=False)
+"""
+        err1 = io.StringIO()
+        with contextlib.redirect_stderr(err1):
+            ns1 = _load_template('none', layout_src=layout_room, items_src='')
+        self.assertEqual(ns1['PENDANT_LAMPS'], [])
+        self.assertIn('placed 0 lamps', err1.getvalue())
+
+        layout_direct = """
+carve((-128, -128, 128, 128), 0, 128, 'low', sym=False)
+sloped_ceil((-128, -128, 128, 128), 'x', 64, 96, top_z=128, sym=False)
+lamp(0, 0, 128, value=300, sym=False)
+"""
+        err2 = io.StringIO()
+        with contextlib.redirect_stderr(err2):
+            ns2 = _load_template('none', layout_src=layout_direct, items_src='')
+        self.assertEqual(len(ns2['PENDANT_LAMPS']), 1)
+        self.assertIn('headroom (< 96)', err2.getvalue())
+
 
 class TestArchesTrussesAndButtresses(unittest.TestCase):
     def test_arch_door_headroom_guard_and_illusionary_trim(self):

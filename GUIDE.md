@@ -542,11 +542,14 @@ Measure our new maps the same way once the group has played them.
     gable roof spanning across `axis`.
   - `barrel_vault(r, axis, z_spring, z_crown, segs=6, top_z=None, tex=None)` — segmented arched
     vault spanning across `axis` with continuous Valve 220 UV wrapping across facets.
-  - **Lamp awareness**: call `lamp()` / `room_lamps()` *after* sloped ceilings and trusses.
+  - **Lamp awareness**: call `room_lamps()` (or `lamp()`) *after* sloped ceilings and trusses.
     `ceil_height_at()` queries `SLOPED_CEILS` over the lamp's 32×32 footprint; beneath angled roofs,
-    `lamp()` automatically emits a non-solid (`func_detail_illusionary`) pendant fixture + hanger
-    stem tucked cleanly into the slope and puts the light entity 40u below the lowest roof corner,
-    while `_lamp_spot()` dodges `truss()` beams and skips low eaves (`< 96u` headroom).
+    `lamp()` lowers the mount to a non-solid (`func_detail_illusionary`) pendant fixture + hanger
+    stem tucked cleanly into the slope and puts the light entity 40u below the lowest roof corner.
+    Truss dodging and the `≥ 96u` headroom filter are enforced by `room_lamps()` / `_lamp_spot()`,
+    not by direct `lamp()` calls (a direct `lamp()` under a `< 96u` eave still emits the pendant
+    and prints a stderr note), so prefer `room_lamps()` under sloped roofs or check
+    `ceil_height_at()` before calling `lamp()` directly.
 * **Arched doorways, ceiling trusses & buttresses** (following section 5's bounded decorative
   collision policy):
   - `arch_door(r, axis, z0, z1, th, arch_h=None, segs=6, trim=False)` — carves a `door=True`
