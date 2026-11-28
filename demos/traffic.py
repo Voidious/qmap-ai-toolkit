@@ -257,6 +257,8 @@ def main(argv=None):
         parser.error('outputs must be distinct and cannot overwrite inputs')
     try:
         report = trafficprofile.traffic_profile(args.bsp, mode=args.mode)
+        for output in outputs:
+            output.parent.mkdir(parents=True, exist_ok=True)
         result = validate(report, args.demos, start=args.start, end=args.end, whole_demo=args.whole_demo,
                           skip_incomplete=args.skip_incomplete, png=args.png, teams=args.teams)
         Path(args.json).write_text(json.dumps(result, indent=2, allow_nan=False) + '\n')

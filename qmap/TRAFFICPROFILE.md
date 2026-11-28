@@ -20,6 +20,7 @@ refusals exit **2**. An analysis without usable demand reports missing coverage;
 it does not label all floor dead or claim the map passed. JSON includes every
 floor cell, endpoint projection, sampled pair, unreachable route and warning.
 Output paths cannot overwrite input BSPs/demos, and PNG/JSON paths must differ.
+Both CLIs create missing parent directories for their JSON and PNG outputs.
 
 ## Movement and demand
 

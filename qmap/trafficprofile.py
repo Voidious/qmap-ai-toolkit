@@ -471,11 +471,11 @@ def main(argv=None):
             print(f"TRAFFIC SHIFT: {difference['matched_cells']} matched, +{difference['added_cells']}/-{difference['removed_cells']} floor cells; mean absolute shift {shift_label}")
             if difference['demand_changed']:
                 print('DEMAND CHANGED: endpoints differ; this is not a geometry-only comparison')
+        for destination in destinations:
+            destination.parent.mkdir(parents=True, exist_ok=True)
         if args.json:
             payload = dict(before=reports[0], after=reports[1], diff=difference) if args.diff else reports[0] if len(reports) == 1 else reports
             Path(args.json).write_text(json.dumps(payload, indent=2, allow_nan=False) + '\n')
-        if args.png_dir:
-            Path(args.png_dir).mkdir(parents=True, exist_ok=True)
         pngs = destinations[1 if args.json else 0:]
         for index, destination in enumerate(pngs):
             draw(reports[-1] if args.diff else reports[index], destination,

@@ -217,7 +217,7 @@ class TestTraffic(unittest.TestCase):
             first, second = directory / 'test_b1.bsp', directory / 'test_b2.bsp'
             _write_synthetic_arena_bsp(first, with_balcony=True)
             _write_synthetic_arena_bsp(second, with_balcony=False)
-            output, image = directory / 'traffic.json', directory / 'traffic.png'
+            output, image = directory / 'json' / 'traffic.json', directory / 'png' / 'traffic.png'
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(traffic.main(['--diff', str(first), str(second), '--mode', 'ca', '--json', str(output), '--png', str(image)]), 0)
             report = json.loads(output.read_text())
@@ -411,11 +411,12 @@ class TestDemoTraffic(unittest.TestCase):
             incomplete.write_bytes(block(user + position(128)))
             skipped = demo_traffic.validate(report, [incomplete], skip_incomplete=True)
             self.assertEqual(skipped['demos'][0]['status'], 'not_checked')
-            output = directory / 'validation.json'
+            output, image = directory / 'json' / 'validation.json', directory / 'png' / 'validation.png'
             with redirect_stdout(io.StringIO()):
-                self.assertEqual(demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--teams', 'ReD', '--json', str(output)]), 0)
+                self.assertEqual(demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--teams', 'ReD', '--json', str(output), '--png', str(image)]), 0)
             self.assertEqual(json.loads(output.read_text())['demos'][0]['status'], 'checked')
             self.assertEqual(json.loads(output.read_text())['team_filter'], ['red'])
+            self.assertTrue(image.read_bytes().startswith(b'\x89PNG'))
             incomplete.write_bytes(bytes([0, 6, 0]))
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 demo_traffic.main([str(bsp), str(incomplete), '--mode', 'ctf', '--json', str(output)])
