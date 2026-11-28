@@ -108,9 +108,22 @@ class TestAlignment(unittest.TestCase):
     def test_scale_mismatch_cannot_alias_at_periodic_seam_endpoints(self):
         first, second = wall('first'), wall('second', start=64, end=128)
         second.axes[1, 2] = -3
+        second.shifts[1] -= 128
         findings = texcheck.alignment_checks([first, second])
-        self.assertTrue(any(finding['code'] == 'wall-course' for finding in findings))
+        course = next(finding for finding in findings if finding['code'] == 'wall-course')
+        self.assertEqual(course['phase_delta'], 0)
+        self.assertEqual(course['phase_drift'], 256)
+        self.assertIn('phase varies by 256px', course['message'])
         self.assertEqual(texcheck.alignment_checks([first, second], patterns=('other*',)), [])
+
+    def test_phase_report_uses_signed_modular_offsets_without_drift(self):
+        first = wall('first')
+        second = wall('second', start=64, end=128, shifts=(0, 160 + 8))
+        course = texcheck.alignment_checks([first, second])[0]
+        self.assertEqual(course['phase_delta'], 8)
+        self.assertEqual(course['phase_drift'], 0)
+        second.shifts[1] = 160 - 8
+        self.assertEqual(texcheck.alignment_checks([first, second])[0]['phase_delta'], -8)
 
     def test_portal_world_projection_ignores_shifts_and_merges_fragments(self):
         first = wall('portal', start=0, end=64)

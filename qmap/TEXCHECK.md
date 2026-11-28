@@ -47,7 +47,10 @@ Offsets are compared modulo the actual dimensions: two phases of 32 and 160
 are equivalent on a 128-high texture; neither must be zero. QuakeEd rotations,
 negative/non-unit scales, and Valve 220 axes participate in the comparison.
 Phase variation along the seam also warns, so a scale mismatch cannot hide by
-matching only at periodic endpoints. Comparisons use the same texture name,
+matching only at periodic endpoints. JSON `phase_delta` is the signed modular
+offset at the first comparison point; `phase_drift` is the unwrapped offset
+range along the seam. A zero modular offset with nonzero drift still warns,
+and the message names that variation. Comparisons use the same texture name,
 case-insensitively; different material names are not assumed to share courses.
 
 Shared edges are matched by line and overlapping segment, including split BSP

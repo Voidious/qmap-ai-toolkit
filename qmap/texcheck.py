@@ -323,10 +323,15 @@ def alignment_checks(faces, band_gap=32, patterns=(), *, corner_u=False):
             period = first.period[component]
             code = 'wall-course' if component == 1 else 'corner-u-phase' if corner else 'wall-u-phase'
             key = (code, *sorted((first.ident, second.ident)))
-            if key not in seen and (np.max(phase_error(delta, period)) > 0.05 or np.ptp(delta) > 0.05):
+            drift = float(np.ptp(delta))
+            if key not in seen and (np.max(phase_error(delta, period)) > 0.05 or drift > 0.05):
                 seen.add(key)
-                findings.append(finding(code, f'{"V course" if component else "U seam"} disagrees modulo {period:g}px',
-                                        (first, second), phase_delta=round(float(delta[0]), 4), period=period))
+                message = f'{"V course" if component else "U seam"} disagrees modulo {period:g}px'
+                if drift > 0.05:
+                    message += f'; phase varies by {drift:g}px along the seam'
+                modular_delta = float((delta[0] + period / 2) % period - period / 2)
+                findings.append(finding(code, message, (first, second),
+                                        phase_delta=round(modular_delta, 4), phase_drift=round(drift, 4), period=period))
 
     edges = defaultdict(list)
     for face in walls:
