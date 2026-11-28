@@ -84,6 +84,7 @@ sys.path.insert(0, 'qmap')
 import combatprofile as cp
 
 bsp_dir = pathlib.Path(sys.argv[1])
+by_name = {p.stem.lower(): p for p in bsp_dir.iterdir() if p.is_file() and p.suffix.lower() == '.bsp'}
 pools = [
     ('duel',  ['aerowalk', 'dapak12', 'naked3', 'naked4', 'ztndm3']),
     ('large', ['skull', 'bravado', 'spinev2', 'ultrav', 'schloss',
@@ -92,7 +93,7 @@ pools = [
 rows = []
 for pool, names in pools:
     for name in names:
-        r = cp.combat_profile(str(bsp_dir / f'{name}.bsp'), name=name, ref=pool)
+        r = cp.combat_profile(str(by_name[name]), name=name, ref=pool)
         kb = r['killboxes'][0] if r['killboxes'] else {}
         pc = r['perches'][0] if r['perches'] else {}
         rows.append({
