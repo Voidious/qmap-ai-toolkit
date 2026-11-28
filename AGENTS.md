@@ -19,11 +19,12 @@ scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 - **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
   `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
   `scipy`, `matplotlib`, `numba`.
-  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/itemprofile.py`, which import it) requires
-    `numba`. Without `numba`, the `TestVprofilePassageWidth` tests in `tests/test_checks.py` and
-    `TestCtfRouteIndependence` tests in `tests/test_ctfprofile.py` are skipped rather than failing.
+  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py`, which import it) requires
+    `numba`. Without `numba`, the `TestVprofilePassageWidth` tests in `tests/test_checks.py`,
+    `TestCtfRouteIndependence` tests in `tests/test_ctfprofile.py`, and
+    `TestCombatProfile` tests in `tests/test_combatprofile.py` are skipped rather than failing.
     Run in a Python environment with `numba` installed whenever you touch `vprofile.py`,
-    `ctfprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
+    `ctfprofile.py`, `combatprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
 - **Map compilation** (only needed to smoke-test `template/build.sh` or rebuild `examples/`):
   [`ericw-tools`](https://github.com/ericwa/ericw-tools) built from source with `ERICW` pointing
   to the build directory containing `qbsp/qbsp`, `vis/vis`, and `light/light`, plus `bash`. On
@@ -41,7 +42,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 A change isn't done until the full `tests/` suite passes. Check the test output for skipped
-`numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`, or `qmap/itemprofile.py`.
+`numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`,
+`qmap/combatprofile.py`, or `qmap/itemprofile.py`.
 
 When changing `template/` or the compilation/check pipeline (`qmap/check.py`, `qmap/vprofile.py`,
 `qmap/makewad.py`, `qmap/render.py`), also run an end-to-end `template/` smoke build if `ERICW`
@@ -79,7 +81,7 @@ surrounding file and keep diffs clean and scoped.
   - Root `VERSION` holds 3-part SemVer (`MAJOR.MINOR.PATCH`, trailing newline required).
   - The top heading in `CHANGES.md` must match `VERSION` (`# v<VERSION> ...`). Keep ticket IDs
     out of `CHANGES.md` bullets.
-  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`)
+  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`, `qmap/COMBATPROFILE.md`)
     and `template/` file banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
     hardcode release numbers or the old name `qmap-toolkit`. `tests/test_version.py` enforces
     all of these plus valid relative links/anchors in `README.md`.
@@ -133,7 +135,7 @@ surrounding file and keep diffs clean and scoped.
 | `GUIDE.md` | End-to-end map-making field guide (process, design, verticality, sizing, item economy, gotchas). |
 | `VERSION` | Single source of truth for toolkit SemVer (`MAJOR.MINOR.PATCH`). |
 | `CHANGES.md` | Release changelog (top heading must match `VERSION`). |
-| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality & CTF benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`), and item-placement study (`items/`). |
+| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality, CTF & combat benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`, `profiles/combat_refs.json`), and item-placement study (`items/`). |
 | `examples/` | Four frozen, reproducible reference maps (`ca_lyceum`, `ctf_circuit`, `ctf_strata`, `ctf_bastion`). |
 
 ### `template/` -- starting point for each new map
@@ -155,6 +157,7 @@ surrounding file and keep diffs clean and scoped.
 | `check.py` | Grid-level checks on generator JSON: reachability, one-way traps, blind pockets, spawn sightlines, item margins, perches, stair feet, 16-unit slots, and prism separation (`--min-prism-sep`). |
 | `vprofile.py` | Compiled BSP29 player-hull check (`--check`: traps, narrow passages `--min-passage`, blind pockets, unreachable items), verticality benchmark (`--targets --ref duel\|large`), and travel-distance sizing (`numba` required). |
 | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag routes, LOS-separated midfield lanes, single-vantage choke detection, flag exits/sightlines, and two-panel PNG plots (`numba` required). |
+| `combatprofile.py`, `COMBATPROFILE.md` | Compiled BSP29 3D exposure, overlook asymmetry (kill boxes & oppressive perches), and disengage / time-to-cover analyzer calibrated against 15 classic QW maps, with floor-sliced PNG heatmaps and `--diff` mode (`numba` required). |
 | `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator auditing visual-pass collision diffs (proving zero change on texture-only builds or verifying only declared decorative edits). |
 | `texcheck.py`, `TEXCHECK.md` | Source/BSP texture alignment and visual hazards: courses, seams, portals, WADs, illusionary contents, sky overlaps, and dark standable floors; opt-in `TEXCHECK=1` build integration. |
 | `pick_spawns.py`, `pick_spawns_sym.py` | Spawn solvers maximizing spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror`). |
@@ -192,6 +195,13 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
   compatibility, docstring coverage), `gallery/profiles/large_refs.json` invariants, and
   `numba`-gated `vprofile.py` checks (synthetic clipnode passage width, real-hull blind pockets,
   `--targets --ref duel|large`).
+- `tests/test_combatprofile.py` -- `gallery/profiles/combat_refs.json` schema, classic-only
+  invariant, and `REFERENCE_*` min..max parity, plus `numba`-gated `combatprofile.py` checks
+  (shared `vprofile.build_floor_graph()` parity + teleporters/push pads, exact hull-0 raycasting +
+  `func_wall` blocking, 3D diagonal & cross-elevation sightlines, `--max-sightline` cap reporting,
+  `--overlook-dz`, sampled-representative bucketing, overlook asymmetry kill box vs. perch,
+  regional overlooker disengage & unoverlooked shelter, floor slicing, diff noise floors &
+  added/removed floor overlays, JSON/PNG CLI outputs).
 - `tests/test_ctfprofile.py` -- `gallery/profiles/ctf_refs.json` schema & classic-only invariant,
   plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, off-route
   vantage-grid chokes and route-1 pre-filtering, geodesic U-shape progress, flag exits, walk-time

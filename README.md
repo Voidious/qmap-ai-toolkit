@@ -235,6 +235,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 | | `texcheck.py` | Texture course/corner/portal alignment, WAD/content/sky hazards, and compiled dark-floor lint with JSON reports (see [`qmap/TEXCHECK.md`](qmap/TEXCHECK.md)) |
 | **Spawns, Routes & Pacing** | `pick_spawns.py`, `pick_spawns_sym.py` | Solvers for the largest set of spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror` symmetric) |
 | | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag times, LOS-separated midfield routes, single-vantage choke detection, flag exits/sightlines, and diagnostic plots |
+| | `combatprofile.py` | Compiled BSP29 3D exposure, overlook asymmetry (kill boxes & oppressive perches), and disengage / time-to-cover analyzer calibrated to 15 classic QW maps, with floor-sliced heatmaps and `--diff` mode (see [`qmap/COMBATPROFILE.md`](qmap/COMBATPROFILE.md)) |
 | | `routes.py`, `flagtime.py` | Named walking routes and timings between flags or arbitrary coordinates (carrier pace vs solo hook pace) |
 | | `sightlines.py` | Longest straight eye-level sightlines per floor level along X and Y |
 | | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map |
