@@ -40,15 +40,17 @@ def horizontal(ident, texture, rect, height, normal=-1):
                          np.array([0., 0, normal]), np.array([[1., 0, 0], [0., -1, 0]]), np.zeros(2), (128, 128))
 
 
-def floor_bsp(path, *, lighting=bytes(9), ceiling=None, fullbright=False, model_class=None):
-    write_bsp(path, lighting=lighting, indices=[224 if fullbright else 16] * 256)
+def floor_bsp(path, *, lighting=bytes(9), ceiling=None, fullbright=False, model_class=None,
+              light_offset=0, styles=(0, 255, 255, 255), texture_flags=0):
+    write_bsp(path, lighting=lighting, indices=[224 if fullbright else 16] * 256,
+              light_offset=light_offset, styles=styles)
     data = Path(path).read_bytes()
     lumps = [data[offset:offset + length] for offset, length in
              (struct.unpack_from('<ii', data, 4 + index * 8) for index in range(15))]
     lumps[1] = struct.pack('<4fi', 0, 0, 1, 0, 2) + struct.pack('<4fi', 0, 0, 1, 24, 2)
     vertices = [struct.unpack_from('<3f', lumps[3], offset) for offset in range(0, len(lumps[3]), 12)]
     lumps[3] = b''.join(struct.pack('<3f', point[1], point[2], point[0]) for point in vertices)
-    lumps[6] = struct.pack('<8fii', 1, 0, 0, 0, 0, -1, 0, 0, 0, 0)
+    lumps[6] = struct.pack('<8fii', 1, 0, 0, 0, 0, -1, 0, 0, 0, texture_flags)
     lumps[9] = struct.pack('<i2h', 1, -1, -2)
     if ceiling is not None:
         lumps[1] += struct.pack('<4fi', 0, 0, 1, ceiling - 32, 2)
@@ -228,6 +230,21 @@ class TestDarkFloors(unittest.TestCase):
         report = texcheck.audit(self.path)
         self.assertEqual(report['counts'], {})
         self.assertTrue(any('fullbright map' in skipped for skipped in report['coverage']['skipped']))
+
+    def test_omitted_lightmaps_are_black_except_special_or_fullbright_texels(self):
+        for offset, styles in ((-1, (255, 255, 255, 255)), (-1, (0, 255, 255, 255)),
+                               (0, (255, 255, 255, 255))):
+            with self.subTest(offset=offset, styles=styles):
+                floor_bsp(self.path, lighting=bytes([64] * 9), light_offset=offset, styles=styles)
+                report = texcheck.audit(self.path)
+                self.assertEqual(report['coverage']['standable_floor_cells'], 4)
+                self.assertEqual(len(report['findings'][0]['cells']), 4)
+                floor_bsp(self.path, light_offset=offset, styles=styles, fullbright=True)
+                self.assertEqual(texcheck.audit(self.path)['counts'], {})
+                floor_bsp(self.path, light_offset=offset, styles=styles, texture_flags=1)
+                report = texcheck.audit(self.path)
+                self.assertEqual(report['counts'], {})
+                self.assertEqual(report['coverage']['standable_floor_cells'], 0)
 
     def test_floor_budget_and_invalid_settings_refuse_instead_of_claiming_clean(self):
         floor_bsp(self.path)

@@ -109,8 +109,10 @@ checks appear under missing coverage rather than silently passing.
 ### Dark floors
 
 Samples use a world-aligned 16-unit XY grid by default (`--floor-step`). Only
-upward-facing polygons with normal Z at least 0.7 and stored lightmaps are
-sampled. The compiled Quake hull 1 tests whether a 32x32x56 player can stand at
+ordinary upward-facing polygons with normal Z at least 0.7 are sampled.
+On an otherwise lit BSP, omitted face lightmaps (`lightofs = -1` or no styles)
+are treated as zero illumination: the compiler can omit completely black faces.
+`TEX_SPECIAL` faces are excluded. The compiled Quake hull 1 tests whether a 32x32x56 player can stand at
 that point against the world and static `func_wall` models, including clearance
 above and support immediately below; slopes
 include the hull's horizontal footprint. The test does not establish spawn

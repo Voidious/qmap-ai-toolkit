@@ -462,12 +462,14 @@ def dark_floor_checks(bsp, clipnodes, faces, step=16, threshold=0, budget=100000
         if face.owner not in bsp.solid_models or face.normal[2] < 0.7 or face.texture.startswith('*') or face.texture.lower().startswith('sky'):
             continue
         stored = bsp.faces[face.index]
-        if stored[9] < 0 or stored[5] == 255:
+        if bsp.texinfo[stored[4]][9] & 1:
             continue
-        uv = face.uv(face.vertices)
-        minimum = np.floor(uv.min(0) / 16)
-        size = (np.ceil(uv.max(0) / 16) - minimum + 1).astype(int)
-        lightmap = render.build_lightmap(samples, stored[9], int(size[0]), int(size[1]), stored[5:9]) * 255
+        lightmap = None
+        if stored[9] >= 0 and stored[5] != 255:
+            uv = face.uv(face.vertices)
+            minimum = np.floor(uv.min(0) / 16)
+            size = (np.ceil(uv.max(0) / 16) - minimum + 1).astype(int)
+            lightmap = render.build_lightmap(samples, stored[9], int(size[0]), int(size[1]), stored[5:9]) * 255
         lower, upper = face.vertices.min(0), face.vertices.max(0)
         xstart, xend = math.ceil(lower[0] / step - 0.5), math.ceil(upper[0] / step - 0.5)
         ystart, yend = math.ceil(lower[1] / step - 0.5), math.ceil(upper[1] / step - 0.5)
@@ -497,16 +499,18 @@ def dark_floor_checks(bsp, clipnodes, faces, step=16, threshold=0, budget=100000
                 pixels = texture[1]
                 if pixels[int(math.floor(texture_uv[1])) % pixels.shape[0], int(math.floor(texture_uv[0])) % pixels.shape[1]] >= 224:
                     continue
-            coordinate = np.clip(texture_uv / 16 - minimum, 0, size - 1)
-            start = np.floor(coordinate).astype(int)
-            end = np.minimum(start + 1, size - 1)
-            fraction = coordinate - start
-            horizontal_weight, vertical_weight = fraction
-            brightness = (lightmap[start[1], start[0]] * (1 - horizontal_weight) * (1 - vertical_weight)
-                          + lightmap[start[1], end[0]] * horizontal_weight * (1 - vertical_weight)
-                          + lightmap[end[1], start[0]] * (1 - horizontal_weight) * vertical_weight
-                          + lightmap[end[1], end[0]] * horizontal_weight * vertical_weight)
-            if float(brightness @ [0.299, 0.587, 0.114]) <= threshold:
+            luminance = 0.0
+            if lightmap is not None:
+                coordinate = np.clip(texture_uv / 16 - minimum, 0, size - 1)
+                start = np.floor(coordinate).astype(int)
+                end = np.minimum(start + 1, size - 1)
+                horizontal_weight, vertical_weight = coordinate - start
+                brightness = (lightmap[start[1], start[0]] * (1 - horizontal_weight) * (1 - vertical_weight)
+                              + lightmap[start[1], end[0]] * horizontal_weight * (1 - vertical_weight)
+                              + lightmap[end[1], start[0]] * (1 - horizontal_weight) * vertical_weight
+                              + lightmap[end[1], end[0]] * horizontal_weight * vertical_weight)
+                luminance = float(brightness @ [0.299, 0.587, 0.114])
+            if luminance <= threshold:
                 dark.append(point.round(4).tolist())
         if dark:
             findings.append(finding('dark-floor', f'{len(dark)} pitch-black standable floor cells', (face,), cells=dark))
