@@ -42,8 +42,12 @@ def play_windows(prints, duration, mode, start=None, end=None, whole_demo=False)
     else:
         starts = sorted(set(time for time, message in prints if 'match has begun' in message.lower()))
         ends = sorted(set(time for time, message in prints if 'match is over' in message.lower()))
-        windows = [(lower, next(time for time in ends if time > lower))
-                   for lower in starts if any(time > lower for time in ends)]
+        windows = []
+        for index, lower in enumerate(starts):
+            limit = starts[index + 1] if index + 1 < len(starts) else duration
+            upper = next((time for time in ends if lower < time <= limit), None)
+            if upper is not None:
+                windows.append((lower, upper))
     if not windows:
         raise ValueError('no complete match/round windows; specify --start/--end or explicitly --whole-demo')
     merged = []

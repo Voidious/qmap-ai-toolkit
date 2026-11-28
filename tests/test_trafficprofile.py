@@ -282,6 +282,17 @@ class TestDemoTraffic(unittest.TestCase):
         np.testing.assert_allclose(seconds, [0.05, 0.05])
         self.assertEqual(coverage['matched_fraction'], 1)
 
+    def test_restarted_matches_do_not_pair_an_aborted_start_with_a_later_end(self):
+        prints = [(10, 'Match has begun'), (50, 'Match has begun'), (100, 'Match is over')]
+        for mode in ('tdm', 'ffa', 'ctf'):
+            with self.subTest(mode=mode):
+                self.assertEqual(demo_traffic.play_windows(prints, 120, mode)[0], [(50, 100)])
+        prints = [(5, 'match has begun'), (20, 'match is over'), (30, 'match has begun'),
+                  (60, 'match has begun'), (90, 'match is over'), (95, 'match has begun')]
+        self.assertEqual(demo_traffic.play_windows(prints, 120, 'tdm')[0], [(5, 20), (60, 90)])
+        with self.assertRaisesRegex(ValueError, 'no complete'):
+            demo_traffic.play_windows([(5, 'match has begun'), (30, 'match has begun')], 120, 'ctf')
+
     def test_rank_correlation_handles_ties_and_constant_predictions(self):
         report = dict(cells=dict(patch=np.repeat(np.arange(4), 4).tolist(), route_share=np.repeat([0, 0.1, 0.2, 0.3], 4).tolist()))
         result = demo_traffic.rank_comparison(report, np.repeat([0, 1, 2, 3], 4))

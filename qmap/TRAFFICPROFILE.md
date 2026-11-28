@@ -115,7 +115,8 @@ geometry-only experiment; ID renaming alone does not change demand. Floor shifts
 `demos/traffic.py` compares alive **player-seconds**, not raw update counts, with
 the prediction on the same reachable floor patches. CA uses complete KTX round
 windows (countdown + 5 through round stats); other modes use match-begun/over
-prints. There is no silent whole-demo fallback: incomplete recordings refuse
+prints. Aborted starts are never paired with an end after the next match restart.
+There is no silent whole-demo fallback: incomplete recordings refuse
 unless `--skip-incomplete` explicitly records/omits them. `--start` / `--end`
 select explicit seconds; `--whole-demo` opts into possible warmup contamination.
 
