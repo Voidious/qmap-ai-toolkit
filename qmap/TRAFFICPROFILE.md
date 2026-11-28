@@ -49,7 +49,12 @@ CTF exits are continuing components of a 384-unit **directed geodesic shell**
 must reach the opposing flag without returning inside the base shell. Nearby
 floor cells connect a component only through local walk/jump/drop edges. This
 is a fixed-radius base-boundary heuristic, not semantic room recognition; small
-maps may provide only flag routes. CTF uses the shared ground-floor graph,
+maps may provide only flag routes, while a wide open flag room can merge several
+real exits into one shell component. Adaptive shell expansion is not implemented.
+Flag projection is bounded to nearby supported floor (64 XY / 96 Z), but does
+not test wall/LOS separation, so a stance across a thin partition remains a
+possible false match. Wall-aware projection is not implemented.
+CTF uses the shared ground-floor graph,
 **not** ctfprofile's extra free-swim/grapple graph. Hook-only travel is absent.
 
 At most `--max-pairs 256` ordered pairs are sampled without replacement by
