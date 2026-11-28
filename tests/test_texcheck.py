@@ -312,6 +312,18 @@ class TestDarkFloors(unittest.TestCase):
 
 
 class TestTemplateAnchors(unittest.TestCase):
+    def test_demo_strip_ramps_meet_the_room_strips(self):
+        environment = {'__name__': 'template_test'}
+        for name in ('_core.py', '_layout.py'):
+            path = ROOT / 'template' / name
+            exec(compile(path.read_text(), str(path), 'exec'), environment)
+        column = (0 - environment['XMIN']) // environment['C']
+        for height, position, room in ((-96, 688, 'low'), (0, 528, 'hall'), (0, 1024, 'hall')):
+            with self.subTest(height=height, position=position):
+                row = (position - environment['YMIN']) // environment['C']
+                self.assertEqual(environment['strip_z']('low', height, column, row),
+                                 environment['STRIPE_Z'][room])
+
     def test_default_and_custom_strip_use_one_wall_course_origin(self):
         environment = {'__name__': 'template_test'}
         for name in ('_core.py', '_out.py'):

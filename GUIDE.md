@@ -822,7 +822,7 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 26. **Multi-tier wings with ramps need per-level sub-themes** (`ca_saddle`): the first `carve()`
     of a theme pins `STRIPE_Z` to that floor, so a climbing flank sharing one theme drops its
     light strip into upper floors and breaks sloped ramp strips. Split tiers into sub-themes
-    (`wing_lo/mid/hi`) so every tier's strip sits at `floor + 128` and sloped ramp strips connect
+    (`wing_lo/mid/hi`) so every tier's strip sits at `floor + 144` and sloped ramp strips connect
     corner-to-corner. Avoid baking continuous horizontal straps into wall textures on multi-tier
     or ramped hallways, and cover horizontal-to-slope light-strip bends with non-solid junction
     collars (`func_detail_illusionary`) so the 1–2u overlay parallax step never shows as a notch.
