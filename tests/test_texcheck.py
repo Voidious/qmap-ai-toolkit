@@ -90,9 +90,20 @@ class TestAlignment(unittest.TestCase):
         self.assertEqual(texcheck.alignment_checks([first, second]), [])
         second.shifts = np.array([0., 16])
         self.assertEqual({finding['code'] for finding in texcheck.alignment_checks([first, second])},
-                         {'wall-course', 'wall-u-phase'})
+                         {'wall-course'})
+        self.assertEqual({finding['code'] for finding in texcheck.alignment_checks([first, second], corner_u=True)},
+                         {'wall-course', 'corner-u-phase'})
+        second.shifts[1] = 32
+        self.assertEqual(texcheck.alignment_checks([first, second]), [])
+        self.assertEqual(texcheck.alignment_checks([first, second], corner_u=True)[0]['code'], 'corner-u-phase')
         second.vertices[:, 0] += 256
         self.assertEqual(texcheck.alignment_checks([first, second]), [])
+
+    def test_coplanar_u_mismatches_remain_enabled_by_default(self):
+        first = wall('first')
+        second = wall('second', start=64, end=128, shifts=(8, 32))
+        findings = texcheck.alignment_checks([first, second])
+        self.assertEqual([finding['code'] for finding in findings], ['wall-u-phase'])
 
     def test_scale_mismatch_cannot_alias_at_periodic_seam_endpoints(self):
         first, second = wall('first'), wall('second', start=64, end=128)
@@ -215,10 +226,11 @@ class TestSourceAndWad(unittest.TestCase):
         self.write_map(brush_block(box_faces(0, 0, 0, 64, 64, 64, tex='absent')))
         output = self.directory / 'report.json'
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(texcheck.main([str(self.path), '--report', str(output)]), 0)
+            self.assertEqual(texcheck.main([str(self.path), '--report', str(output), '--corner-u']), 0)
             self.assertEqual(texcheck.main([str(self.path), '--strict']), 1)
             self.assertEqual(texcheck.main([str(self.path), '--strict', '--ignore', 'missing-texture']), 0)
         self.assertIn('missing-texture', json.loads(output.read_text())['counts'])
+        self.assertTrue(json.loads(output.read_text())['settings']['corner_u'])
         original = self.path.read_bytes()
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
             texcheck.main([str(self.path), '--report', str(self.path)])

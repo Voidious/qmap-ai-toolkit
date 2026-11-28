@@ -299,20 +299,20 @@ def phase_error(values, period):
     return np.abs((np.asarray(values) + period / 2) % period - period / 2)
 
 
-def alignment_checks(faces, band_gap=32, patterns=()):
+def alignment_checks(faces, band_gap=32, patterns=(), *, corner_u=False):
     walls = [face for face in faces if abs(face.normal[2]) < EPSILON and face.period
              and face.texture.lower() not in TOOLS and not face.texture.startswith('*')
              and not face.texture.lower().startswith('sky')
              and (not patterns or any(fnmatch.fnmatchcase(face.texture.lower(), pattern.lower()) for pattern in patterns))]
     findings, seen = [], set()
 
-    def compare(first, second, points, components):
+    def compare(first, second, points, components, corner=False):
         if first is second:
             return
         for component in components:
             delta = first.uv(points)[:, component] - second.uv(points)[:, component]
             period = first.period[component]
-            code = 'wall-course' if component == 1 else 'wall-u-phase'
+            code = 'wall-course' if component == 1 else 'corner-u-phase' if corner else 'wall-u-phase'
             key = (code, *sorted((first.ident, second.ident)))
             if key not in seen and (np.max(phase_error(delta, period)) > 0.05 or np.ptp(delta) > 0.05):
                 seen.add(key)
@@ -343,7 +343,8 @@ def alignment_checks(faces, band_gap=32, patterns=()):
                     continue
                 origin = start - direction * (start @ direction)
                 points = origin + np.linspace(common_lower, common_upper, 3)[:, None] * direction
-                compare(face, other, points, (0, 1))
+                corner = np.dot(face.normal, other.normal) < 1 - EPSILON
+                compare(face, other, points, (0, 1) if corner_u or not corner else (1,), corner)
             active.append((lower, upper, face, direction, start))
     planes = defaultdict(list)
     for face in walls:
@@ -520,7 +521,7 @@ def dark_floor_checks(bsp, clipnodes, faces, step=16, threshold=0, budget=100000
 
 
 def audit(path, *, map_path=None, bsp_path=None, wad_paths=None, wall_textures=(), portal_textures=(),
-          band_gap=32, sky_gap=8, floor_step=16, dark_threshold=0, max_floor_cells=1000000):
+          band_gap=32, sky_gap=8, floor_step=16, dark_threshold=0, max_floor_cells=1000000, corner_u=False):
     if not np.isfinite([band_gap, sky_gap, floor_step, dark_threshold]).all() or min(band_gap, sky_gap, dark_threshold) < 0 or dark_threshold > 255 or floor_step <= 0 or max_floor_cells <= 0:
         raise ValueError('require finite nonnegative gaps, 0 <= dark threshold <= 255, and positive floor step/budget')
     path = Path(path)
@@ -584,7 +585,7 @@ def audit(path, *, map_path=None, bsp_path=None, wad_paths=None, wall_textures=(
     geometry = compiled_faces if bsp_path.is_file() else source_visibility(source_faces, brushes)
     if any(face.period is None and face.texture.lower() not in TOOLS for face in geometry):
         skipped.append('wall alignment: faces with unknown texture periods')
-    findings.extend(alignment_checks(geometry, band_gap, wall_textures))
+    findings.extend(alignment_checks(geometry, band_gap, wall_textures, corner_u=corner_u))
     findings.extend(portal_checks(geometry, portal_textures))
     sky_faces = [face for face in source_faces if not brushes[face.owner]['classname'].startswith('trigger')]
     findings.extend(sky_checks(sky_faces if source_faces else compiled_faces, sky_gap))
@@ -594,7 +595,8 @@ def audit(path, *, map_path=None, bsp_path=None, wad_paths=None, wall_textures=(
             'coverage': {'geometry': 'compiled BSP faces' if bsp_path.is_file() else 'source faces with sampled exposure',
                          'faces': len(geometry), 'standable_floor_cells': checked, 'skipped': skipped},
             'settings': dict(band_gap=band_gap, sky_gap=sky_gap, floor_step=floor_step, dark_threshold=dark_threshold,
-                             max_floor_cells=max_floor_cells, wall_textures=list(wall_textures), portal_textures=list(portal_textures))}
+                             max_floor_cells=max_floor_cells, wall_textures=list(wall_textures), portal_textures=list(portal_textures),
+                             corner_u=corner_u)}
 
 
 def main(argv=None):
@@ -604,6 +606,7 @@ def main(argv=None):
     parser.add_argument('--bsp', dest='bsp_path', help='corresponding BSP29 (otherwise auto-discovered)')
     parser.add_argument('--wad', action='append', dest='wad_paths', help='WAD path; repeat to override worldspawn WAD list')
     parser.add_argument('--wall-texture', action='append', default=[], help='audit only matching wall texture globs')
+    parser.add_argument('--corner-u', action='store_true', help='also check U phase across independent corner projections')
     parser.add_argument('--portal-texture', action='append', default=[], help='portal texture globs (default: * names containing tele/portal)')
     parser.add_argument('--band-gap', type=float, default=32, help='maximum intervening wall-band height')
     parser.add_argument('--sky-gap', type=float, default=8, help='maximum decal clearance from sky')
@@ -619,7 +622,7 @@ def main(argv=None):
         report = audit(args.input, map_path=args.map_path, bsp_path=args.bsp_path, wad_paths=args.wad_paths,
                        wall_textures=args.wall_texture, portal_textures=args.portal_texture,
                        band_gap=args.band_gap, sky_gap=args.sky_gap, floor_step=args.floor_step,
-                       dark_threshold=args.dark_threshold, max_floor_cells=args.max_floor_cells)
+                       dark_threshold=args.dark_threshold, max_floor_cells=args.max_floor_cells, corner_u=args.corner_u)
         report['ignored_codes'] = args.ignore
         active = [item for item in report['findings'] if item['code'] not in args.ignore]
         if args.report:

@@ -31,7 +31,8 @@ the existing build/check exit-code conventions.
 | Code | What it detects |
 | --- | --- |
 | `wall-course` | Adjoining vertical faces of the same texture whose V coordinates disagree modulo texture height, including corners and walls separated by a narrow band. |
-| `wall-u-phase` | U coordinate disagreement modulo texture width along a shared wall/corner seam or across a narrow band. |
+| `wall-u-phase` | U coordinate disagreement modulo texture width along a coplanar seam or across a narrow band. |
+| `corner-u-phase` | Opt-in U phase comparison across independent non-coplanar projections (`--corner-u`). |
 | `portal-alignment` | A 64-unit-wide `*` portal whose projected world-U center is not 32 modulo 64. |
 | `missing-wad` | A source WAD reference that cannot be resolved. |
 | `missing-texture` | Source texture absent from the supplied WAD set, or a compiled face without embedded texture pixels. |
@@ -55,8 +56,11 @@ across a band up to `--band-gap 32` units high. Set `--band-gap 0` to restrict
 these comparisons to touching surfaces. Disconnected walls are not compared
 against a whole-map zero-offset rule.
 
-An intentional seam, an independently fitted pillar, or a mirrored corner can
-produce a useful warning without being a design error. Restrict the material
+V courses are checked across corners by default. U phases on independent
+non-coplanar projections are not directly comparable: ordinary QuakeEd walls
+can project X on one wall and Y on the next without a design error. Use
+`--corner-u` when the material is deliberately intended to match U at corners;
+these findings have the separate `corner-u-phase` code. Restrict the material
 set with repeatable `--wall-texture GLOB`, or use `--ignore wall-u-phase` when
 reviewing only horizontal courses. Ignored findings remain in the JSON report,
 alongside `ignored_codes`; they do not trigger strict failure. Texture pixel
