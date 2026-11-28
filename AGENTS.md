@@ -79,7 +79,7 @@ surrounding file and keep diffs clean and scoped.
   - Root `VERSION` holds 3-part SemVer (`MAJOR.MINOR.PATCH`, trailing newline required).
   - The top heading in `CHANGES.md` must match `VERSION` (`# v<VERSION> ...`). Keep ticket IDs
     out of `CHANGES.md` bullets.
-  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`)
+  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`)
     and `template/` file banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
     hardcode release numbers or the old name `qmap-toolkit`. `tests/test_version.py` enforces
     all of these plus valid relative links/anchors in `README.md`.
@@ -156,6 +156,7 @@ surrounding file and keep diffs clean and scoped.
 | `vprofile.py` | Compiled BSP29 player-hull check (`--check`: traps, narrow passages `--min-passage`, blind pockets, unreachable items), verticality benchmark (`--targets --ref duel\|large`), and travel-distance sizing (`numba` required). |
 | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag routes, LOS-separated midfield lanes, single-vantage choke detection, flag exits/sightlines, and two-panel PNG plots (`numba` required). |
 | `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator auditing visual-pass collision diffs (proving zero change on texture-only builds or verifying only declared decorative edits). |
+| `texcheck.py`, `TEXCHECK.md` | Source/BSP texture alignment and visual hazards: courses, seams, portals, WADs, illusionary contents, sky overlaps, and dark standable floors; opt-in `TEXCHECK=1` build integration. |
 | `pick_spawns.py`, `pick_spawns_sym.py` | Spawn solvers maximizing spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror`). |
 | `routes.py`, `flagtime.py` | 8-way Dijkstra walking routes and timings on `check.py`'s floor graph. |
 | `sightlines.py` | Longest straight eye-level sightlines per floor level along X and Y. |
@@ -180,6 +181,9 @@ surrounding file and keep diffs clean and scoped.
 ## Tests
 
 Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
+
+- `tests/test_texcheck.py` -- texture transforms, course/seam/portal phase, WAD/source parsing,
+  sky overlap, dark compiled floors/player clearance, CLI contracts, and template anchor consistency.
 
 - `tests/test_render.py` -- synthetic BSP29/.lit parsing, RGB normalization and lightmap
   response, liquid UVs, fullbrights, camera solidity/near-plane intersections, and paired sheets.

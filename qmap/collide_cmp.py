@@ -182,12 +182,13 @@ def brush_contents(texes):
     return typed[0], mixed
 
 
-def entities(txt):
+def entities(txt, *, spans=False):
     """Yield (brush blocks, classname or None) for every entity block in a .map file.
 
     A brush block is its text from '{' to the matching '}' inclusive, exactly the span
     map_entity_t::parse() hands to parse_brush(); parse_brush() below ignores the brace lines
     along with every other line that holds no face.
+    With spans=True, brush blocks are (start, end) source offsets instead of copied text.
 
     Walks tokens the way map_file_t::parse / map_entity_t::parse / parse_entity_dict do
     (common/mapfile.cc), because nothing about .map structure is decided by anything else. Every
@@ -299,7 +300,7 @@ def entities(txt):
                     if m.group(kind) == '}':
                         depth -= 1
                         if depth == 1:
-                            brs.append(txt[bstart:m.end()])
+                            brs.append((bstart, m.end()) if spans else txt[bstart:m.end()])
                         else:
                             bstate = 6
                         continue
@@ -309,7 +310,7 @@ def entities(txt):
             if bstate == 0:                 # brush header right after opening '{'
                 if tok == '}':
                     depth = 1
-                    brs.append(txt[bstart:m.end()])
+                    brs.append((bstart, m.end()) if spans else txt[bstart:m.end()])
                 elif tok == '{':
                     depth, bp, bstate = 3, True, 2
                 elif tok == 'brushDef':
@@ -324,7 +325,7 @@ def entities(txt):
             elif bstate == 6:               # after inner '}' of brushDef, expecting outer '}'
                 if tok == '}':
                     depth = 1
-                    brs.append(txt[bstart:m.end()])
+                    brs.append((bstart, m.end()) if spans else txt[bstart:m.end()])
             continue
         if kind is None:
             continue

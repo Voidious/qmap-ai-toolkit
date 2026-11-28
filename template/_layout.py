@@ -50,11 +50,11 @@ carve((-128, 384, 128, 512), 0, 128, 'hall', door=True, sym=False)
 carve((-128, 512, 128, 704), -96, 224, 'low', sym=False)
 stairs(-128, 512, 128, 704, 'y', -96, 0, rev=True, sym=False)          # rises toward the hall
 carve((-384, 704, 384, 1088), -96, 224, 'low', sym=False)
-strip_ramp((-128, 512, 128, 704), 32, 128, 128, sym=False)             # strip follows the stairs
+strip_ramp((-128, 512, 128, 704), 48, 144, 144, sym=False)             # strip follows the stairs
 room_lamps((-384, 704, 384, 1088), 224, step=256, value=420, sym=False)
 panel((-64, 1080, 64, 1088), 64, 192, 'bk_panel', tex_px=256, sym=False)  # placeholder picture, 128 wide, thin in y
 fill((-384, 960, 384, 1088), BOT, 0, None, sym=False)                  # v3: a ledge along the north wall (0)
-strip_ramp((-384, 960, 384, 1088), 128, 128, 128, sym=False)          # the ledge's strip 128 above it
+strip_ramp((-384, 960, 384, 1088), 144, 144, 144, sym=False)          # the ledge's strip 144 above it
 ramp((-384, 768, -256, 960), 'y', -96, 0, sym=False)                   # v3: ramp up to it along the west wall (foot clear)
 carve((-512, 704, -384, 960), -96, 160, 'alcove', strip=-48, sym=False) # v3.5: alcove beside ramp (exercises veneer + architrave)
 room_lamps((-512, 704, -384, 960), 160, step=256, value=340, sym=False)
@@ -68,4 +68,3 @@ spawn(640, 64, 0, 180, 'wing')
 spawn(960, -192, 128, 180, 'gallery')
 spawn(-128, 800, -96, 0, 'low', sym=False)
 spawn(320, 760, -96, 180, 'low', sym=False)
-
