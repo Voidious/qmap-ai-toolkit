@@ -107,7 +107,11 @@ balance judgments. Near-wall floor, camping space or a longer alternate route
 can be cold under shortest-path demand without being undesirable design.
 
 PNGs show separate world-aligned 128-unit Z slices with a shared route-share
-scale (up to 32 slices). Diffs use identical settings and resolved modes, common
+scale (up to 32 slices). A square-root color mapping (`--heatmap-gamma 0.5`)
+makes secondary routes visible without changing scores or clipping peaks;
+`--heatmap-gamma 1` restores linear colors. Before/after share the same mapping
+and maximum, and colorbar ticks remain in raw route-share units. Signed shift
+colors remain linear. Diffs use identical settings and resolved modes, common
 world XY and floor height rounded to 4 units. Matched cells show signed raw
 route-share shifts; added floor uses green hollow rings and removed floor small
 gray crosses. Both remain visible at the same XY when floor Z changes. Before/after

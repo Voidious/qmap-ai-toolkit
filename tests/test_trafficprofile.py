@@ -296,6 +296,32 @@ class TestTraffic(unittest.TestCase):
         self.assertEqual(removed[1]['marker'], 'x')
         self.assertGreater(added[1]['s'], removed[1]['s'])
 
+    def test_heatmap_gamma_is_display_only_and_can_restore_linear_colors(self):
+        from matplotlib.axes import Axes
+
+        report = dict(map='floor', mode='ca', cells=dict(points=[[8, 8, 0], [24, 8, 0], [40, 8, 0]],
+                                                       reachable=[True] * 3, route_share=[0, 0.01, 1]))
+        original_report = json.dumps(report)
+        scatter, norms = Axes.scatter, []
+
+        def record_scatter(axis, *coordinates, **style):
+            if style.get('cmap') == 'inferno':
+                norms.append(style['norm'])
+            return scatter(axis, *coordinates, **style)
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(Axes, 'scatter', new=record_scatter):
+            destination = Path(temporary) / 'traffic.png'
+            traffic.draw(report, destination)
+            np.testing.assert_allclose(norms[-1]([0, 0.01, 1]), [0, 0.1, 1])
+            traffic.draw(report, destination, heatmap_gamma=1)
+            np.testing.assert_allclose(norms[-1]([0, 0.01, 1]), [0, 0.01, 1])
+            with self.assertRaisesRegex(ValueError, 'gamma'):
+                traffic.draw(report, destination, heatmap_gamma=0)
+        self.assertEqual(json.dumps(report), original_report)
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+            traffic.main(['unused.bsp', '--heatmap-gamma', '0'])
+        self.assertEqual(caught.exception.code, 2)
+
 
 @unittest.skipUnless(HAS_NUMBA, 'numba required for demo/traffic integration')
 class TestDemoTraffic(unittest.TestCase):

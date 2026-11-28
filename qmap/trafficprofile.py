@@ -361,13 +361,15 @@ def compare(before, after):
                 removed_points=[before['cells']['points'][first[key]] for key in sorted(first.keys() - second.keys())])
 
 
-def draw(report, destination, before=None, difference=None):
+def draw(report, destination, before=None, difference=None, heatmap_gamma=0.5):
+    if not math.isfinite(heatmap_gamma) or heatmap_gamma <= 0:
+        raise ValueError('heatmap gamma must be positive and finite')
     if before is not None and difference is None:
         difference = compare(before, report)
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    from matplotlib.colors import Normalize
+    from matplotlib.colors import Normalize, PowerNorm
 
     points = np.asarray(report['cells']['points'], dtype=float).reshape(-1, 3)
     reachable = np.asarray(report['cells']['reachable'], dtype=bool)
@@ -389,9 +391,9 @@ def draw(report, destination, before=None, difference=None):
             coords = np.asarray(current['cells']['points'], dtype=float).reshape(-1, 3)
             keep = np.asarray(current['cells']['reachable'], dtype=bool) & (np.floor((coords[:, 2] + 1) / 128) == band)
             values = np.asarray(current['cells']['route_share'])[keep]
-            dots = axis.scatter(coords[keep, 0], coords[keep, 1], c=values, s=7, marker='s', cmap='inferno', norm=Normalize(0, maximum))
+            dots = axis.scatter(coords[keep, 0], coords[keep, 1], c=values, s=7, marker='s', cmap='inferno', norm=PowerNorm(heatmap_gamma, vmin=0, vmax=maximum))
             axis.set_title(f"{current['map']} ({current['mode']}), Z {band * 128}..{(band + 1) * 128}")
-            figure.colorbar(dots, ax=axis, label='fraction of routed demand visiting cell')
+            figure.colorbar(dots, ax=axis, label=f'route share (color gamma {heatmap_gamma:g})')
         if before:
             axis = axes[row, 2]
             changed = [item for item in difference['changes'] if math.floor((item['point'][2] + 1) / 128) == band]
@@ -440,10 +442,13 @@ def main(argv=None):
     parser.add_argument('--choke-multiple', type=float, default=4)
     parser.add_argument('--choke-share', type=float, default=0.25)
     parser.add_argument('--min-region-area', type=float, default=16384)
+    parser.add_argument('--heatmap-gamma', type=float, default=0.5, help='positive PNG color gamma (default sqrt; 1 restores linear)')
     parser.add_argument('--json')
     parser.add_argument('--png')
     parser.add_argument('--png-dir')
     args = parser.parse_args(argv)
+    if not math.isfinite(args.heatmap_gamma) or args.heatmap_gamma <= 0:
+        parser.error('--heatmap-gamma must be positive and finite')
     paths = args.diff or args.bsps
     if not paths or args.diff and args.bsps or args.png and args.png_dir or args.png and not args.diff and len(paths) != 1:
         parser.error('provide BSPs or --diff; --png requires one analysis; choose --png or --png-dir')
@@ -472,7 +477,7 @@ def main(argv=None):
         pngs = destinations[1 if args.json else 0:]
         for index, destination in enumerate(pngs):
             draw(reports[-1] if args.diff else reports[index], destination,
-                 before=reports[0] if args.diff else None, difference=difference)
+                 before=reports[0] if args.diff else None, difference=difference, heatmap_gamma=args.heatmap_gamma)
     except (OSError, ValueError, AssertionError, IndexError, struct.error) as error:
         parser.error(str(error))
     return 0
