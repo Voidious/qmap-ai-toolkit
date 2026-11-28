@@ -524,7 +524,10 @@ Measure our new maps the same way once the group has played them.
   - `curved_wall(cx, cy, r_in, r_out, a0, a1, z0, z1, segs=8, kind=None, fit_u=False)` —
     segmented curved wall arc with continuous UV wrapping on both inner and outer arcs; its
     segments share a `prism_groups` ID so `check.py` skips internal facet-to-facet pairs while
-    still enforcing `< 64` separation against other solids.
+    still enforcing `< 64` separation against other solids. Leave `≥ ~80u` radial clearance
+    between concentric curved walls (or between a curved baffle and its enclosing `rotunda()` wall)
+    so the 32×32 axial player box still has `≥ 64u` effective width against angled facets in
+    `vprofile.py --check`.
   - `rotunda(cx, cy, radius, z0, z1, th, sides=12, openings=(), fit_u=True)` — leak-safe circular
     room: carves the enclosing 16-grid box and tiles the outer spandrels with exact disjoint convex
     perimeter wedges (no hollow cavities behind the curved wall), clipping any cardinal or
@@ -615,7 +618,9 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   `fill()` rect, and wall at walkable height (`check.py`, fails below 64; configurable via
   `--min-prism-sep N`). Walkable `'bridge'` slabs are skipped; wall-attached structural prisms
   (`chamfer`, `diag_wall`) are allowed flush contact with their mounting wall; freestanding prisms
-  (pillars, cover blocks) must stay clear of every solid.
+  (pillars, cover blocks) must stay clear of every solid. Because an axis-aligned 32×32 player
+  box loses effective width against angled facets, keep `≥ ~80u` radial clearance between
+  concentric curved walls so `vprofile.py --check` (`--min-passage 64`) stays clear too.
 * **Stair feet**: the floor in front of every stair's bottom step must be clear across its full
   width — catches stairs running into a pillar or a wall stub.
 * **16-unit slots**: gaps a player can see but not fit into (a notch between a stub and a step).
