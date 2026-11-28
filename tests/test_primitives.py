@@ -333,9 +333,19 @@ diag_ramp(0, 0, 64, 64, 64, 0, 128, sym=False)
 
 class TestTemplateDemoAllSymmetryModes(unittest.TestCase):
     def test_template_demo_builds_cleanly_in_all_three_sym_modes(self):
+        counts = {}
         for sym in ('none', 'rotate', 'mirror'):
             with self.subTest(sym=sym):
                 ns = _load_template(sym)
+                counts[sym] = {
+                    'sloped_ceils': len(ns['SLOPED_CEILS']),
+                    'trusses': len(ns['TRUSSES']),
+                    'buttresses': len(ns['BUTTRESSES']),
+                    'diag_ramps': len(ns['DIAG_RAMPS']),
+                    'arch_trims': len(ns['ARCH_TRIMS']),
+                    'prism_groups': len({m.get('group') for m in ns['PRISM_META'] if m.get('group') is not None}),
+                    'cyl_prisms': sum(1 for _p, _z0, _z1, k in ns['PRISMS'] if k == 'pillar'),
+                }
                 with tempfile.TemporaryDirectory() as td:
                     mp, _, data = _build_and_dump(ns, td, f'demo_{sym}')
                     b, warnings, _ = _parse_map_clean(mp)
@@ -353,6 +363,11 @@ class TestTemplateDemoAllSymmetryModes(unittest.TestCase):
                     report = texcheck.audit(mp, wad_paths=[])
                     bad_codes = [f for f in report['findings'] if f['code'] in ('illusionary-contents', 'sky-overlap')]
                     self.assertEqual(bad_codes, [], f'SYM={sym} hazards: {bad_codes}')
+        # Symmetric modes must actually emit copied geometry for every new primitive family
+        for sym in ('rotate', 'mirror'):
+            for key, base_n in counts['none'].items():
+                self.assertGreater(counts[sym][key], base_n,
+                                   f'SYM={sym} did not emit symmetric copies for {key}: {counts[sym][key]} <= {base_n}')
 
 
 if __name__ == '__main__':

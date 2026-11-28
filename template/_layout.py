@@ -25,9 +25,10 @@
 # =========================================================================
 
 # --- DEMO (delete): an octagonal central hall with a plinth, an east wing with a gabled roof,
-#     trusses, buttresses, an arched doorway, and a diagonal ramp, a sunken north room with a
-#     barrel vault, slanted alcove ceiling, axial ramp, and 12-sided column, and a south rotunda
-#     with a curved baffle wall. Builds cleanly in all three SYM modes.
+#     trusses, buttresses, an arched doorway, and a diagonal ramp, a symmetric NE vaulted annex
+#     with an off-axis rotunda, curved baffle, circular column, and sloped alcove, a sunken north
+#     room with a barrel vault, slanted alcove, axial ramp, and 12-sided column, and a south
+#     rotunda with a curved baffle wall. Builds cleanly in all three SYM modes.
 
 # central hall, straddling x = 0: written once
 carve((-384, -384, 384, 384), 0, 384, 'hall', sym=False)
@@ -55,6 +56,19 @@ buttress((608, -320, 640, -288), '-y', 0, 288, top_depth=8)             # sloped
 buttress((608, 288, 640, 320), '+y', 0, 288, top_depth=8)
 room_lamps((512, -320, 1024, 320), 384, step=256, value=480)            # pendant lamps clear gable & trusses
 label(640, -200, 'WING 0'), label(928, -200, 'gallery 128', 128)
+
+# NE annex (+ copy): exercises sym=True barrel_vault, rotunda, curved_wall, cylinder & sloped_ceil
+carve((864, 320, 992, 448), 0, 192, 'wing', door=True, nocap=True, noarch=True)
+barrel_vault((864, 320, 992, 448), 'x', 128, 192, segs=4)
+_annex_box = rotunda(928, 704, 256, 0, 288, 'rotunda', sides=12,
+                     openings=[('-y', 128, 192), ('+x', 128, 160)])
+curved_wall(928, 704, 80, 112, 30, 150, 0, 96, segs=4)
+cylinder(832, 624, 28, 0, 288, sides=10, kind='pillar')
+carve((1184, 640, 1312, 768), 0, 192, 'alcove_e', strip=10 ** 6)
+sloped_ceil((1184, 640, 1312, 768), 'x', 128, 192, rev=True)
+room_lamps(_annex_box, 288, step=256, value=460)
+room_lamps((1184, 640, 1312, 768), 192, step=128, value=320)
+label(928, 704, 'ANNEX 0')
 
 # sunken room to the north, straddling x = 0: barrel vault, slanted alcove, axial ramp, circular column
 carve((-128, 384, 128, 512), 0, 128, 'hall', door=True, sym=False)
@@ -85,6 +99,7 @@ label(0, -736, 'ROTUNDA 0')
 spawn(-256, -256, 0, 45, 'hall')
 spawn(640, 64, 0, 180, 'wing')
 spawn(960, -192, 128, 180, 'gallery')
+spawn(928, 864, 0, 270, 'annex')
 spawn(-128, 800, -96, 0, 'low', sym=False)
 spawn(320, 760, -96, 180, 'low', sym=False)
 spawn(128, -736, 0, 180, 'rotunda', sym=False)
