@@ -363,6 +363,70 @@ class TestCombatProfile(unittest.TestCase):
         cp.draw(res, str(png_path))
         self.assertGreater(png_path.stat().st_size, 5000)
 
+    def test_disengage_requires_regional_overlook_cover_and_unoverlooked_shelter(self):
+        # 1. Single-point overlooker LOS break behind a narrow obstacle must NOT count as cover
+        #    when most of the overlooking ledge (region) still sees you.
+        # 3-node chain: 0 --(16u)--> 1 --(16u)--> 2.
+        # 4 overlooker samples (0..3) all on one ledge (within 192u), all watching node 0.
+        # Node 1 hides ONLY dominant sample 0 (3 of 4 still see it -> 75% remain).
+        # Node 2 hides samples 0, 1, 2 (1 of 4 remains -> 25% <= 50%).
+        indptr = np.array([0, 1, 3, 4], np.int64)
+        indices = np.array([1, 0, 2, 1], np.int64)
+        weights = np.array([16.0, 16.0, 16.0, 16.0], np.float64)
+        rep_pts = np.array([
+            [0.0, 0.0, 128.0],
+            [48.0, 0.0, 128.0],
+            [96.0, 0.0, 128.0],
+            [144.0, 0.0, 128.0],
+        ], np.float64)
+        rep_w = np.full(4, 250.0, np.float64)
+        cell_area = float(cp.C * cp.C)
+        pts_z = np.array([0.0, 0.0, 0.0], np.float64)
+        reg_indptr, reg_indices = cp._build_overlook_regions(rep_pts)
+
+        # Exposure matches active watchers (rep_w * cell_area = 64k each):
+        # node 0 sees 4 (256k), node 1 sees 3 (192k, > 50% of 256k), node 2 sees 1 (64k, <= 50%).
+        # Give node 2 an extra ground watcher or use exposure_area = [256k, 192k, 192k] so ONLY
+        # regional overlook-break (not total-exposure cut) triggers at node 2.
+        exposure_area = np.array([4 * 250.0 * cell_area, 3 * 250.0 * cell_area, 3 * 250.0 * cell_area], np.float64)
+        overlooked_by_area = np.array([4 * 250.0 * cell_area, 3 * 250.0 * cell_area, 1 * 250.0 * cell_area], np.float64)
+        dom_obs = np.array([0, 1, 3], np.int64)
+        cell_sees = np.array([
+            [1, 1, 1, 1],
+            [0, 1, 1, 1],
+            [0, 0, 0, 1],
+        ], np.uint8)
+        d_dist, d_reason = cp._compute_disengage(
+            indptr, indices, weights, exposure_area, overlooked_by_area, dom_obs,
+            cell_sees, rep_w, np.ascontiguousarray(rep_pts[:, 2]), pts_z,
+            reg_indptr, reg_indices, 64.0, 64000.0, 1536.0,
+        )
+        # Must walk 32u to node 2 (not stop at 16u node 1 where only 1 point lost LOS)
+        self.assertAlmostEqual(float(d_dist[0]), 32.0)
+        self.assertEqual(int(d_reason[0]), 2)
+
+        # 2. Shelter check must inspect destination dom_obs[u] < 0 (not start cell dom < 0)
+        #    and report distinct reason code 5 when reaching genuine shelter.
+        # Node 0: un-overlooked, exposure 70k (> 64k shelter).
+        # Node 1 (16u away): exposure 50k (<= 64k) BUT overlooked (dom_obs[1] = 0) -> NOT shelter!
+        # Node 2 (32u away): exposure 50k (<= 64k) and NOT overlooked (dom_obs[2] = -1) -> shelter (reason 5)!
+        rep_w_sh = np.full(4, 68.0, np.float64)  # 4 * 68 * 256 = 69632 (consistent with 70k)
+        exposure_sh = np.array([70000.0, 50000.0, 50000.0], np.float64)
+        overlooked_sh = np.array([0.0, 4 * 68.0 * cell_area, 0.0], np.float64)
+        dom_sh = np.array([-1, 0, -1], np.int64)
+        sees_sh = np.array([
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],
+        ], np.uint8)
+        d_dist2, d_reason2 = cp._compute_disengage(
+            indptr, indices, weights, exposure_sh, overlooked_sh, dom_sh,
+            sees_sh, rep_w_sh, np.ascontiguousarray(rep_pts[:, 2]), pts_z,
+            reg_indptr, reg_indices, 64.0, 64000.0, 1536.0,
+        )
+        self.assertAlmostEqual(float(d_dist2[0]), 32.0)
+        self.assertEqual(int(d_reason2[0]), 5)
+
     def test_func_wall_submodel_blocks_hull0_sightlines(self):
         world_cover = self.dir / 'world_cover.bsp'
         fw_cover = self.dir / 'func_wall_cover.bsp'

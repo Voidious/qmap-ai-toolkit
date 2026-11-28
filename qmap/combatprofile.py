@@ -43,6 +43,8 @@ DEFAULT_OVERLOOK_RANGE = 1200.0
 DEFAULT_MAX_SIGHTLINE = 4096.0
 DEFAULT_MAX_DISENGAGE = 1536.0
 DEFAULT_OVERLOOK_DZ = 64.0
+DEFAULT_OVERLOOK_REGION_RADIUS = 192.0  # horizontal neighborhood defining a dominant overlooker ledge
+DEFAULT_OVERLOOK_REGION_DZ = 48.0       # max height spread within one overlooker ledge
 DEFAULT_SHELTER_AREA_K = 64.0   # <= 64k sq u (~256x256) with no overlooker counts as sheltered cover
 DEFAULT_SAMPLE_CAP = 1400
 DEFAULT_MAX_SLICES = 4
@@ -262,20 +264,27 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
 
 
 @njit(cache=True)
-def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_sees,
-                       rep_w, shelter_area, max_dist):
-    """Per-cell bounded Dijkstra for minimum walk distance to break dominant overlooker LOS
-    or cut visible-floor exposure by >= 50% (either total visible floor or currently watching
-    floor without stepping into higher exposure or newly overlooked space)."""
+def _compute_disengage(indptr, indices, weights, exposure_area, overlooked_by_area, dom_obs,
+                       cell_sees, rep_w, rep_z, pts_z, reg_indptr, reg_indices,
+                       overlook_dz, shelter_area, max_dist):
+    """Per-cell bounded Dijkstra for minimum walk distance to reach real cover:
+      - Break LOS from >= 50% of the dominant overlooker's high-ground region AND cut total
+        overlooked-by area by >= 50% without stepping into significantly higher exposure (<= 1.15x),
+      - Cut total visible-floor exposure area by >= 50%,
+      - Break LOS from >= 50% of active watchers without stepping into higher exposure (<= 1.15x)
+        or newly overlooked ground, or
+      - Reach sheltered ground (not overlooked and exposure <= shelter_area).
+    """
     N = len(exposure_area)
     M = len(rep_w)
     out_dist = np.zeros(N, np.float64)
-    # 0=sheltered, 1=exp_cut, 2=ov_broken, 3=both, 4=capped
+    # 0=already_sheltered, 1=exp_cut, 2=ov_broken, 3=both, 4=capped, 5=reached_shelter
     out_reason = np.zeros(N, np.int8)
 
     dist = np.empty(N, np.float64)
     stamp = np.zeros(N, np.int64)
     vis_idx = np.empty(M, np.int64)
+    dom_idx = np.empty(M, np.int64)
     cur_stamp = 0
     cell_area = float(C * C)
 
@@ -285,6 +294,7 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
 
     for s in range(N):
         ea = exposure_area[s]
+        ov_s = overlooked_by_area[s]
         dom = dom_obs[s]
         if dom < 0 and ea <= shelter_area:
             out_dist[s] = 0.0
@@ -296,6 +306,19 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
             if cell_sees[s, j] != 0:
                 vis_idx[nv] = j
                 nv += 1
+
+        nd = 0
+        dom_w_tot = 0.0
+        if dom >= 0:
+            sz = pts_z[s]
+            rs = reg_indptr[dom]
+            re = reg_indptr[dom + 1]
+            for e in range(rs, re):
+                j = reg_indices[e]
+                if cell_sees[s, j] != 0 and rep_z[j] - sz >= overlook_dz:
+                    dom_idx[nd] = j
+                    nd += 1
+                    dom_w_tot += rep_w[j]
 
         cur_stamp += 1
         stamp[s] = cur_stamp
@@ -336,9 +359,20 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
                 break
 
             if u != s:
-                broke = (dom >= 0) and (cell_sees[u, dom] == 0)
+                broke = False
+                if (dom >= 0 and nd > 0
+                        and overlooked_by_area[u] <= 0.5 * ov_s
+                        and (exposure_area[u] <= ea * 1.15
+                             or (dom_obs[u] < 0 and exposure_area[u] <= ea * 1.5))):
+                    rem_dom = 0.0
+                    for k in range(nd):
+                        j = dom_idx[k]
+                        if cell_sees[u, j] != 0:
+                            rem_dom += rep_w[j]
+                    if rem_dom <= 0.5 * dom_w_tot:
+                        broke = True
                 cut = (ea > 0.0) and (exposure_area[u] <= exp_cut)
-                sheltered = (dom < 0) and (exposure_area[u] <= shelter_area)
+                sheltered = (dom_obs[u] < 0) and (exposure_area[u] <= shelter_area)
                 if (not (broke or cut or sheltered)
                         and ea > 0.0
                         and exposure_area[u] <= ea * 1.15
@@ -352,19 +386,26 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
                         cut = True
                 if broke or cut or sheltered:
                     found_d = d
-                    found_r = 3 if (broke and cut) else (2 if broke else 1)
+                    if broke and cut:
+                        found_r = 3
+                    elif broke:
+                        found_r = 2
+                    elif cut:
+                        found_r = 1
+                    else:
+                        found_r = 5
                     break
 
             start = indptr[u]
             end = indptr[u + 1]
             for e in range(start, end):
                 v = indices[e]
-                nd = d + weights[e]
-                if nd > max_dist:
+                ndist = d + weights[e]
+                if ndist > max_dist:
                     continue
-                if stamp[v] != cur_stamp or nd < dist[v]:
+                if stamp[v] != cur_stamp or ndist < dist[v]:
                     stamp[v] = cur_stamp
-                    dist[v] = nd
+                    dist[v] = ndist
                     if hsize >= cap:
                         new_cap = cap * 2
                         nd_arr = np.empty(new_cap, np.float64)
@@ -378,19 +419,36 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
                     hsize += 1
                     while pos > 0:
                         par = (pos - 1) // 2
-                        if nd < h_d[par]:
+                        if ndist < h_d[par]:
                             h_d[pos] = h_d[par]
                             h_u[pos] = h_u[par]
                             pos = par
                         else:
                             break
-                    h_d[pos] = nd
+                    h_d[pos] = ndist
                     h_u[pos] = v
 
         out_dist[s] = found_d
         out_reason[s] = found_r
 
     return out_dist, out_reason
+
+
+def _build_overlook_regions(rep_pts, radius=DEFAULT_OVERLOOK_REGION_RADIUS,
+                            dz_max=DEFAULT_OVERLOOK_REGION_DZ):
+    """Build CSR adjacency of local high-ground neighborhoods around each observer representative."""
+    M = len(rep_pts)
+    r2 = radius * radius
+    indptr = np.zeros(M + 1, np.int64)
+    idx_list = []
+    for j in range(M):
+        dx = rep_pts[:, 0] - rep_pts[j, 0]
+        dy = rep_pts[:, 1] - rep_pts[j, 1]
+        dz = np.abs(rep_pts[:, 2] - rep_pts[j, 2])
+        nbrs = np.nonzero((dx * dx + dy * dy <= r2) & (dz <= dz_max))[0]
+        idx_list.extend(nbrs.tolist())
+        indptr[j + 1] = len(idx_list)
+    return indptr, np.array(idx_list, np.int64)
 
 
 # ------------------------------------------------------------------ lightweight walkable floor loader
@@ -620,9 +678,9 @@ REFERENCE_DUEL = {
     'overlooked_by_area_k_p90':   (89.3,  177.5, 240.0, 'down', '90th-pct high-ground area shooting down (k sq u)'),
     'overlook_net_p05':           (-0.129, -0.072, -0.180, 'up', '5th-pct overlook asymmetry (kill-box tail)'),
     'overlook_net_p95':           (0.099, 0.134, 0.200, 'down', '95th-pct overlook asymmetry (perch tail)'),
-    'disengage_p50_s':            (0.30,  0.36,  0.55,  'down', 'median disengage time to cover (s)'),
-    'disengage_p90_s':            (0.78,  1.20,  1.65,  'down', '90th-pct disengage time to cover (s)'),
-    'disengage_overlooked_p90_s': (0.62,  0.84,  1.20,  'down', '90th-pct disengage from overlooked floor (s)'),
+    'disengage_p50_s':            (0.37,  0.50,  0.70,  'down', 'median disengage time to cover (s)'),
+    'disengage_p90_s':            (0.87,  1.25,  1.70,  'down', '90th-pct disengage time to cover (s)'),
+    'disengage_overlooked_p90_s': (0.82,  1.15,  1.55,  'down', '90th-pct disengage from overlooked floor (s)'),
 }
 
 # Ten larger QW classics (skull, bravado, spinev2, ultrav, schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2).
@@ -633,9 +691,9 @@ REFERENCE_LARGE = {
     'overlooked_by_area_k_p90':   (65.0,  187.6, 250.0, 'down', '90th-pct high-ground area shooting down (k sq u)'),
     'overlook_net_p05':           (-0.103, -0.022, -0.160, 'up', '5th-pct overlook asymmetry (kill-box tail)'),
     'overlook_net_p95':           (0.027, 0.147, 0.220, 'down', '95th-pct overlook asymmetry (perch tail)'),
-    'disengage_p50_s':            (0.28,  0.44,  0.65,  'down', 'median disengage time to cover (s)'),
-    'disengage_p90_s':            (0.72,  1.37,  1.85,  'down', '90th-pct disengage time to cover (s)'),
-    'disengage_overlooked_p90_s': (0.59,  1.40,  1.80,  'down', '90th-pct disengage from overlooked floor (s)'),
+    'disengage_p50_s':            (0.38,  0.47,  0.68,  'down', 'median disengage time to cover (s)'),
+    'disengage_p90_s':            (0.92,  1.38,  1.85,  'down', '90th-pct disengage time to cover (s)'),
+    'disengage_overlooked_p90_s': (0.73,  1.32,  1.75,  'down', '90th-pct disengage from overlooked floor (s)'),
 }
 
 REFERENCE_ALL = {
@@ -740,10 +798,14 @@ def combat_profile(path, name=None, *,
     eff_shelter_area = min(float(shelter_area_k) * 1000.0, 0.15 * total_area)
 
     # 3. Per-cell bounded Dijkstra disengage distance/time
+    overlooked_by_area = overlooked_by_w * cell_area
+    reg_indptr, reg_indices = _build_overlook_regions(rep_pts)
     cell_sees = np.ascontiguousarray(obs_sees.T)
     disengage_dist, disengage_reason = _compute_disengage(
         loaded['indptr'], loaded['indices'], loaded['weights'],
-        exposure_area, dom_obs, cell_sees, rep_w, eff_shelter_area, float(max_disengage),
+        exposure_area, overlooked_by_area, dom_obs, cell_sees, rep_w,
+        np.ascontiguousarray(rep_pts[:, 2]), np.ascontiguousarray(F),
+        reg_indptr, reg_indices, float(overlook_dz), eff_shelter_area, float(max_disengage),
     )
     disengage_time = disengage_dist / WALK_SPEED
 
