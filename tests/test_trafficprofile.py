@@ -323,6 +323,25 @@ class TestTraffic(unittest.TestCase):
         self.assertEqual(caught.exception.code, 2)
 
 
+    def test_cli_shift_is_compact_and_marks_unmatched_floor_unavailable(self):
+        report = dict(map='floor', mode='ca', sha256='0' * 64, settings={}, endpoints=[], pairs=[],
+                      dead_wings=[], overloaded_chokes=[],
+                      coverage=dict(reachable_cells=1, floor_cells=1, sampled_pairs=0, possible_pairs=0,
+                                    routed_weight=0, warnings=[]),
+                      cells=dict(points=[[8, 8, 0]], reachable=[True], route_share=[0.25]))
+        after = dict(report, cells=dict(report['cells'], route_share=[0.2500054392435027]))
+        output = io.StringIO()
+        with redirect_stdout(output), mock.patch.object(traffic, 'traffic_profile', side_effect=[report, after]):
+            self.assertEqual(traffic.main(['--diff', 'before.bsp', 'after.bsp']), 0)
+        self.assertIn('mean absolute shift 5.43924e-06', output.getvalue())
+        after['cells']['points'] = [[24, 8, 0]]
+        output = io.StringIO()
+        with redirect_stdout(output), mock.patch.object(traffic, 'traffic_profile', side_effect=[report, after]):
+            traffic.main(['--diff', 'before.bsp', 'after.bsp'])
+        self.assertIn('n/a (no matched floor)', output.getvalue())
+        self.assertNotIn('None', output.getvalue())
+
+
 @unittest.skipUnless(HAS_NUMBA, 'numba required for demo/traffic integration')
 class TestDemoTraffic(unittest.TestCase):
     def test_windows_exclude_warmup_and_refuse_silent_whole_demo_fallback(self):

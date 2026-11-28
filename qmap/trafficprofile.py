@@ -466,7 +466,9 @@ def main(argv=None):
         for report in reports:
             print(format_report(report))
         if difference:
-            print(f"TRAFFIC SHIFT: {difference['matched_cells']} matched, +{difference['added_cells']}/-{difference['removed_cells']} floor cells; mean absolute shift {difference['mean_absolute_shift']}")
+            mean_shift = difference['mean_absolute_shift']
+            shift_label = f'{mean_shift:.6g}' if mean_shift is not None else 'n/a (no matched floor)'
+            print(f"TRAFFIC SHIFT: {difference['matched_cells']} matched, +{difference['added_cells']}/-{difference['removed_cells']} floor cells; mean absolute shift {shift_label}")
             if difference['demand_changed']:
                 print('DEMAND CHANGED: endpoints differ; this is not a geometry-only comparison')
         if args.json:
