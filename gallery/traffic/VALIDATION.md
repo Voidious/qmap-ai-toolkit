@@ -19,6 +19,8 @@ team selection with explicit roster-exclusion coverage. All six aggregate
 results below are unchanged; the evidence and algorithm hashes are refreshed
 for that implementation. This corpus does not exercise the aborted-match or
 custom-team regressions; self-contained tests cover those cases.
+The second review rerun retains identical records after deferring output-directory
+creation until demo validation succeeds; the affected source hash is refreshed.
 
 - Directed 16-unit `vprofile.build_floor_graph()`, equal-shortest-path splitting,
   spawn-pair CA demand and flag/base-exit CTF demand. These four maps use **all**

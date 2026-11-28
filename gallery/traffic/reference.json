@@ -3,7 +3,7 @@
   "algorithm_sha256": {
     "qmap/trafficprofile.py": "7b48c61b45e61c6f2c235d33f16402b667625bfc527b2eb6436e2c7e8f20b3b1",
     "qmap/vprofile.py": "cb2dd5bdf580a5c3577985a09836c80f2ece513d2dcdd7227ffb5d474a390c3d",
-    "demos/traffic.py": "9b1aabf5034e1f42ec6caeb902b9132ae75b7fe222a7f297a5e492bab7877126",
+    "demos/traffic.py": "64101367f7d4238343df0366a1d65b50f3d5988e5e2d2ddcaef1c6dfa26bb533",
     "demos/mvd.py": "514c55f2443ec6ac9b373bdc616df94a88c19cb82551ea7491b22aeca3f1709e"
   },
   "date": "2026-11-28",
@@ -3028,5 +3028,5 @@
     }
   ],
   "method": "Default target-weighted shortest-path traffic versus alive player-seconds on graph-connected 128x128 XY / 64 Z patches; all available demand pairs in these cases. Descriptive only, not independent-sample significance or universal hot/cold validation.",
-  "review_base_commit": "420c6c372cf0d0f8f9f563b4ec6fba0f9989e5dd"
+  "review_base_commit": "f0ffafe276a7f647cf63940920eaa7a20d132fae"
 }
