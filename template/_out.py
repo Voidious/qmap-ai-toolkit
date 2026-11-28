@@ -71,6 +71,11 @@ WALL_PERIOD = {}    # zone -> vertical period of its wall texture when not 128 (
 EXTRA = {'world': [], 'skin': [], 'detail': []}    # v3: whole brushes written outside the grid
 
 
+def wall_anchor(th):
+    """One course origin for lower/upper walls, custom strips, ramps, and prisms."""
+    return ZONE_FLOOR.get(th, 0) + 32
+
+
 def band_role(n, mid):
     """Band of a wall face at height mid looking into air n (the main chain in detail_pieces, minus
     its glass / sill / step-edge special cases): (role, anchor z)."""
@@ -84,9 +89,7 @@ def band_role(n, mid):
     tz = n['tz']
     if tz is not None and tz <= mid < tz + TRIM_H and tz + TRIM_H < c - 16:
         return 'band', tz + TRIM_H
-    nsz = STRIPE_Z.get(th, sz)
-    anc = nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32
-    return ('wall_lo' if mid < SPLIT_Z.get(th, -10 ** 6) else 'wall'), anc
+    return ('wall_lo' if mid < SPLIT_Z.get(th, -10 ** 6) else 'wall'), wall_anchor(th)
 
 
 def _plane_pts(n, p):
@@ -271,7 +274,7 @@ def detail_pieces():
                             else:
                                 th = n['th']
                                 faces.append((textures('wall', th, 'wall')[2],
-                                              (ZONE_FLOOR.get(th, 0) + 32) % WALL_PERIOD.get(zone(th), 128)))
+                                              wall_anchor(th) % WALL_PERIOD.get(zone(th), 128)))
                                 continue
                         th = n['th']
                         f, c, sz = n['f'], n['c'], n['sz']
@@ -297,11 +300,7 @@ def detail_pieces():
                                       for k in (-2, -1, 1, 2))):
                             role, anc = 'glass', gz + 96   # only on straight runs wide enough for a window
                         else:
-                            # stone sits on the band below it: the kickplate top, or the strip top above the strip
-                            # anchor to the room's NOMINAL strip (and compare mid against it too) so walls beside
-                            # stairs or above/beside ramps (where sz=10**6) stay aligned with the rest of the room
-                            nsz = STRIPE_Z.get(th, sz)
-                            role, anc = 'wall', (nsz + 16 if mid > nsz + 16 else ZONE_FLOOR.get(th, 0) + 32)
+                            role, anc = 'wall', wall_anchor(th)
                             if mid < SPLIT_Z.get(th, -10 ** 6):
                                 role = 'wall_lo'           # stratified rooms: a different stone below the split
                         per = WALL_PERIOD.get(zone(th), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
@@ -330,6 +329,7 @@ def detail_pieces():
         th = nt['th']
         flr = textures('wall', th, 'wall')[0]
         side = textures('ledge', th, None)[2]
+        side_anchor = wall_anchor(th) % WALL_PERIOD.get(zone(th), 128)
         rise = z1 - z0
         run = (x1 - x0) if axis == 'x' else (y1 - y0)
         h = (1, 0, 0) if axis == 'x' else (0, 1, 0)
@@ -370,7 +370,7 @@ def detail_pieces():
             side_runs.append((n_, p_, exp, runs_))
         if not any_exposed:
             fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
-                  sface(hi_n, hi_p, side, 0, z1 % 128)] + [sface(n_, p_, side, 0, z1 % 128) for n_, p_ in lat]
+                  sface(hi_n, hi_p, side, 0, side_anchor)] + [sface(n_, p_, side, 0, side_anchor) for n_, p_ in lat]
             EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
         else:
             # Main walking wedge shrunk VENEER_THICK inward on exposed lateral side(s); stays in EXTRA['skin']!
@@ -378,9 +378,9 @@ def detail_pieces():
             lat_main = []
             for n_, p_, exp, _ in side_runs:
                 mp = (p_[0] - n_[0] * (VENEER_THICK if exp else 0), p_[1] - n_[1] * (VENEER_THICK if exp else 0), p_[2])
-                lat_main.append(sface(n_, mp, side, 0, z1 % 128))
+                lat_main.append(sface(n_, mp, side, 0, side_anchor))
             fs = [sface((0, 0, -1), (x0, y0, z0), flr, 0, 0), sface(top_n, lo, flr, 0, 0),
-                  sface(hi_n, hi_p, side, 0, z1 % 128)] + lat_main
+                  sface(hi_n, hi_p, side, 0, side_anchor)] + lat_main
             EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
             # VENEER_THICK outer veneer(s) on each exposed lateral side (exact union == original wedge!)
             for n_, p_, exp, runs_ in side_runs:
@@ -402,17 +402,17 @@ def detail_pieces():
                             continue
                         mid = (za + zb) / 2
                         if adj is None:
-                            l_tex, l_yo = side, z1 % 128
+                            l_tex, l_yo = side, side_anchor
                         elif adj['f'] <= mid < adj['c']:
                             role, anc = band_role(adj, mid)
                             per = WALL_PERIOD.get(zone(adj['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
                             l_tex, l_yo = textures('wall', adj['th'], role)[2], anc % per
                         else:
                             l_tex = textures('wall', adj['th'], 'wall')[2]
-                            l_yo = (ZONE_FLOOR.get(adj['th'], 0) + 32) % WALL_PERIOD.get(zone(adj['th']), 128)
+                            l_yo = wall_anchor(adj['th']) % WALL_PERIOD.get(zone(adj['th']), 128)
                         vfs = [sface((0, 0, -1), (p_[0], p_[1], za), flr, 0, 0),
                                sface(n_, p_, l_tex, 0, l_yo),
-                               sface(in_n, in_p, side, 0, z1 % 128)]
+                               sface(in_n, in_p, side, 0, side_anchor)]
                         if zb > z_lo_r - 0.01:
                             vfs.append(sface(top_n, lo, flr, 0, 0))
                         if zb < z_hi_r - 0.01:
@@ -420,9 +420,9 @@ def detail_pieces():
                         p_r0 = (r0, p_[1], za) if axis == 'x' else (p_[0], r0, za)
                         p_r1 = (r1, p_[1], za) if axis == 'x' else (p_[0], r1, za)
                         if zs0 > za + 0.01:
-                            vfs.append(sface((-h[0], -h[1], 0), p_r0, side, 0, z1 % 128))
+                            vfs.append(sface((-h[0], -h[1], 0), p_r0, side, 0, side_anchor))
                         if zs1 > za + 0.01:
-                            vfs.append(sface((h[0], h[1], 0), p_r1, side, 0, z1 % 128))
+                            vfs.append(sface((h[0], h[1], 0), p_r1, side, 0, side_anchor))
                         EXTRA['skin' if adj is None else 'world'].append('{\n' + '\n'.join(vfs) + '\n}')
         if not bands:
             continue
@@ -509,7 +509,7 @@ def detail_pieces():
                     tex, voff = textures(kind, (ni or {'th': tht})['th'], None)[2], z1 % 128
                 elif ni is None or not (ni['f'] <= mid < ni['c']):
                     th2 = (ni or {'th': tht})['th']
-                    tex, voff = textures('wall', th2, 'wall')[2], (ZONE_FLOOR.get(th2, 0) + 32) % 128
+                    tex, voff = textures('wall', th2, 'wall')[2], wall_anchor(th2) % WALL_PERIOD.get(zone(th2), 128)
                 else:
                     role, anc = band_role(ni, mid)
                     per = WALL_PERIOD.get(zone(ni['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]

@@ -366,6 +366,20 @@ class TestRoiMergeAndMasking(unittest.TestCase):
 
 
 class TestParserHardening(unittest.TestCase):
+    def test_optional_brush_spans_preserve_the_default_token_walk(self):
+        brush = brush_block(box_faces(0, 0, 0, 64, 64, 64))
+        primitive = bp_brush(box_faces(0, 0, 0, 64, 64, 64, fmt='bp'))
+        text = entity_block('worldspawn', '{ }', brush, primitive,
+                            extra_epairs=f'"message" "{brush}"\n')
+        original = list(cc.entities(text))
+        positioned = list(cc.entities(text, spans=True))
+        self.assertEqual(len(positioned), len(original))
+        for (blocks, classname), (spans, positioned_classname) in zip(original, positioned):
+            self.assertEqual(classname, positioned_classname)
+            self.assertEqual(blocks, [text[start:end] for start, end in spans])
+            self.assertEqual(blocks, ['{ }', brush, primitive])
+            self.assertGreater(spans[1][0], text.index('"message"') + len(brush))
+
     def setUp(self):
         self.room = sealed_room()
         self.cube = box_faces(-64, -64, -64, 64, 64, 64, 'wall1')

@@ -42,7 +42,10 @@ qmap/                   shared tools - reuse or extend as needed
   sightlines.py         longest straight sightline per floor level
   contact.py            Clan Arena pacing proxy (compare against a map the group likes)
   collide_cmp.py        audit visual-pass collision diffs (player + hull-0 voxel compare)
-  render.py             software BSP renderer (lightmaps + textures) for preview images
+  texcheck.py, TEXCHECK.md   texture course/seam/portal alignment, WAD/content/sky hazards,
+                        and compiled standable-floor lightmap lint
+  render.py, view_sheet.py, RENDERING.md   BSP previews with RGB lightmaps, ezQuake calibration,
+                        camera checks, and shared-camera before/after sheets
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
   fsq.py                error-diffusion quantising for colours the palette lacks (cream, ivory)
   makewad.py            palette PNGs -> WAD2;  quake_palette.lmp (LibreQuake, BSD-3)
@@ -50,6 +53,8 @@ qmap/                   shared tools - reuse or extend as needed
                         passages, blind pockets) + verticality & travel-distance profile (--targets)
   ctfprofile.py         compiled BSP29 CTF route-independence diagnostics: walk (hook-off) & grapple
                         (hook-on) flag routes, LOS-separated lanes, single-vantage chokes, flag exits
+  combatprofile.py, COMBATPROFILE.md   compiled BSP29 3D sightlines, overlook asymmetry (kill boxes &
+                        perches), disengage / time-to-cover heatmaps, classic bands, and --diff mode
   itemprofile.py, itemcheck.py, ITEMS.md   BSP29 item-economy diagnostics (inventories, directed
                         routes, RL/LG/resource trios, hypothetical --move) and MVDSV edict verification
   section.py, iso.py    side-on slices and isometric cutaways of a map from its JSON
@@ -409,6 +414,15 @@ mid, yet one central vantage sees both).
   (optimistic for button-locked doors), while `func_plat` lifts are absent (pessimistic for
   lift-dependent climbs).
 
+**Reachable does not mean busy.** `python3 qmap/trafficprofile.py map.bsp --mode ca --png traffic.png`
+flags predicted dead wings and overloaded route hotspots on the player-hull graph. Use `tdm`
+for major-item demand, `ffa` for both spawn and item demand, or `ctf` for flag/base-exit demand;
+`--diff map_b1.bsp map_b2.bsp` shows traffic shifts on matched floor. These are shortest-route
+hypotheses, not judgments about camping space, tactical flanks or map balance. Human MVD
+occupancy agreement is weak/mixed, including near-zero correlation on the tested ztndm3 CA
+recording; inspect and playtest findings rather than treating them as a gate. See
+[traffic definitions and demo comparison](qmap/TRAFFICPROFILE.md).
+
 **Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
 (`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet
 play at duel/compact travel speed (`797` and `905`): stacked floor adds area, not distance, and
@@ -460,7 +474,7 @@ Measure our new maps the same way once the group has played them.
   to its own rect), `oculus` (ceiling becomes sky; texture only), `strip_ramp` /
   `strip_ramp_pos` (light strips that follow stairs), `label` (plan text).
 * **Themes**: every carved space has a theme. The first carve of a theme sets its main floor
-  (`ZONE_FLOOR`) and light-strip height (`STRIPE_Z`, default floor + 128). `textures()` maps
+  (`ZONE_FLOOR`) and light-strip height (`STRIPE_Z`, default floor + 144). `textures()` maps
   (kind, theme, band) to texture names — replace it in the visual pass.
 * **Faces are textured from the space they face**, not from the brush: a wall's texture comes
   from the room on that side. That keeps bands continuous round corners and lets one solid wall
@@ -565,9 +579,16 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   and **hook on** (grapple swings/climbs), counts visually independent (LOS-separated) midfield
   routes, tests whether a single standing defender can watch every crossing, and reports flag-room
   exits and flag sightlines (see section 3, *CTF layout & route structure*).
-* **Sightlines** (`sightlines.py`): a clear line the length of a route is usually a problem.
-  On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
-  lanes cut the longest to ~2,100 units within one half.
+* **Sightlines** (`sightlines.py` on JSON, `combatprofile.py` on compiled BSP): a clear line the
+  length of a route is usually a problem. On Circuit the first blockout had a line down the whole
+  north arc; staggered rooms and offset lanes cut the longest to ~2,100 units within one half.
+  Use `python3 qmap/combatprofile.py map.bsp --ref duel|large --png map.combat.png` for true 3D
+  sightlines across diagonals and elevations, per-cell overlook asymmetry (kill boxes vs.
+  oppressive perches), and disengage time-to-cover heatmaps (plus `--diff b1.bsp b2.bsp` between
+  layout builds). Match `--ref` to map scale: use `--ref duel` for compact 1v1 / small FFA maps
+  (`~1,080k–1,600k` sq u), and `--ref large` for Clan Arena 6–12, 4v4 TDM, and larger multi-player
+  maps (`~1,400k–4,710k` sq u; running `--ref duel` on 3,000–4,200k CA maps trips sightline and
+  overlooked-by bands from size alone). See [3D combat exposure](qmap/COMBATPROFILE.md).
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-pass collision audit** (`collide_cmp.py old.map new.map`): the old "zero collision
   change" rule protected three real things — keeping the playtested layout intact, preventing
@@ -610,7 +631,14 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
     `func_illusionary_visblocker` `clip`, with face textures read for contents — and prints a
     `note:` line accounting for every ignored brush. Gotcha 31 has the full solidity rules —
     several are not what you would guess.
-* **Brightness**: `views.py` prints a mean per view; keep it in the range of the group's maps.
+* **Brightness**: `views.py` prints an overall safe-camera mean for each build to stdout;
+  per-view means appear on tile captions and in `--report` JSON. Unsafe cameras are excluded.
+  Compare with the group's maps using the same explicit render settings.
+* **Texture/visual lint**: `python3 qmap/texcheck.py map.map --bsp map.bsp --report lint.json`
+  checks local wall-course/U seams, 64u `*` portal centers, WAD textures, illusionary liquid/sky
+  contents, sky overlays, and compiled pitch-black standable floor samples.
+  `TEXCHECK=1 bash build.sh` adds advisory lint to the template build. Use `--strict` for exit 1 on findings;
+  review `NOT CHECKED` coverage and intentional seams. See [texture lint](qmap/TEXCHECK.md).
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
   to spare on axial walls, reporting `(x, y, z)` and the two opposing solids), **blind pockets**,
@@ -647,8 +675,9 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   result: the light changes it again (Pompeian red read as muddy brown under lamplight).
 * **Size textures to the object**, **anchor them to the object** on both axes: boxes and columns
   from their own corner and top (a column built from several brushes uses the whole column's
-  corner); plates and medallions from their own rect (`inlay`, `stand`); walls from the band
-  below. **Floor patterns: centre them on the room** (`FLOOR_OFFSET`) — a pattern starting at one
+  corner); plates and medallions from their own rect (`inlay`, `stand`); wall stone from the
+  room's common course origin (`ZONE_FLOOR + 32`), above and below strips.
+  **Floor patterns: centre them on the room** (`FLOOR_OFFSET`) — a pattern starting at one
   wall leaves a stray band along the other, and a pattern cut across a platform reads as an
   error; give platforms their own fitted texture.
 * **Light strips that change level** must meet the strip in the room above and below at every
@@ -670,10 +699,16 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 ## 7. Lighting
 
 * ericw `light` with `-extra4 -minlight 5 -minlight_dirt 0`; floors get their own minlight.
-* The human's eye is the reference. Calibrate your renderer to their screenshots once (client
-  brightness ≈ 255·(raw/255)^0.55). Our group's taste sat around ~45–60 on preferred maps (DM2 ~35,
-  gothic map ~32–43): "as dark as gameplay allows; no black floors; not fiesta-bright." Calibrate
-  the target band to your own group's preferred maps and client gamma.
+* The human's eye is the reference. `render.py` loads companion `.lit` colors and exposes
+  ezQuake gamma, contrast, lightmode, and modulation; see [preview calibration](qmap/RENDERING.md).
+  Match the client's settings explicitly (for example `--gamma 0.5 --contrast 1.2`) and measure
+  preferred maps again with those settings. The old monochrome `**0.55` fit and its ~45–60
+  target band are historical, not universal defaults. Our group's preference remains
+  "as dark as gameplay allows; no black floors; not fiesta-bright."
+* For a visual pass, `views.py new_bN.bsp diff.png --before old_bN.bsp` renders the same
+  camera list on both builds. Camera-in-solid and near-clip warnings appear on stderr and
+  in red on sheets; `--strict-cameras` refuses unsafe views rather than saving misleading
+  comparisons. See [camera lists and diff sheets](qmap/RENDERING.md#shared-cameras-and-safe-sheets).
 * **Material changes brightness**: pale marble needed the global lamp scale cut by a third to
   sit with the other maps; black-painted walls needed lamps raised. Re-measure after a visual
   pass, not only after layout changes.
@@ -768,7 +803,8 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 17. Three maps in a row with the same skeleton — see section 3.
 18. **Wall stone misaligned beside stairs** (Strata): walls were anchored to the strip, and the
     strip climbs with the stairs, so the stone slid up the wall step by step. Anchor wall stone to
-    the room's nominal strip (`STRIPE_Z + 16`); only the strip itself climbs.
+    one room-floor course origin (`ZONE_FLOOR + 32`); only the strip itself climbs. The default
+    strip top (`floor + 160`) agrees with that origin modulo 128; custom strips must not reset it.
 19. A ramp whose foot runs into a wall (the template's own demo): the stair-feet check catches
     ramps too. Leave 32 of clear floor in front of the low end.
 20. **Camera pitch in `render.py`: positive looks DOWN**, as in Quake. A preview that "looks too
@@ -797,13 +833,14 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
     exit landing pad. Exclude teleporter gates in `torches()` so wall lamps never clip behind the
     lintel.
 25. **ezQuake ignores `texinfo` translation offsets on `*` turbulent liquids** (`ca_saddle`):
-    `render.py` honors texture offsets on `*` surfaces, so a teleporter swirl can look centered in
-    offline renders while rendering shifted in ezQuake (`EmitWaterPolys` computes UVs from world
-    coordinates). Align 64-wide teleporter portals so `(cx - 32) % 64 == 0` and verify in-client.
+    `render.py` now matches that world-coordinate projection, retaining the texture axes but
+    ignoring shifts, with a 64-unit repeat. Earlier previews could falsely center a shifted
+    swirl. Align 64-wide teleporter portals so `(cx - 32) % 64 == 0` and verify the animated
+    result in-client; the preview shows the unwarped surface.
 26. **Multi-tier wings with ramps need per-level sub-themes** (`ca_saddle`): the first `carve()`
     of a theme pins `STRIPE_Z` to that floor, so a climbing flank sharing one theme drops its
     light strip into upper floors and breaks sloped ramp strips. Split tiers into sub-themes
-    (`wing_lo/mid/hi`) so every tier's strip sits at `floor + 128` and sloped ramp strips connect
+    (`wing_lo/mid/hi`) so every tier's strip sits at `floor + 144` and sloped ramp strips connect
     corner-to-corner. Avoid baking continuous horizontal straps into wall textures on multi-tier
     or ramped hallways, and cover horizontal-to-slope light-strip bends with non-solid junction
     collars (`func_detail_illusionary`) so the 1–2u overlay parallax step never shows as a notch.
