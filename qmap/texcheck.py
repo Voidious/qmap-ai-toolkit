@@ -134,21 +134,30 @@ def texture_axes(normal, tail):
 
 
 def map_data(path):
+    def plain_point(match):
+        coordinates = np.array([float(value) for value in match.groups()])
+        if not np.isfinite(coordinates).all():
+            raise ValueError(f'{path}: brush coordinates must be finite')
+        return '( ' + ' '.join(np.format_float_positional(value, trim='-') for value in coordinates) + ' )'
+
     text = Path(path).read_text(encoding='utf-8')
-    entities = list(collide_cmp.entities(text))
+    entities = list(collide_cmp.entities(text, spans=True))
     if not entities:
         raise ValueError(f'{path}: no map entities')
     stripped, cursor, brushes, faces = [], 0, [], []
     for entity_index, (blocks, classname) in enumerate(entities):
         classname = (classname or '').lower()
-        for brush_index, block in enumerate(blocks):
-            start = text.find(block, cursor)
+        for brush_index, (start, end) in enumerate(blocks):
             stripped.append(text[cursor:start])
-            cursor = start + len(block)
+            cursor = end
+            block = text[start:end]
             cleaned = collide_cmp._strip_brush_comments(block)
+            if [token.group(token.lastindex) for token in collide_cmp.TOKEN_RE.finditer(cleaned)
+                    if token.lastindex] == ['{', '}']:
+                continue
             if 'brushDef' in cleaned or collide_cmp.BP_MAT_RE.search(cleaned):
                 raise ValueError(f'{path}: brush primitives are unsupported; compile to BSP29 or use Valve 220')
-            parsed = collide_cmp.parse_brush(block)
+            parsed = collide_cmp.parse_brush(POINT.sub(plain_point, cleaned))
             if parsed is None:
                 raise ValueError(f'{path}: degenerate brush {entity_index}/{brush_index}')
             lower, upper, (normals, distances), *_ = parsed

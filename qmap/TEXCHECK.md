@@ -72,6 +72,9 @@ CSG/visibility. Prefer a compiled BSP when checking complex intersections.
 Brush-primitives source is refused explicitly; compile it to BSP29 or convert
 it to Valve 220. The QuakeEd axis convention follows ericw-tools' default old
 axis selection; use the compiled BSP for maps built with different options.
+Brush locations come from the collision parser's token walk, not a substring
+search through comments or quoted properties. Empty brushes are skipped;
+signed decimal and scientific plane coordinates are accepted.
 
 ### Portals and sky
 

@@ -187,6 +187,33 @@ class TestSourceAndWad(unittest.TestCase):
         self.assertEqual(len(report['findings'][0]['faces']), 6)
         self.assertEqual(texcheck.wad_textures(self.wad)['stone'], (128, 128))
 
+    def test_brush_spans_ignore_identical_quoted_text_and_empty_blocks(self):
+        body = brush_block(box_faces(0, 0, 0, 64, 64, 128, tex='stone'))
+        text = entity_block('worldspawn', '{ }', body,
+                            extra_epairs=f'"wad" "fixture.wad"\n"message" "{body}"\n')
+        self.path.write_text('// decoy { }\n' + text)
+        faces, brushes, properties = texcheck.map_data(self.path)
+        self.assertEqual(len(faces), 6)
+        self.assertEqual(len(brushes), 1)
+        self.assertEqual(properties[0]['message'], body)
+        self.assertEqual(properties[0]['wad'], 'fixture.wad')
+
+    def test_scientific_and_signed_brush_coordinates_match_decimal_geometry(self):
+        body = brush_block(box_faces(-32, 0, 0, 64, 64, 128, tex='stone'))
+        self.write_map(body)
+        expected, _, _ = texcheck.map_data(self.path)
+        body = texcheck.POINT.sub(lambda match: '( ' + ' '.join(
+            f'{float(value):+.3e}' for value in match.groups()) + ' )', body)
+        self.write_map(body.replace('+0.000e+00', '+.0'))
+        faces, _, _ = texcheck.map_data(self.path)
+        self.assertEqual(len(faces), 6)
+        for actual, reference in zip(faces, expected):
+            np.testing.assert_allclose(actual.vertices, reference.vertices)
+            np.testing.assert_allclose(actual.axes, reference.axes)
+        self.write_map(body.replace('+6.400e+01', '1e999'))
+        with self.assertRaisesRegex(ValueError, 'coordinates must be finite'):
+            texcheck.map_data(self.path)
+
     def test_hidden_internal_faces_are_not_alignment_candidates(self):
         first = brush_block(box_faces(0, 0, 0, 64, 64, 64, tex='stone'))
         second = brush_block(box_faces(64, 0, 0, 128, 64, 64, tex='stone'))
