@@ -639,15 +639,22 @@ class TestCombatProfile(unittest.TestCase):
         bsp_path = self.dir / 'balcony_opts.bsp'
         _write_synthetic_arena_bsp(bsp_path, with_balcony=True, cover_box=(256.0, 128.0, 0.0, 288.0, 384.0, 208.0))
 
-        # 1. --max-sightline caps long unobstructed lines rather than silently dropping them
+        # 1. --max-sightline caps per-cell summary metrics rather than silently dropping long lines,
+        #    while top_sightlines reports consistent true traced 3D/2D lengths tagged [capped >Nu].
         capped_res = cp.combat_profile(str(bsp_path), max_sightline=300.0, ref='duel')
         self.assertEqual(capped_res['metrics']['sightline_3d_max'], 300)
         self.assertTrue(capped_res['sightline_capped'])
         self.assertGreater(capped_res['sightline_capped_cells'], 0)
-        self.assertTrue(any(sl['capped'] for sl in capped_res['top_sightlines']))
+        capped_lines = [sl for sl in capped_res['top_sightlines'] if sl['capped']]
+        self.assertTrue(capped_lines)
+        for sl in capped_lines:
+            self.assertGreater(sl['length_3d'], 300)
+            self.assertGreaterEqual(sl['length_3d'], sl['length_2d'])
+            d_end = math.sqrt(sum((b - a) ** 2 for a, b in zip(sl['start'], sl['end'])))
+            self.assertAlmostEqual(sl['length_3d'], d_end, delta=2.0)
         report_txt = cp.format_report(capped_res)
         self.assertIn('sightline cap hit (300u)', report_txt)
-        self.assertIn('[capped]', report_txt)
+        self.assertIn('[capped >300u]', report_txt)
 
         # 2. --overlook-dz CLI flag controls vertical overlook threshold (balcony is 128u high)
         out_json = self.dir / 'ovdz.json'

@@ -212,12 +212,12 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
             d2_sq = dx * dx + dy * dy
             d3_sq = d2_sq + dz * dz
             if d3_sq > r_max2:
-                if not capped_i:
+                if (not capped_i) or (d3_sq > best_d3 * best_d3):
                     if (_los_multi_exact(roots0, nplane, nchild, lcont, pn, pd,
                                          jx, jy, jz + EYE, ix, iy, ibz)
                             or _los_multi_exact(roots0, nplane, nchild, lcont, pn, pd,
                                                 ix, iy, iez, jx, jy, jz + BODY)):
-                        best_d3 = max_sightline
+                        best_d3 = math.sqrt(d3_sq)
                         best_d2 = math.sqrt(d2_sq)
                         best_dz = dz
                         best_tgt = rep_node_idx[j]
@@ -821,12 +821,13 @@ def combat_profile(path, name=None, *,
     )
 
     # 2. Full N x M 3D visibility pass
-    (max_sl_3d, max_sl_2d, max_sl_dz, max_sl_tgt, sl_capped,
+    (max_sl_3d_raw, max_sl_2d, max_sl_dz, max_sl_tgt, sl_capped,
      exposure_w, overlooked_by_w, overlooks_w, dom_obs, obs_sees) = _compute_visibility_metrics(
         roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         pts, rep_pts, rep_w, rep_node_idx, rep_power,
         float(overlook_range), float(max_sightline), float(overlook_dz),
     )
+    max_sl_3d = np.minimum(max_sl_3d_raw, float(max_sightline))
     sightline_capped_cells = int(sl_capped.sum())
 
     exposure_area = exposure_w * cell_area
@@ -874,11 +875,11 @@ def combat_profile(path, name=None, *,
     )
     capped_mask = (disengage_reason == 4)
 
-    # 5. Top spatially distinct 3D sightlines
+    # 5. Top spatially distinct 3D sightlines (ranked by true traced 3D length)
     top_sightlines = []
-    order_sl = np.argsort(-max_sl_3d)
+    order_sl = np.argsort(-max_sl_3d_raw)
     for idx in order_sl:
-        L = float(max_sl_3d[idx])
+        L = float(max_sl_3d_raw[idx])
         tgt = int(max_sl_tgt[idx])
         if L <= 0.0 or tgt < 0:
             break
@@ -1218,12 +1219,12 @@ def format_report(res):
             f"raise --max-sightline to measure full unobstructed lengths"
         )
     if res['top_sightlines']:
+        cap_u = int(round(res['settings']['max_sightline']))
         lines.append("   longest 3D sightlines:")
         for sl in res['top_sightlines'][:3]:
-            prefix = '>=' if sl.get('capped') else ''
-            suffix = ' [capped]' if sl.get('capped') else ''
+            suffix = f' [capped >{cap_u}u]' if sl.get('capped') else ''
             lines.append(
-                f"     {prefix}{sl['length_3d']}u 3D ({sl['length_2d']}u 2D, dz={sl['dz']:+d}u, {sl['elev_deg']} deg){suffix}: "
+                f"     {sl['length_3d']}u 3D ({sl['length_2d']}u 2D, dz={sl['dz']:+d}u, {sl['elev_deg']} deg){suffix}: "
                 f"{tuple(sl['start'])} -> {tuple(sl['end'])}"
             )
     if res['killboxes']:

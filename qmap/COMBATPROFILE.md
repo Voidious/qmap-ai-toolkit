@@ -29,7 +29,7 @@ All metrics are computed on every reachable 16-unit player-hull floor node (`eye
 
 1. **True 3D Combat Sightline Length (`sightline_3d_*`)**
    - Longest clear 3D distance (`sqrt(dx^2 + dy^2 + dz^2)`) from a reachable floor cell to any other reachable floor cell with unobstructed eye-to-body hull-0 LOS across arbitrary azimuths and elevations, up to `--max-sightline` (default `4096u`).
-   - If any unobstructed line exceeds `--max-sightline`, it is capped at `--max-sightline` (rather than silently dropped), flagged in JSON (`sightline_capped` / `sightline_capped_cells`), and noted in the text report so you can raise `--max-sightline` on very large CTF or open maps.
+   - If any unobstructed line exceeds `--max-sightline`, per-cell summary metrics and heatmaps cap at `--max-sightline` (rather than silently dropping the line), JSON flags `sightline_capped` / `sightline_capped_cells`, and `top_sightlines` reports the true traced 3D/2D lengths tagged `[capped >Nu]` so you can raise `--max-sightline` on very large CTF or open maps.
    - Reports `p50`, `p90`, `max`, plus the top 5 spatially distinct sightlines with endpoints, 2D horizontal distance, `dz`, and elevation angle.
 
 2. **Overlook Asymmetry (`overlooked_by_*`, `overlooks_*`, `overlook_net_*`)**
