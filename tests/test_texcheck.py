@@ -348,6 +348,23 @@ class TestTemplateAnchors(unittest.TestCase):
         phases = {face.shifts[1] % 128 for face in faces if face.texture == texture}
         self.assertEqual(phases, {64})
 
+    def test_prism_fallback_respects_the_configured_wall_period(self):
+        environment = {'__name__': 'template_test'}
+        for name in ('_core.py', '_out.py'):
+            path = ROOT / 'template' / name
+            exec(compile(path.read_text(), str(path), 'exec'), environment)
+        environment['carve']((-128, -128, 128, 128), -64, 64, 'test', sym=False)
+        environment['WALL_PERIOD'][environment['zone']('test')] = 80
+        environment['prism']([(0, 0), (32, 0), (32, 32), (0, 32)], 96, 192, sym=False)
+        list(environment['detail_pieces']())
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'prism.map'
+            path.write_text(entity_block('worldspawn', *environment['EXTRA']['world']))
+            faces, _, _ = texcheck.map_data(path)
+        texture = environment['textures']('wall', 'test', 'wall')[2]
+        phases = {face.shifts[1] for face in faces if face.texture == texture}
+        self.assertEqual(phases, {48})
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -509,7 +509,7 @@ def detail_pieces():
                     tex, voff = textures(kind, (ni or {'th': tht})['th'], None)[2], z1 % 128
                 elif ni is None or not (ni['f'] <= mid < ni['c']):
                     th2 = (ni or {'th': tht})['th']
-                    tex, voff = textures('wall', th2, 'wall')[2], (ZONE_FLOOR.get(th2, 0) + 32) % 128
+                    tex, voff = textures('wall', th2, 'wall')[2], wall_anchor(th2) % WALL_PERIOD.get(zone(th2), 128)
                 else:
                     role, anc = band_role(ni, mid)
                     per = WALL_PERIOD.get(zone(ni['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
