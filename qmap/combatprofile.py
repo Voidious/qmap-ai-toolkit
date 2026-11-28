@@ -1094,6 +1094,17 @@ def combat_profile(path, name=None, *,
 
 
 # ------------------------------------------------------------------ diff mode
+# Per-metric noise floors below which layout diffs report 'unchanged' instead of jitter.
+def _diff_tolerance(metric):
+    if metric.endswith('_s'):
+        return 0.03
+    if '_area_k' in metric:
+        return 8.0
+    if metric.startswith('sightline_3d_') or metric.endswith('_u'):
+        return 16.0
+    return 0.01
+
+
 def compare_profiles(before, after, ref=None):
     """Compare two combat_profile() results (_b1 vs _b2) for layout review."""
     ref_name = ref or after.get('ref') or before.get('ref') or 'duel'
@@ -1116,7 +1127,8 @@ def compare_profiles(before, after, ref=None):
                 d1 = max(0.0, lo - v1)
                 d2 = max(0.0, lo - v2)
                 safer = v2 > v1
-            if abs(diff) > 1e-4:
+            tol = _diff_tolerance(k)
+            if abs(diff) > tol:
                 if d2 < d1 - 1e-4:
                     trend = 'improved'
                 elif d2 > d1 + 1e-4:
@@ -1239,6 +1251,22 @@ def _slice_grid(D, z_lo, z_hi, is_last, values, mode='max'):
     return grid
 
 
+def _style_world_axes(ax, show_x, show_y):
+    """Apply readable world-coordinate ticks and subtle gridlines on dark heatmap panels."""
+    from matplotlib.ticker import MaxNLocator
+
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=4, integer=True))
+    ax.tick_params(
+        colors='#999', labelsize=6.5, length=2.5, pad=2,
+        labelbottom=show_x, labelleft=show_y,
+    )
+    ax.grid(color='#ffffff', alpha=0.08, linewidth=0.5, linestyle='--')
+    for sp in ax.spines.values():
+        sp.set_color('#3a3d42')
+        sp.set_linewidth(0.6)
+
+
 def draw(res, out):
     """Render floor-sliced 3-column combat heatmap PNG (3D sightlines, overlook asymmetry, disengage time)."""
     import matplotlib
@@ -1251,12 +1279,13 @@ def draw(res, out):
     aspect = D['ny'] / max(D['nx'], 1)
     col_w = 4.6
     row_h = max(2.8, min(4.6, col_w * aspect + 0.5))
-    fig, axes = plt.subplots(nrows, 3, figsize=(col_w * 3 + 1.2, row_h * nrows + 1.1),
+    fig, axes = plt.subplots(nrows, 3, figsize=(col_w * 3 + 1.4, row_h * nrows + 1.2),
                              facecolor='#18191b', squeeze=False)
 
     sl_vmax = max(1200.0, float(np.percentile(D['max_sl_3d'], 99)))
     ov_vlim = max(0.12, float(np.percentile(np.abs(D['overlook_net']), 99)))
     dis_vmax = min(2.5, max(1.2, float(np.percentile(D['disengage_time'], 97))))
+    extent = [D['x0'], D['x0'] + D['nx'] * C, D['y0'], D['y0'] + D['ny'] * C]
 
     m = res['metrics']
     fig.suptitle(
@@ -1287,41 +1316,43 @@ def draw(res, out):
         for c_idx, (g, cmap, vmin, vmax) in enumerate(specs):
             ax = axes[r_idx, c_idx]
             ax.set_facecolor('#0d0d0e')
-            im = ax.imshow(g, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax, interpolation='nearest')
-            ax.set_xticks([])
-            ax.set_yticks([])
+            im = ax.imshow(g, origin='lower', extent=extent, cmap=cmap,
+                           vmin=vmin, vmax=vmax, interpolation='nearest')
+            _style_world_axes(ax, show_x=is_last, show_y=(c_idx == 0))
             if r_idx == 0:
                 ax.set_title(col_titles[c_idx], color='white', fontsize=9)
             if c_idx == 0:
-                ax.set_ylabel(f'z {int(zlo)}..{int(zhi)}', color='#ccc', fontsize=8.5)
+                ax.set_ylabel(f'y  (z {int(zlo)}..{int(zhi)})', color='#ccc', fontsize=8)
+            if is_last:
+                ax.set_xlabel('x (world u)', color='#999', fontsize=7.5)
             if c_idx == 0:
                 for sl in D['top_sightlines'][:2]:
                     s_z, e_z = sl['start'][2], sl['end'][2]
                     if (zlo <= s_z <= zhi) or (zlo <= e_z <= zhi):
                         ax.plot(
-                            [(sl['start'][0] - D['x0'] - 8) / C, (sl['end'][0] - D['x0'] - 8) / C],
-                            [(sl['start'][1] - D['y0'] - 8) / C, (sl['end'][1] - D['y0'] - 8) / C],
+                            [sl['start'][0], sl['end'][0]],
+                            [sl['start'][1], sl['end'][1]],
                             '--', color='#00f0ff', lw=1.2, alpha=0.85,
                         )
             elif c_idx == 1:
                 for kb in D['killboxes'][:3]:
                     if zlo <= kb['center'][2] <= zhi:
-                        ax.plot((kb['center'][0] - D['x0'] - 8) / C, (kb['center'][1] - D['y0'] - 8) / C,
+                        ax.plot(kb['center'][0], kb['center'][1],
                                 'x', color='#ffff00', ms=7, mew=1.8)
                 for pc in D['perches'][:3]:
                     if zlo <= pc['center'][2] <= zhi:
-                        ax.plot((pc['center'][0] - D['x0'] - 8) / C, (pc['center'][1] - D['y0'] - 8) / C,
+                        ax.plot(pc['center'][0], pc['center'][1],
                                 '^', color='#00ff88', ms=6, mec='black', mew=0.6)
             elif c_idx == 2:
                 for sz in D['slow_zones'][:3]:
                     if zlo <= sz['center'][2] <= zhi:
-                        ax.plot((sz['center'][0] - D['x0'] - 8) / C, (sz['center'][1] - D['y0'] - 8) / C,
+                        ax.plot(sz['center'][0], sz['center'][1],
                                 'o', mfc='none', mec='#00f0ff', ms=7, mew=1.5)
             cb = fig.colorbar(im, ax=ax, fraction=0.042, pad=0.02)
             cb.ax.tick_params(colors='#bbb', labelsize=7)
 
-    fig_h = row_h * nrows + 1.1
-    top_rect = max(0.84, min(0.96, 1.0 - 0.62 / fig_h))
+    fig_h = row_h * nrows + 1.2
+    top_rect = max(0.84, min(0.96, 1.0 - 0.64 / fig_h))
     plt.tight_layout(rect=[0, 0, 1, top_rect])
     fig.savefig(out, dpi=115, facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -1331,7 +1362,13 @@ def draw_diff(before, after, diff, out):
     """Render floor-sliced spatial diff heatmap (_b2 - _b1) on shared 16u world coordinates."""
     import matplotlib
     matplotlib.use('Agg')
+    from matplotlib.colors import LinearSegmentedColormap
     import matplotlib.pyplot as plt
+
+    diff_cmap = LinearSegmentedColormap.from_list(
+        'combat_diff',
+        ['#16d96a', '#1b6d41', '#2c3036', '#8d2b2b', '#ff3b30'],
+    )
 
     D1, D2 = before['_draw'], after['_draw']
     x0 = min(D1['x0'], D2['x0'])
@@ -1340,6 +1377,7 @@ def draw_diff(before, after, diff, out):
     y1 = max(D1['y0'] + D1['ny'] * C, D2['y0'] + D2['ny'] * C)
     nx = int(round((x1 - x0) / C))
     ny = int(round((y1 - y0) / C))
+    extent = [x0, x0 + nx * C, y0, y0 + ny * C]
 
     F_all = np.concatenate([D1['pts'][:, 2], D2['pts'][:, 2]])
     slices = compute_floor_slices(F_all, max_slices=max(len(D1['slices']), len(D2['slices'])))
@@ -1347,7 +1385,7 @@ def draw_diff(before, after, diff, out):
     aspect = ny / max(nx, 1)
     col_w = 4.6
     row_h = max(2.8, min(4.6, col_w * aspect + 0.5))
-    fig, axes = plt.subplots(nrows, 3, figsize=(col_w * 3 + 1.2, row_h * nrows + 1.1),
+    fig, axes = plt.subplots(nrows, 3, figsize=(col_w * 3 + 1.4, row_h * nrows + 1.2),
                              facecolor='#18191b', squeeze=False)
 
     def raster_shared(D, zlo, zhi, is_last, values, mode='max'):
@@ -1377,10 +1415,22 @@ def draw_diff(before, after, diff, out):
     slice_grids = []
     for r_idx, (zlo, zhi) in enumerate(slices):
         is_last = (r_idx == len(slices) - 1)
-        g_sl = raster_shared(D2, zlo, zhi, is_last, D2['max_sl_3d'], 'max') - raster_shared(D1, zlo, zhi, is_last, D1['max_sl_3d'], 'max')
-        g_ov = np.abs(raster_shared(D2, zlo, zhi, is_last, D2['overlook_net'], 'absmax')) - np.abs(raster_shared(D1, zlo, zhi, is_last, D1['overlook_net'], 'absmax'))
-        g_ds = raster_shared(D2, zlo, zhi, is_last, D2['disengage_time'], 'max') - raster_shared(D1, zlo, zhi, is_last, D1['disengage_time'], 'max')
-        slice_grids.append((zlo, zhi, g_sl, g_ov, g_ds))
+        g1_sl = raster_shared(D1, zlo, zhi, is_last, D1['max_sl_3d'], 'max')
+        g2_sl = raster_shared(D2, zlo, zhi, is_last, D2['max_sl_3d'], 'max')
+        g_sl = g2_sl - g1_sl
+        g_ov = (np.abs(raster_shared(D2, zlo, zhi, is_last, D2['overlook_net'], 'absmax'))
+                - np.abs(raster_shared(D1, zlo, zhi, is_last, D1['overlook_net'], 'absmax')))
+        g_ds = (raster_shared(D2, zlo, zhi, is_last, D2['disengage_time'], 'max')
+                - raster_shared(D1, zlo, zhi, is_last, D1['disengage_time'], 'max'))
+
+        # Floor present in only one build (cyan = added in after, violet = removed from before)
+        added = np.isfinite(g2_sl) & ~np.isfinite(g1_sl)
+        removed = np.isfinite(g1_sl) & ~np.isfinite(g2_sl)
+        chg_rgba = np.zeros((ny, nx, 4), np.float32)
+        chg_rgba[added] = (0.22, 0.74, 0.97, 0.78)
+        chg_rgba[removed] = (0.75, 0.52, 0.99, 0.72)
+
+        slice_grids.append((zlo, zhi, g_sl, g_ov, g_ds, chg_rgba))
         if np.any(np.isfinite(g_sl)):
             d_sl_all.append(np.abs(g_sl[np.isfinite(g_sl)]))
         if np.any(np.isfinite(g_ov)):
@@ -1394,11 +1444,12 @@ def draw_diff(before, after, diff, out):
 
     dlt = diff['deltas']
     fig.suptitle(
-        f"Combat Diff: {diff['before_map']} -> {diff['after_map']}  (green = improved, red = worse)  |  "
+        f"Combat Diff: {diff['before_map']} -> {diff['after_map']}  |  "
         f"sightline p90 {int(round(dlt['sightline_3d_p90']['delta'])):+d}u  |  "
         f"killbox p05 {dlt['overlook_net_p05']['delta']:+.3f}  |  "
-        f"disengage p90 {dlt['disengage_p90_s']['delta']:+.2f}s",
-        color='white', fontsize=9.8, y=0.992,
+        f"disengage p90 {dlt['disengage_p90_s']['delta']:+.2f}s\n"
+        f"green = improved  |  dark slate = unchanged  |  red = worse  |  cyan = added floor  |  violet = removed floor",
+        color='white', fontsize=9.2, y=0.992,
     )
 
     col_titles = [
@@ -1406,22 +1457,27 @@ def draw_diff(before, after, diff, out):
         'Delta |Overlook Asymmetry|',
         'Delta Disengage Time (s)',
     ]
-    for r_idx, (zlo, zhi, g_sl, g_ov, g_ds) in enumerate(slice_grids):
+    for r_idx, (zlo, zhi, g_sl, g_ov, g_ds, chg_rgba) in enumerate(slice_grids):
+        is_last = (r_idx == len(slice_grids) - 1)
         for c_idx, (g, vlim) in enumerate(((g_sl, v_sl), (g_ov, v_ov), (g_ds, v_ds))):
             ax = axes[r_idx, c_idx]
             ax.set_facecolor('#0d0d0e')
-            im = ax.imshow(g, origin='lower', cmap='RdYlGn_r', vmin=-vlim, vmax=vlim, interpolation='nearest')
-            ax.set_xticks([])
-            ax.set_yticks([])
+            im = ax.imshow(g, origin='lower', extent=extent, cmap=diff_cmap,
+                           vmin=-vlim, vmax=vlim, interpolation='nearest')
+            if np.any(chg_rgba[:, :, 3] > 0):
+                ax.imshow(chg_rgba, origin='lower', extent=extent, interpolation='nearest')
+            _style_world_axes(ax, show_x=is_last, show_y=(c_idx == 0))
             if r_idx == 0:
                 ax.set_title(col_titles[c_idx], color='white', fontsize=9)
             if c_idx == 0:
-                ax.set_ylabel(f'z {int(zlo)}..{int(zhi)}', color='#ccc', fontsize=8.5)
+                ax.set_ylabel(f'y  (z {int(zlo)}..{int(zhi)})', color='#ccc', fontsize=8)
+            if is_last:
+                ax.set_xlabel('x (world u)', color='#999', fontsize=7.5)
             cb = fig.colorbar(im, ax=ax, fraction=0.042, pad=0.02)
             cb.ax.tick_params(colors='#bbb', labelsize=7)
 
-    fig_h = row_h * nrows + 1.1
-    top_rect = max(0.84, min(0.96, 1.0 - 0.62 / fig_h))
+    fig_h = row_h * nrows + 1.2
+    top_rect = max(0.84, min(0.96, 1.0 - 0.64 / fig_h))
     plt.tight_layout(rect=[0, 0, 1, top_rect])
     fig.savefig(out, dpi=115, facecolor=fig.get_facecolor())
     plt.close(fig)

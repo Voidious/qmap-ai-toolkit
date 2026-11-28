@@ -540,6 +540,56 @@ class TestCombatProfile(unittest.TestCase):
         }
         self.assertEqual(set(loaded_pad['nodes_reach']), vp_pad_reach)
 
+    def test_diff_noise_floor_and_added_removed_floor_rendering(self):
+        # Sub-tolerance jitter must report 'unchanged'; real changes report trend verdicts
+        base_metrics = {
+            'sightline_3d_p90': 1400,
+            'sightline_3d_max': 1700,
+            'exposure_p90': 0.350,
+            'overlooked_by_area_k_p90': 200.0,
+            'overlook_net_p05': -0.140,
+            'overlook_net_p95': 0.150,
+            'killbox_share': 0.230,
+            'perch_share': 0.085,
+            'disengage_p50_s': 0.55,
+            'disengage_p90_s': 1.35,
+            'disengage_overlooked_p90_s': 1.25,
+        }
+        jitter_metrics = dict(
+            base_metrics,
+            sightline_3d_p90=1412,           # +12u <= 16u noise floor
+            exposure_p90=0.349,              # -0.001 <= 0.01 noise floor
+            overlooked_by_area_k_p90=205.0,  # +5k <= 8k noise floor
+            disengage_p90_s=1.37,            # +0.02s <= 0.03s noise floor
+        )
+        real_metrics = dict(
+            base_metrics,
+            sightline_3d_p90=1460,           # +60u > 16u -> regressed
+            exposure_p90=0.310,              # -0.040 > 0.01 -> improved
+            disengage_p90_s=1.20,            # -0.15s > 0.03s -> improved
+        )
+        stub = lambda nm, m: dict(map=nm, ref='duel', floor_area_k=1000, metrics=m,
+                                  verdicts={}, warnings=[], killboxes=[], perches=[])
+        d_jitter = cp.compare_profiles(stub('m1', base_metrics), stub('m2', jitter_metrics), ref='duel')
+        for k in ('sightline_3d_p90', 'exposure_p90', 'overlooked_by_area_k_p90', 'disengage_p90_s'):
+            self.assertEqual(d_jitter['deltas'][k]['trend'], 'unchanged', f'{k} jitter should be unchanged')
+        d_real = cp.compare_profiles(stub('m1', base_metrics), stub('m2', real_metrics), ref='duel')
+        self.assertEqual(d_real['deltas']['sightline_3d_p90']['trend'], 'regressed')
+        self.assertEqual(d_real['deltas']['exposure_p90']['trend'], 'improved')
+        self.assertEqual(d_real['deltas']['disengage_p90_s']['trend'], 'improved')
+
+        # Added/removed floor diff PNG renders cleanly with non-empty footprint overlays
+        flat_bsp = self.dir / 'flat.bsp'
+        balc_bsp = self.dir / 'balc.bsp'
+        _write_synthetic_arena_bsp(flat_bsp, with_balcony=False)
+        _write_synthetic_arena_bsp(balc_bsp, with_balcony=True)
+        r_flat = cp.combat_profile(str(flat_bsp), ref='duel')
+        r_balc = cp.combat_profile(str(balc_bsp), ref='duel')
+        diff = cp.compare_profiles(r_flat, r_balc, ref='duel')
+        out_png = self.dir / 'added_removed_diff.png'
+        cp.draw_diff(r_flat, r_balc, diff, str(out_png))
+        self.assertGreater(out_png.stat().st_size, 5000)
+
     def test_cli_single_diff_json_and_errors(self):
         b1 = self.dir / 'cli_b1.bsp'
         b2 = self.dir / 'cli_b2.bsp'
