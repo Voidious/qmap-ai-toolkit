@@ -21,7 +21,7 @@ Diagnostics exit 0 by default (advisory); input errors exit 2.
 See COMBATPROFILE.md for metric definitions, classic reference bands, and diff mode.
 """
 import argparse
-from collections import defaultdict, deque
+from collections import defaultdict
 import json
 import math
 import os
@@ -34,8 +34,6 @@ from numba import njit, prange
 import vprofile
 
 C = vprofile.C
-STEP = vprofile.STEP
-JUMP = vprofile.JUMP
 EYE = float(vprofile.EYE)       # 46u above feet
 BODY = float(vprofile.BODY)     # 32u above feet (center of 56u player)
 WALK_SPEED = 320.0              # QuakeWorld sv_maxspeed (u/s)
@@ -397,219 +395,17 @@ def _compute_disengage(indptr, indices, weights, exposure_area, dom_obs, cell_se
 
 # ------------------------------------------------------------------ lightweight walkable floor loader
 def load_walkable_floor(path, name=None):
-    """Build vprofile's exact reachable 16u walkable floor nodes & movement graph directly from
-    the BSP29 hulls, skipping passage-width, blind-pocket, and redundant overlook scans."""
-    B = vprofile.BSP(str(path))
+    """Build vprofile's exact reachable 16u walkable floor nodes & movement graph via
+    vprofile.build_floor_graph(), skipping passage-width, blind-pocket, and overlook scans."""
+    G = vprofile.build_floor_graph(str(path))
     name = name or os.path.splitext(os.path.basename(str(path)))[0]
-    m0 = B.models[0]
+    B = G['bsp']
+    x0, y0, nx, ny = G['x0'], G['y0'], G['nx'], G['ny']
+    nodes = G['nodes']
+    adj = G['adj']
+    N_all = G['N']
 
-    roots1 = [int(m0['h'][1])]
-    roots0 = [int(m0['h'][0])]
-    for e in B.ents:
-        if e.get('classname') == 'func_wall':
-            mi = vprofile.model_index(e)
-            if mi and mi < len(B.models):
-                roots1.append(int(B.models[mi]['h'][1]))
-                roots0.append(int(B.models[mi]['h'][0]))
-    roots1 = np.array(roots1, np.int64)
-    roots0 = np.array(roots0, np.int64)
-
-    S1 = lambda x, y, z: vprofile._solid1(roots1, B.cplane, B.cchild, B.pn, B.pd, x, y, z)
-    root0 = int(m0['h'][0])
-    LC = lambda x, y, z: vprofile._leaf(root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, x, y, z)
-
-    mn, mx = m0['mn'], m0['mx']
-    x0, y0 = math.floor(mn[0] / C) * C, math.floor(mn[1] / C) * C
-    nx, ny = int(math.ceil((mx[0] - x0) / C)), int(math.ceil((mx[1] - y0) / C))
-    raw = vprofile._scan(roots1, B.cplane, B.cchild, B.pn, B.pd,
-                         float(x0), float(y0), nx, ny, float(mn[2]) - 8, float(mx[2]) + 40)
-
-    cols = defaultdict(list)
-    for i, j, oz in raw:
-        x, y = x0 + i * C + 8, y0 + j * C + 8
-        if LC(x, y, oz - 20) in (-4, -5):   # slime, lava
-            continue
-        cols[(i, j)].append(oz - 24.0)
-
-    nodes = []
-    nid = {}
-    colof = {}
-    for (i, j), fl in cols.items():
-        sfl = sorted(fl)
-        colof[(i, j)] = sfl
-        for k, f in enumerate(sfl):
-            nid[(i, j, k)] = len(nodes)
-            nodes.append((i, j, f))
-    N_all = len(nodes)
-    F_all = np.array([n[2] for n in nodes], np.float64)
-
-    def cxy(i, j):
-        return x0 + i * C + 8, y0 + j * C + 8
-
-    def floor_at(i, j, zmax):
-        fl = colof.get((i, j))
-        if not fl:
-            return None
-        best = None
-        for k, f in enumerate(fl):
-            if f <= zmax + 0.5:
-                best = k
-        return None if best is None else nid[(i, j, best)]
-
-    def node_near(x, y, z):
-        i, j = int((x - x0) // C), int((y - y0) // C)
-        for di, dj in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
-            n = floor_at(i + di, j + dj, z - 24 + 12)
-            if n is not None and z - 24 - F_all[n] < 96:
-                return n
-        return None
-
-    # Build walkable edges matching vprofile.py
-    adj = defaultdict(list)
-    D8 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1))
-    for n, (i, j, f) in enumerate(nodes):
-        x, y = cxy(i, j)
-        for di, dj in D8:
-            fl = colof.get((i + di, j + dj))
-            if not fl:
-                continue
-            nx_, ny_ = cxy(i + di, j + dj)
-            h = C * math.hypot(di, dj)
-            for k, g in enumerate(fl):
-                dz = g - f
-                if -STEP <= dz <= STEP:
-                    if di and dj and (S1(nx_, y, max(f, g) + 25) or S1(x, ny_, max(f, g) + 25)):
-                        continue
-                    if S1(x, y, max(f, g) + 25) or S1(nx_, ny_, max(f, g) + 25):
-                        continue
-                    adj[n].append((nid[(i + di, j + dj, k)], h, 'walk'))
-                elif STEP < dz <= JUMP and not S1(x, y, f + 24 + dz + 4) and not S1(nx_, ny_, g + 24):
-                    adj[n].append((nid[(i + di, j + dj, k)], h + 32, 'jump'))
-            if not S1(nx_, ny_, f + 25):
-                m = floor_at(i + di, j + dj, f)
-                if m is not None and F_all[m] < f - STEP:
-                    adj[n].append((m, h, 'drop'))
-        for di, dj in D8:
-            for s in range(2, 9):
-                ti, tj = i + di * s, j + dj * s
-                if C * s * math.hypot(di, dj) > 128:
-                    break
-                m = floor_at(ti, tj, f + 8)
-                if m is None or F_all[m] < f - 64:
-                    continue
-                ok = True
-                for t in range(1, s):
-                    mi, mj = i + di * t, j + dj * t
-                    px, py = cxy(mi, mj)
-                    if S1(px, py, f + 48):
-                        ok = False
-                        break
-                    mm = floor_at(mi, mj, f + 8)
-                    if mm is not None and F_all[mm] > f - 24:
-                        ok = False
-                        break
-                if ok:
-                    adj[n].append((m, C * s * math.hypot(di, dj) + 16, 'gap'))
-                break
-
-    # Teleporters
-    dest = {
-        e.get('targetname'): vprofile.origin(e)
-        for e in B.ents
-        if e.get('classname') in ('info_teleport_destination', 'info_notnull', 'info_null') and e.get('targetname')
-    }
-    for e in B.ents:
-        if e.get('classname') != 'trigger_teleport' or vprofile.model_index(e) is None:
-            continue
-        o = dest.get(e.get('target'))
-        if o is None:
-            continue
-        M_ent = B.models[vprofile.model_index(e)]
-        d = node_near(o[0], o[1], o[2])
-        if d is None:
-            continue
-        for n, (i, j, f) in enumerate(nodes):
-            x, y = cxy(i, j)
-            if (M_ent['mn'][0] - 16 <= x <= M_ent['mx'][0] + 16
-                    and M_ent['mn'][1] - 16 <= y <= M_ent['mx'][1] + 16
-                    and M_ent['mn'][2] - 56 <= f <= M_ent['mx'][2]):
-                adj[n].append((d, TELE_COST, 'tele'))
-
-    # Push pads
-    PUSH = []
-    for e in B.ents:
-        if e.get('classname') != 'trigger_push' or vprofile.model_index(e) is None:
-            continue
-        M_ent = B.models[vprofile.model_index(e)]
-        sp = float(e.get('speed', 1000)) * 10
-        if 'angles' in e:
-            p, yw, _ = [float(v) for v in e['angles'].split()]
-        else:
-            a = float(e.get('angle', 0))
-            p, yw = (-90, 0) if a == -1 else (90, 0) if a == -2 else (0, a)
-        pr, yr = math.radians(-p), math.radians(yw)
-        PUSH.append((M_ent, np.clip(np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), math.sin(pr)]) * sp, -2000, 2000)))
-
-    def in_push(pos):
-        hit = None
-        for M_ent, v0 in PUSH:
-            if (M_ent['mn'][0] - 16 <= pos[0] <= M_ent['mx'][0] + 16
-                    and M_ent['mn'][1] - 16 <= pos[1] <= M_ent['mx'][1] + 16
-                    and M_ent['mn'][2] - 32 <= pos[2] <= M_ent['mx'][2] + 24):
-                hit = v0
-        return hit
-
-    for M_ent, v0 in PUSH:
-        cx, cy = (M_ent['mn'][0] + M_ent['mx'][0]) / 2, (M_ent['mn'][1] + M_ent['mx'][1]) / 2
-        src = [n for n, (i, j, f) in enumerate(nodes)
-               if M_ent['mn'][0] - 8 <= cxy(i, j)[0] <= M_ent['mx'][0] + 8
-               and M_ent['mn'][1] - 8 <= cxy(i, j)[1] <= M_ent['mx'][1] + 8
-               and M_ent['mn'][2] - 56 <= f <= M_ent['mx'][2]]
-        if not src:
-            continue
-        pos = np.array([cx, cy, min(F_all[s] for s in src) + 25], float)
-        v = v0.copy()
-        land = None
-        for _ in range(600):
-            pv = in_push(pos)
-            if pv is not None:
-                v = pv.copy()
-            v[2] -= 800 * 0.01
-            nxt = pos + v * 0.01
-            if S1(*nxt):
-                if v[2] < 0 and in_push(nxt) is None:
-                    land = node_near(nxt[0], nxt[1], pos[2])
-                    break
-                if S1(pos[0], pos[1], nxt[2]):
-                    v[2] = 0
-                else:
-                    v[0] = v[1] = 0
-                continue
-            pos = nxt
-        if land is not None and land not in src:
-            for s in src:
-                adj[s].append((land, 64.0, 'pad'))
-
-    # Spawns & reachability BFS
-    spn = []
-    for e in B.ents:
-        if e.get('classname') in ('info_player_deathmatch', 'info_player_start',
-                                  'info_player_team1', 'info_player_team2', 'info_player_coop'):
-            o = vprofile.origin(e)
-            n = node_near(o[0], o[1], o[2])
-            if n is not None:
-                spn.append(n)
-    seen = np.zeros(N_all, bool)
-    dq = deque(spn)
-    seen[spn] = True
-    while dq:
-        u = dq.popleft()
-        for v, _, _ in adj[u]:
-            if not seen[v]:
-                seen[v] = True
-                dq.append(v)
-
-    reach_ids = np.nonzero(seen)[0]
+    reach_ids = np.nonzero(G['R'])[0]
     N = len(reach_ids)
     if N == 0:
         raise ValueError(f'{path}: no reachable floor nodes found from spawns')
@@ -623,11 +419,12 @@ def load_walkable_floor(path, name=None):
     edge_dst = []
     edge_w = []
     for r_u in range(N):
-        for full_v, cost, _kind in adj[int(reach_ids[r_u])]:
+        for full_v, cost, kind in adj[int(reach_ids[r_u])]:
             r_v = int(full_to_r[full_v])
             if r_v >= 0 and r_v != r_u:
                 edge_dst.append(r_v)
-                edge_w.append(max(float(cost), 1.0))
+                eff_cost = TELE_COST if kind == 'tele' else float(cost)
+                edge_w.append(max(eff_cost, 1.0))
         indptr[r_u + 1] = len(edge_dst)
 
     F = pts[:, 2]
@@ -639,7 +436,7 @@ def load_walkable_floor(path, name=None):
     return dict(
         map=name,
         bsp=B,
-        roots0=roots0,
+        roots0=G['roots0'],
         x0=float(x0), y0=float(y0), nx=nx, ny=ny,
         nodes_reach=nodes_reach,
         pts=pts,
@@ -648,7 +445,7 @@ def load_walkable_floor(path, name=None):
         weights=np.array(edge_w, np.float64),
         floor_area_k=round(N * C * C / 1000.0),
         eff_levels=eff_levels,
-        spawns=len(spn),
+        spawns=len(G['spn']),
     )
 
 

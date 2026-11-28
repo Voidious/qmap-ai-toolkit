@@ -673,15 +673,24 @@ def origin(e):
     return np.array([float(v) for v in e.get('origin', '0 0 0').split()])
 
 
-def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASSAGE):
-    B = BSP(path)
-    name = name or os.path.splitext(os.path.basename(path))[0]
+def build_floor_graph(bsp_or_path):
+    """Build the 16-unit player-hull walkable floor graph and spawn reachability from a BSP29.
+
+    Shared by profile() and downstream BSP analyzers (combatprofile.py, etc.) so movement rules
+    (walk/step/jump/drop/gap/tele/pad) and reachable floor nodes stay identical across tools.
+    """
+    B = bsp_or_path if isinstance(bsp_or_path, BSP) else BSP(str(bsp_or_path))
     m0 = B.models[0]
     roots = [int(m0['h'][1])]
+    roots0 = [int(m0['h'][0])]
     for e in B.ents:
-        if e.get('classname') == 'func_wall' and model_index(e):
-            roots.append(int(B.models[model_index(e)]['h'][1]))
+        if e.get('classname') == 'func_wall':
+            mi = model_index(e)
+            if mi and mi < len(B.models):
+                roots.append(int(B.models[mi]['h'][1]))
+                roots0.append(int(B.models[mi]['h'][0]))
     roots = np.array(roots, np.int64)
+    roots0 = np.array(roots0, np.int64)
     S1 = lambda x, y, z: _solid1(roots, B.cplane, B.cchild, B.pn, B.pd, x, y, z)
     root0 = int(m0['h'][0])
     LC = lambda x, y, z: _leaf(root0, B.nplane, B.nchild, B.lcont, B.pn, B.pd, x, y, z)
@@ -698,17 +707,19 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
         cols[(i, j)].append(oz - 24.0)
     nodes = []
     nid = {}
+    colof = {}
     for (i, j), fl in cols.items():
-        for k, f in enumerate(sorted(fl)):
+        sfl = sorted(fl)
+        colof[(i, j)] = sfl
+        for k, f in enumerate(sfl):
             nid[(i, j, k)] = len(nodes)
             nodes.append((i, j, f))
     N = len(nodes)
-    F = np.array([n[2] for n in nodes])
-    colof = {}
-    for (i, j), fl in cols.items():
-        colof[(i, j)] = sorted(fl)
+    F = np.array([n[2] for n in nodes], np.float64)
+
     def cxy(i, j):
         return x0 + i * C + 8, y0 + j * C + 8
+
     def floor_at(i, j, zmax):
         """highest floor in column (i,j) at or below zmax (feet height)"""
         fl = colof.get((i, j))
@@ -719,6 +730,7 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
             if f <= zmax + 0.5:
                 best = k
         return None if best is None else nid[(i, j, best)]
+
     def node_near(x, y, z):
         i, j = int((x - x0) // C), int((y - y0) // C)
         for di, dj in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)):
@@ -729,7 +741,6 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
 
     # --- edges
     adj = defaultdict(list)                # n -> [(m, cost, kind)]
-    kinds = defaultdict(int)
     drops, jumps, graded = set(), set(), set()
     D8 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
     for n, (i, j, f) in enumerate(nodes):
@@ -825,6 +836,7 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
             p, yw = (-90, 0) if a == -1 else (90, 0) if a == -2 else (0, a)
         pr, yr = math.radians(-p), math.radians(yw)
         PUSH.append((M, np.clip(np.array([math.cos(pr) * math.cos(yr), math.cos(pr) * math.sin(yr), math.sin(pr)]) * sp, -2000, 2000)))
+
     def in_push(pos):
         hit = None
         for M, v0 in PUSH:
@@ -832,6 +844,7 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
                     and M['mn'][2] - 32 <= pos[2] <= M['mx'][2] + 24):
                 hit = v0
         return hit
+
     for M, v0 in PUSH:
         cx, cy = (M['mn'][0] + M['mx'][0]) / 2, (M['mn'][1] + M['mx'][1]) / 2
         src = [n for n, (i, j, f) in enumerate(nodes) if M['mn'][0] - 8 <= cxy(i, j)[0] <= M['mx'][0] + 8
@@ -868,6 +881,7 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
             n = node_near(o[0], o[1], o[2])
             if n is not None:
                 spn.append(n)
+
     def bfs(extra=None):
         seen = np.zeros(N, bool)
         dq = deque(spn)
@@ -884,7 +898,28 @@ def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASS
                         seen[m] = True
                         dq.append(m)
         return seen
+
     R = bfs()
+    return dict(
+        bsp=B, roots=roots, roots0=roots0, root0=root0, S1=S1, LC=LC,
+        x0=x0, y0=y0, nx=nx, ny=ny,
+        nodes=nodes, nid=nid, colof=colof, N=N, F=F,
+        cxy=cxy, floor_at=floor_at, node_near=node_near,
+        adj=adj, drops=drops, jumps=jumps, graded=graded,
+        tele=tele, pads=pads, spn=spn, bfs=bfs, R=R, D8=D8,
+    )
+
+
+def profile(path, name=None, with_navigation=False, min_passage=DEFAULT_MIN_PASSAGE):
+    G = build_floor_graph(path)
+    B = G['bsp']
+    name = name or os.path.splitext(os.path.basename(path))[0]
+    roots, root0 = G['roots'], G['root0']
+    x0, y0, nx, ny = G['x0'], G['y0'], G['nx'], G['ny']
+    nodes, nid, colof, N, F = G['nodes'], G['nid'], G['colof'], G['N'], G['F']
+    cxy, node_near = G['cxy'], G['node_near']
+    adj, drops, jumps, graded = G['adj'], G['drops'], G['jumps'], G['graded']
+    tele, pads, spn, bfs, R, D8 = G['tele'], G['pads'], G['spn'], G['bfs'], G['R'], G['D8']
     def rj(n):                       # rocket jump: up to RJ above, within 192 horizontally
         i, j, f = nodes[n]
         out = []

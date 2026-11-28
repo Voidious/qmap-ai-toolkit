@@ -68,13 +68,16 @@ class TestCombatReferenceDataset(unittest.TestCase):
             self.assertGreater(m['disengage_p90_s'], 0.0)
 
 
-def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover_as_func_wall=False):
+def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover_as_func_wall=False,
+                               balcony_spawn=True, teleporter=None, push_pad=None):
     """Build a self-contained compiled BSP29 arena with exact hull-0 nodes and hull-1 clipnodes.
 
     World interior: x in [0, 512], y in [0, 512], z in [0, 320].
     Optional balcony (z=128): solid step/block at x in [0, 128], y in [0, 512], z in [0, 128].
     Optional cover_box: (x0, y0, z0, x1, y1, z1) solid wall/baffle inside the arena, placed
     either in worldspawn or as a func_wall submodel (*1).
+    Optional teleporter: (trigger_box, dest_xyz) adding a trigger_teleport + info_teleport_destination.
+    Optional push_pad: (trigger_box, angles_str, speed) adding a trigger_push launch pad.
     """
     planes = []
 
@@ -177,13 +180,14 @@ def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover
         '{\n"classname" "worldspawn"\n}\n',
         '{\n"classname" "info_player_deathmatch"\n"origin" "384 256 24"\n}\n',
     ]
-    if with_balcony:
+    if with_balcony and balcony_spawn:
         # Spawn on the balcony as well so both tiers are reachable
         ents.append('{\n"classname" "info_player_deathmatch"\n"origin" "64 256 152"\n}\n')
 
     if cover_box is not None and cover_as_func_wall:
         fw_h0 = _box_bsp([cover_box], is_hull0=True, outer_empty=True)
         fw_h1 = _box_bsp([cover_box], is_hull0=False, expand_xy=16.0, expand_z_lo=32.0, expand_z_hi=24.0, outer_empty=True)
+        mi = len(models)
         models.append((
             (cover_box[0], cover_box[1], cover_box[2]),
             (cover_box[3], cover_box[4], cover_box[5]),
@@ -191,7 +195,38 @@ def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover
             (fw_h0, fw_h1, fw_h1, 0),
             2, 0, 0,
         ))
-        ents.append('{\n"classname" "func_wall"\n"model" "*1"\n}\n')
+        ents.append(f'{{\n"classname" "func_wall"\n"model" "*{mi}"\n}}\n')
+
+    if teleporter is not None:
+        tbox, dest_xyz = teleporter
+        mi = len(models)
+        models.append((
+            (tbox[0], tbox[1], tbox[2]),
+            (tbox[3], tbox[4], tbox[5]),
+            (0.0, 0.0, 0.0),
+            (-1, -1, -1, 0),
+            1, 0, 0,
+        ))
+        ents.append(f'{{\n"classname" "trigger_teleport"\n"model" "*{mi}"\n"target" "tele_dest"\n}}\n')
+        ents.append(
+            f'{{\n"classname" "info_teleport_destination"\n"targetname" "tele_dest"\n'
+            f'"origin" "{dest_xyz[0]} {dest_xyz[1]} {dest_xyz[2]}"\n}}\n'
+        )
+
+    if push_pad is not None:
+        pbox, angles_str, speed = push_pad
+        mi = len(models)
+        models.append((
+            (pbox[0], pbox[1], pbox[2]),
+            (pbox[3], pbox[4], pbox[5]),
+            (0.0, 0.0, 0.0),
+            (-1, -1, -1, 0),
+            1, 0, 0,
+        ))
+        ents.append(
+            f'{{\n"classname" "trigger_push"\n"model" "*{mi}"\n'
+            f'"angles" "{angles_str}"\n"speed" "{speed}"\n}}\n'
+        )
 
     # Pack BSP29 lumps
     lump_ents = ''.join(ents).encode('latin1') + b'\0'
@@ -360,6 +395,60 @@ class TestCombatProfile(unittest.TestCase):
         slices = cp.compute_floor_slices(three_tiers, max_slices=4)
         self.assertEqual(len(slices), 3)
         self.assertTrue(slices[0][0] <= 0 < slices[0][1] <= 128 < slices[1][1] <= 256 <= slices[2][1])
+
+    def test_floor_graph_matches_vprofile_and_handles_teleporter_and_push_pad(self):
+        import vprofile
+
+        # 1. Parity with vprofile.profile() on reachable floor nodes
+        arena = self.dir / 'parity.bsp'
+        _write_synthetic_arena_bsp(arena, with_balcony=True, cover_box=(256.0, 128.0, 0.0, 288.0, 384.0, 208.0))
+        vp = vprofile.profile(str(arena))
+        vp_reach = {
+            vp['_draw']['nodes'][idx]
+            for idx, ok in enumerate(vp['_draw']['R'])
+            if ok
+        }
+        cp_loaded = cp.load_walkable_floor(str(arena))
+        self.assertEqual(set(cp_loaded['nodes_reach']), vp_reach)
+
+        # 2. Teleporter connects pit (only spawn) up to balcony with TELE_COST edge
+        tele_bsp = self.dir / 'tele.bsp'
+        _write_synthetic_arena_bsp(
+            tele_bsp,
+            with_balcony=True,
+            balcony_spawn=False,
+            teleporter=((224.0, 224.0, 0.0, 288.0, 288.0, 64.0), (64, 256, 152)),
+        )
+        loaded_tele = cp.load_walkable_floor(str(tele_bsp))
+        self.assertTrue(np.any(loaded_tele['pts'][:, 2] >= 120.0), 'teleporter should reach balcony')
+        # Verify at least one edge uses TELE_COST (48.0) jumping from z=0 to z=128
+        found_tele_edge = False
+        for u in range(len(loaded_tele['pts'])):
+            if loaded_tele['pts'][u, 2] <= 8.0:
+                for e in range(loaded_tele['indptr'][u], loaded_tele['indptr'][u + 1]):
+                    v = loaded_tele['indices'][e]
+                    if loaded_tele['pts'][v, 2] >= 120.0 and loaded_tele['weights'][e] == cp.TELE_COST:
+                        found_tele_edge = True
+                        break
+        self.assertTrue(found_tele_edge, 'expected TELE_COST edge from pit trigger to balcony')
+
+        # 3. Push pad launches pit player onto balcony (only pit spawn, no balcony spawn)
+        pad_bsp = self.dir / 'pad.bsp'
+        _write_synthetic_arena_bsp(
+            pad_bsp,
+            with_balcony=True,
+            balcony_spawn=False,
+            push_pad=((208.0, 224.0, 0.0, 272.0, 288.0, 64.0), '-75 180 0', 75),
+        )
+        loaded_pad = cp.load_walkable_floor(str(pad_bsp))
+        self.assertTrue(np.any(loaded_pad['pts'][:, 2] >= 120.0), 'push pad should launch onto balcony')
+        vp_pad = vprofile.profile(str(pad_bsp))
+        vp_pad_reach = {
+            vp_pad['_draw']['nodes'][idx]
+            for idx, ok in enumerate(vp_pad['_draw']['R'])
+            if ok
+        }
+        self.assertEqual(set(loaded_pad['nodes_reach']), vp_pad_reach)
 
     def test_cli_single_diff_json_and_errors(self):
         b1 = self.dir / 'cli_b1.bsp'
