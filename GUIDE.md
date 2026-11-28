@@ -576,7 +576,10 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   Use `python3 qmap/combatprofile.py map.bsp --ref duel|large --png map.combat.png` for true 3D
   sightlines across diagonals and elevations, per-cell overlook asymmetry (kill boxes vs.
   oppressive perches), and disengage time-to-cover heatmaps (plus `--diff b1.bsp b2.bsp` between
-  layout builds). See [3D combat exposure](qmap/COMBATPROFILE.md).
+  layout builds). Match `--ref` to map scale: use `--ref duel` for compact 1v1 / small FFA maps
+  (`~1,080k–1,600k` sq u), and `--ref large` for Clan Arena 6–12, 4v4 TDM, and larger multi-player
+  maps (`~1,400k–4,710k` sq u; running `--ref duel` on 3,000–4,200k CA maps trips sightline and
+  overlooked-by bands from size alone). See [3D combat exposure](qmap/COMBATPROFILE.md).
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-pass collision audit** (`collide_cmp.py old.map new.map`): the old "zero collision
   change" rule protected three real things — keeping the playtested layout intact, preventing

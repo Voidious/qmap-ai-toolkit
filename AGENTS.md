@@ -42,7 +42,8 @@ python3 -m unittest discover -s tests -v
 ```
 
 A change isn't done until the full `tests/` suite passes. Check the test output for skipped
-`numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`, or `qmap/itemprofile.py`.
+`numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`,
+`qmap/combatprofile.py`, or `qmap/itemprofile.py`.
 
 When changing `template/` or the compilation/check pipeline (`qmap/check.py`, `qmap/vprofile.py`,
 `qmap/makewad.py`, `qmap/render.py`), also run an end-to-end `template/` smoke build if `ERICW`
@@ -134,7 +135,7 @@ surrounding file and keep diffs clean and scoped.
 | `GUIDE.md` | End-to-end map-making field guide (process, design, verticality, sizing, item economy, gotchas). |
 | `VERSION` | Single source of truth for toolkit SemVer (`MAJOR.MINOR.PATCH`). |
 | `CHANGES.md` | Release changelog (top heading must match `VERSION`). |
-| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality & CTF benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`), and item-placement study (`items/`). |
+| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality, CTF & combat benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`, `profiles/combat_refs.json`), and item-placement study (`items/`). |
 | `examples/` | Four frozen, reproducible reference maps (`ca_lyceum`, `ctf_circuit`, `ctf_strata`, `ctf_bastion`). |
 
 ### `template/` -- starting point for each new map
@@ -194,10 +195,13 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
   compatibility, docstring coverage), `gallery/profiles/large_refs.json` invariants, and
   `numba`-gated `vprofile.py` checks (synthetic clipnode passage width, real-hull blind pockets,
   `--targets --ref duel|large`).
-- `tests/test_combatprofile.py` -- `gallery/profiles/combat_refs.json` schema & classic-only
-  invariant, plus `numba`-gated `combatprofile.py` checks (exact hull-0 raycasting + `func_wall`
-  blocking, 3D diagonal & cross-elevation sightlines, overlook asymmetry kill box vs. perch,
-  disengage improvement with cover, floor slicing, `--diff` mode, JSON/PNG CLI outputs).
+- `tests/test_combatprofile.py` -- `gallery/profiles/combat_refs.json` schema, classic-only
+  invariant, and `REFERENCE_*` min..max parity, plus `numba`-gated `combatprofile.py` checks
+  (shared `vprofile.build_floor_graph()` parity + teleporters/push pads, exact hull-0 raycasting +
+  `func_wall` blocking, 3D diagonal & cross-elevation sightlines, `--max-sightline` cap reporting,
+  `--overlook-dz`, sampled-representative bucketing, overlook asymmetry kill box vs. perch,
+  regional overlooker disengage & unoverlooked shelter, floor slicing, diff noise floors &
+  added/removed floor overlays, JSON/PNG CLI outputs).
 - `tests/test_ctfprofile.py` -- `gallery/profiles/ctf_refs.json` schema & classic-only invariant,
   plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, off-route
   vantage-grid chokes and route-1 pre-filtering, geodesic U-shape progress, flag exits, walk-time
