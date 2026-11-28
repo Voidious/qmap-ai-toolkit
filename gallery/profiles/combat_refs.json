@@ -37,6 +37,12 @@
    "disengage_overlooked_p90_s": 0.85,
    "disengage_sheltered_share": 0.0,
    "disengage_uncovered_share": 0.003
+  },
+  "hotspots": {
+   "kb_overlooked_k": 226.3,
+   "kb_area_k": 119.3,
+   "pc_overlooks_k": 386.0,
+   "pc_overlooks_share": 0.288
   }
  },
  {
@@ -77,6 +83,12 @@
    "disengage_overlooked_p90_s": 1.16,
    "disengage_sheltered_share": 0.012,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 215.3,
+   "kb_area_k": 73.2,
+   "pc_overlooks_k": 370.7,
+   "pc_overlooks_share": 0.256
   }
  },
  {
@@ -117,6 +129,12 @@
    "disengage_overlooked_p90_s": 0.95,
    "disengage_sheltered_share": 0.0,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 158.7,
+   "kb_area_k": 30.5,
+   "pc_overlooks_k": 296.2,
+   "pc_overlooks_share": 0.274
   }
  },
  {
@@ -157,6 +175,12 @@
    "disengage_overlooked_p90_s": 1.03,
    "disengage_sheltered_share": 0.009,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 249.6,
+   "kb_area_k": 233.5,
+   "pc_overlooks_k": 337.4,
+   "pc_overlooks_share": 0.218
   }
  },
  {
@@ -197,6 +221,12 @@
    "disengage_overlooked_p90_s": 0.84,
    "disengage_sheltered_share": 0.027,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 180.7,
+   "kb_area_k": 118.0,
+   "pc_overlooks_k": 331.8,
+   "pc_overlooks_share": 0.207
   }
  },
  {
@@ -237,6 +267,12 @@
    "disengage_overlooked_p90_s": 1.09,
    "disengage_sheltered_share": 0.004,
    "disengage_uncovered_share": 0.013
+  },
+  "hotspots": {
+   "kb_overlooked_k": 249.9,
+   "kb_area_k": 352.5,
+   "pc_overlooks_k": 427.0,
+   "pc_overlooks_share": 0.21
   }
  },
  {
@@ -277,6 +313,12 @@
    "disengage_overlooked_p90_s": 0.82,
    "disengage_sheltered_share": 0.0,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 194.8,
+   "kb_area_k": 280.6,
+   "pc_overlooks_k": 337.9,
+   "pc_overlooks_share": 0.218
   }
  },
  {
@@ -317,6 +359,12 @@
    "disengage_overlooked_p90_s": 0.75,
    "disengage_sheltered_share": 0.01,
    "disengage_uncovered_share": 0.001
+  },
+  "hotspots": {
+   "kb_overlooked_k": 133.6,
+   "kb_area_k": 86.5,
+   "pc_overlooks_k": 250.1,
+   "pc_overlooks_share": 0.158
   }
  },
  {
@@ -357,6 +405,12 @@
    "disengage_overlooked_p90_s": 0.92,
    "disengage_sheltered_share": 0.007,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 115.5,
+   "kb_area_k": 29.7,
+   "pc_overlooks_k": 352.3,
+   "pc_overlooks_share": 0.252
   }
  },
  {
@@ -397,6 +451,12 @@
    "disengage_overlooked_p90_s": 0.87,
    "disengage_sheltered_share": 0.0,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 174.8,
+   "kb_area_k": 254.7,
+   "pc_overlooks_k": 421.1,
+   "pc_overlooks_share": 0.141
   }
  },
  {
@@ -437,6 +497,12 @@
    "disengage_overlooked_p90_s": 0.73,
    "disengage_sheltered_share": 0.009,
    "disengage_uncovered_share": 0.003
+  },
+  "hotspots": {
+   "kb_overlooked_k": 189.4,
+   "kb_area_k": 458.8,
+   "pc_overlooks_k": 661.5,
+   "pc_overlooks_share": 0.192
   }
  },
  {
@@ -477,6 +543,12 @@
    "disengage_overlooked_p90_s": 0.97,
    "disengage_sheltered_share": 0.017,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 106.2,
+   "kb_area_k": 275.7,
+   "pc_overlooks_k": 565.2,
+   "pc_overlooks_share": 0.12
   }
  },
  {
@@ -517,6 +589,12 @@
    "disengage_overlooked_p90_s": 1.34,
    "disengage_sheltered_share": 0.015,
    "disengage_uncovered_share": 0.0
+  },
+  "hotspots": {
+   "kb_overlooked_k": 105.5,
+   "kb_area_k": 73.0,
+   "pc_overlooks_k": 567.0,
+   "pc_overlooks_share": 0.158
   }
  },
  {
@@ -557,6 +635,12 @@
    "disengage_overlooked_p90_s": 0.88,
    "disengage_sheltered_share": 0.001,
    "disengage_uncovered_share": 0.001
+  },
+  "hotspots": {
+   "kb_overlooked_k": 180.2,
+   "kb_area_k": 149.0,
+   "pc_overlooks_k": 456.4,
+   "pc_overlooks_share": 0.118
   }
  },
  {
@@ -597,6 +681,12 @@
    "disengage_overlooked_p90_s": 0.79,
    "disengage_sheltered_share": 0.003,
    "disengage_uncovered_share": 0.002
+  },
+  "hotspots": {
+   "kb_overlooked_k": 145.9,
+   "kb_area_k": 36.6,
+   "pc_overlooks_k": 348.9,
+   "pc_overlooks_share": 0.089
   }
  }
 ]

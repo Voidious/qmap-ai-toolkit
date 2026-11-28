@@ -54,13 +54,18 @@ class TestCombatReferenceDataset(unittest.TestCase):
             'killbox_share', 'perch_share',
             'disengage_p50_s', 'disengage_p90_s', 'disengage_overlooked_p90_s',
         )
+        req_hotspots = ('kb_overlooked_k', 'kb_area_k', 'pc_overlooks_k', 'pc_overlooks_share')
         for row in data:
             for k in ('map', 'pool', 'floor_area_k', 'eff_levels', 'reachable_cells',
-                      'observer_samples', 'sample_grid', 'metrics'):
+                      'observer_samples', 'sample_grid', 'metrics', 'hotspots'):
                 self.assertIn(k, row, f"Missing {k} in {row.get('map')}")
             m = row['metrics']
             for k in req_metrics:
                 self.assertIn(k, m, f"Missing metric {k} in {row.get('map')}")
+            hs = row['hotspots']
+            for k in req_hotspots:
+                self.assertIn(k, hs, f"Missing hotspot {k} in {row.get('map')}")
+                self.assertGreaterEqual(hs[k], 0.0)
             self.assertGreater(m['sightline_3d_max'], m['sightline_3d_p90'])
             self.assertGreaterEqual(m['sightline_3d_p90'], m['sightline_3d_p50'])
             self.assertLessEqual(m['overlook_net_p05'], 0.0)
@@ -78,7 +83,13 @@ class TestCombatReferenceDataset(unittest.TestCase):
                 vals = [r['metrics'][metric] for r in pool_rows]
                 self.assertEqual(lo, min(vals), f'{pool} {metric} healthy_lo mismatch vs combat_refs.json')
                 self.assertEqual(hi, max(vals), f'{pool} {metric} healthy_hi mismatch vs combat_refs.json')
+            # Hotspot ceilings must match the exact per-pool maxima in combat_refs.json
+            ceil = cp.HOTSPOT_CEILINGS[pool]
+            for hkey, cval in ceil.items():
+                hvals = [r['hotspots'][hkey] for r in pool_rows]
+                self.assertEqual(cval, max(hvals), f'{pool} hotspot ceiling {hkey} mismatch vs combat_refs.json')
             # Every classic in the pool must classify 'ok' against its own pool (zero HIGH/EXTREME)
+            # and stay within its pool's spatial hotspot ceilings (zero false hotspot warnings).
             for row in pool_rows:
                 for metric, spec in table.items():
                     self.assertEqual(
@@ -86,12 +97,25 @@ class TestCombatReferenceDataset(unittest.TestCase):
                         'ok',
                         f"{row['map']} failed {pool} ref on {metric}={row['metrics'][metric]} vs {spec[:2]}",
                     )
+                for hkey, cval in ceil.items():
+                    self.assertLessEqual(
+                        row['hotspots'][hkey],
+                        cval,
+                        f"{row['map']} exceeded {pool} hotspot ceiling on {hkey}",
+                    )
 
         for metric, spec in cp.REFERENCE_ALL.items():
             d_spec = cp.REFERENCE_DUEL[metric]
             l_spec = cp.REFERENCE_LARGE[metric]
             self.assertEqual(spec[0], min(d_spec[0], l_spec[0]), f'all {metric} lo')
             self.assertEqual(spec[1], max(d_spec[1], l_spec[1]), f'all {metric} hi')
+
+        for hkey, cval in cp.HOTSPOT_CEILINGS['all'].items():
+            self.assertEqual(
+                cval,
+                max(cp.HOTSPOT_CEILINGS['duel'][hkey], cp.HOTSPOT_CEILINGS['large'][hkey]),
+                f'all hotspot ceiling {hkey}',
+            )
 
 
 def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover_as_func_wall=False,

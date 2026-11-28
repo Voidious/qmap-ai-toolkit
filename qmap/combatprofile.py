@@ -740,12 +740,15 @@ REFERENCE_ALL = {
     for k in REFERENCE_DUEL
 }
 
-# Worst single-hotspot ceilings across each classic reference pool so healthy classics do not
-# trigger false spatial kill-box or perch warnings while layouts exceeding classic ceilings do.
+# Exact worst single-hotspot ceilings across each classic reference pool (matching the
+# per-classic 'hotspots' records in gallery/profiles/combat_refs.json) so healthy classics
+# emit zero false spatial kill-box or perch warnings while layouts exceeding classics do.
+_HOTSPOT_CEILINGS_DUEL = dict(kb_overlooked_k=249.6, kb_area_k=233.5, pc_overlooks_k=386.0, pc_overlooks_share=0.288)
+_HOTSPOT_CEILINGS_LARGE = dict(kb_overlooked_k=249.9, kb_area_k=458.8, pc_overlooks_k=661.5, pc_overlooks_share=0.252)
 HOTSPOT_CEILINGS = {
-    'duel': dict(kb_overlooked_k=250.0, kb_area_k=235.0, pc_overlooks_k=390.0, pc_overlooks_share=0.290),
-    'large': dict(kb_overlooked_k=255.0, kb_area_k=460.0, pc_overlooks_k=665.0, pc_overlooks_share=0.260),
-    'all': dict(kb_overlooked_k=255.0, kb_area_k=460.0, pc_overlooks_k=665.0, pc_overlooks_share=0.290),
+    'duel': _HOTSPOT_CEILINGS_DUEL,
+    'large': _HOTSPOT_CEILINGS_LARGE,
+    'all': {k: max(_HOTSPOT_CEILINGS_DUEL[k], _HOTSPOT_CEILINGS_LARGE[k]) for k in _HOTSPOT_CEILINGS_DUEL},
 }
 
 
