@@ -19,7 +19,7 @@ scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 - **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `trafficprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
   `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
   `scipy`, `matplotlib`, `numba`.
-  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py`, which import it) requires
+  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py` / `qmap/trafficprofile.py`, which import it) requires
     `numba`. Without `numba`, the `TestVprofilePassageWidth` tests in `tests/test_checks.py`,
     `TestCtfRouteIndependence` tests in `tests/test_ctfprofile.py`, and
     `TestCombatProfile` tests in `tests/test_combatprofile.py` and traffic tests in
