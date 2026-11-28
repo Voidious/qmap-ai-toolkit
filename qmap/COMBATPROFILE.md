@@ -73,6 +73,45 @@ Measured across all 15 classic QuakeWorld reference maps in `gallery/profiles/co
 | `disengage_p90_s` (s) | `0.89..1.25` | `> 1.70` | `0.92..1.38` | `> 1.85` |
 | `disengage_overlooked_p90_s` (s) | `0.84..1.16` | `> 1.55` | `0.73..1.34` | `> 1.75` |
 
+### Recalibrating `combat_refs.json`
+
+Unlike `vprofile.py`'s `profiles.json` and `large_refs.json`, `gallery/profiles/combat_refs.json` stores a compact per-classic projection (pool, summary metrics, and worst kill-box / perch `hotspots`). If a change to `vprofile.py` or `combatprofile.py` shifts classic metrics, regenerate it from a local directory containing the 15 classic `.bsp` files:
+
+```bash
+python3 - <<'EOF' /path/to/classic-bsps
+import json, pathlib, sys
+sys.path.insert(0, 'qmap')
+import combatprofile as cp
+
+bsp_dir = pathlib.Path(sys.argv[1])
+pools = [
+    ('duel',  ['aerowalk', 'dapak12', 'naked3', 'naked4', 'ztndm3']),
+    ('large', ['skull', 'bravado', 'spinev2', 'ultrav', 'schloss',
+               'cmt4', 'dm3', 'e2m2tdm', 'cmt3', 'e1m2']),
+]
+rows = []
+for pool, names in pools:
+    for name in names:
+        r = cp.combat_profile(str(bsp_dir / f'{name}.bsp'), name=name, ref=pool)
+        kb = r['killboxes'][0] if r['killboxes'] else {}
+        pc = r['perches'][0] if r['perches'] else {}
+        rows.append({
+            'map': r['map'], 'pool': pool,
+            **{k: r[k] for k in ('floor_area_k', 'eff_levels', 'spawns',
+                                 'reachable_cells', 'observer_samples', 'sample_grid', 'metrics')},
+            'hotspots': {
+                'kb_overlooked_k': kb.get('max_overlooked_by_area_k', 0.0),
+                'kb_area_k': kb.get('area_k', 0.0),
+                'pc_overlooks_k': pc.get('max_overlooks_area_k', 0.0),
+                'pc_overlooks_share': pc.get('max_overlooks', 0.0),
+            },
+        })
+pathlib.Path('gallery/profiles/combat_refs.json').write_text(json.dumps(rows, indent=1) + '\n')
+EOF
+```
+
+Then run `python3 -m unittest tests/test_combatprofile.py` — the parity tests will flag any `REFERENCE_DUEL`, `REFERENCE_LARGE`, or `HOTSPOT_CEILINGS` entry that needs updating.
+
 ## Heatmaps and Diff Mode
 
 - **Floor-sliced PNG heatmaps (`--png` / `--png-dir`)** partition floor elevations into `1..4` natural Z bands (configurable with `--slices`) via 1D variance-minimizing breaks so stacked levels render on separate rows instead of hiding lower floors under bridges. Panels display world-coordinate `(x, y)` axes matching the coordinates printed in the text report, plotting 3D sightline length (with longest sightlines overlaid), diverging overlook asymmetry (`-killbox` red / `+perch` blue with yellow `x` and green `^` markers), and disengage time (with slow-zone `o` markers).
