@@ -14,6 +14,12 @@ The complete aggregate evidence, hashes, exact play windows, parser unknown-mess
 counts, projection coverage and per-demo correlations are in [`reference.json`](reference.json).
 No BSPs, demos, textures or player identities are redistributed.
 
+The PR 9 review rerun uses restart-bounded non-CA windows and case-insensitive
+team selection with explicit roster-exclusion coverage. All six aggregate
+results below are unchanged; the evidence and algorithm hashes are refreshed
+for that implementation. This corpus does not exercise the aborted-match or
+custom-team regressions; self-contained tests cover those cases.
+
 - Directed 16-unit `vprofile.build_floor_graph()`, equal-shortest-path splitting,
   spawn-pair CA demand and flag/base-exit CTF demand. These four maps use **all**
   their available demand pairs (42, 42, 182 and 60); pair sampling is not a source
