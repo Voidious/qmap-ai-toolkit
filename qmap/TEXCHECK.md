@@ -3,6 +3,9 @@
 `texcheck.py` audits QuakeEd/Valve 220 `.map` source and compiled BSP29 files.
 It prints actionable face identifiers, textures, coordinates, and coverage;
 `--report` writes every finding and sampled dark-cell coordinate as JSON.
+Requires Python 3, NumPy, and Pillow: the shared BSP/lightmap reader imports
+the renderer's image dependency even though this tool does not create images.
+A NumPy-only installation is not currently supported.
 
 ```bash
 python3 qmap/texcheck.py map_b4.map --report texture_lint.json
