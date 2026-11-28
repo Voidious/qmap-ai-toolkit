@@ -179,6 +179,7 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
     max_sl_2d = np.zeros(N, np.float64)
     max_sl_dz = np.zeros(N, np.float64)
     max_sl_tgt = np.full(N, -1, np.int64)
+    sl_capped = np.zeros(N, np.uint8)
 
     exposure_w = np.zeros(N, np.float64)
     overlooked_by_w = np.zeros(N, np.float64)
@@ -195,6 +196,7 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
         best_d2 = 0.0
         best_dz = 0.0
         best_tgt = -1
+        capped_i = False
 
         exp_acc = 0.0
         ov_by_acc = 0.0
@@ -210,6 +212,16 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
             d2_sq = dx * dx + dy * dy
             d3_sq = d2_sq + dz * dz
             if d3_sq > r_max2:
+                if not capped_i:
+                    if (_los_multi_exact(roots0, nplane, nchild, lcont, pn, pd,
+                                         jx, jy, jz + EYE, ix, iy, ibz)
+                            or _los_multi_exact(roots0, nplane, nchild, lcont, pn, pd,
+                                                ix, iy, iez, jx, jy, jz + BODY)):
+                        best_d3 = max_sightline
+                        best_d2 = math.sqrt(d2_sq)
+                        best_dz = dz
+                        best_tgt = rep_node_idx[j]
+                        capped_i = True
                 continue
 
             if rep_node_idx[j] == i:
@@ -254,12 +266,14 @@ def _compute_visibility_metrics(roots0, nplane, nchild, lcont, pn, pd,
         max_sl_2d[i] = best_d2
         max_sl_dz[i] = best_dz
         max_sl_tgt[i] = best_tgt
+        if capped_i:
+            sl_capped[i] = 1
         exposure_w[i] = exp_acc
         overlooked_by_w[i] = ov_by_acc
         overlooks_w[i] = ov_acc
         dom_obs[i] = best_dom
 
-    return (max_sl_3d, max_sl_2d, max_sl_dz, max_sl_tgt,
+    return (max_sl_3d, max_sl_2d, max_sl_dz, max_sl_tgt, sl_capped,
             exposure_w, overlooked_by_w, overlooks_w, dom_obs, obs_sees)
 
 
@@ -790,12 +804,13 @@ def combat_profile(path, name=None, *,
     )
 
     # 2. Full N x M 3D visibility pass
-    (max_sl_3d, max_sl_2d, max_sl_dz, max_sl_tgt,
+    (max_sl_3d, max_sl_2d, max_sl_dz, max_sl_tgt, sl_capped,
      exposure_w, overlooked_by_w, overlooks_w, dom_obs, obs_sees) = _compute_visibility_metrics(
         roots0, B.nplane, B.nchild, B.lcont, B.pn, B.pd,
         pts, rep_pts, rep_w, rep_node_idx, rep_power,
         float(overlook_range), float(max_sightline), float(overlook_dz),
     )
+    sightline_capped_cells = int(sl_capped.sum())
 
     exposure_area = exposure_w * cell_area
     exposure_share = exposure_w / total_w
@@ -869,6 +884,7 @@ def combat_profile(path, name=None, *,
             length_2d=round(d2),
             dz=round(dz),
             elev_deg=round(elev, 1),
+            capped=bool(sl_capped[idx]),
             start=[round(float(p1[0])), round(float(p1[1])), round(float(p1[2]))],
             end=[round(float(p2[0])), round(float(p2[1])), round(float(p2[2]))],
             _p1=p1, _p2=p2,
@@ -1056,6 +1072,8 @@ def combat_profile(path, name=None, *,
         reachable_cells=N,
         observer_samples=len(rep_pts),
         sample_grid=sample_grid,
+        sightline_capped=bool(sightline_capped_cells > 0),
+        sightline_capped_cells=sightline_capped_cells,
         settings=dict(
             overlook_range=float(overlook_range),
             max_sightline=float(max_sightline),
@@ -1176,11 +1194,19 @@ def format_report(res):
         f"killbox={100*m['killbox_share']:.1f}% perch={100*m['perch_share']:.1f}% | "
         f"disengage p50={m['disengage_p50_s']}s p90={m['disengage_p90_s']}s ov90={m['disengage_overlooked_p90_s']}s"
     )
+    if res.get('sightline_capped'):
+        cap_u = int(round(res['settings']['max_sightline']))
+        lines.append(
+            f"   note: sightline cap hit ({cap_u}u) on {res['sightline_capped_cells']} cells — "
+            f"raise --max-sightline to measure full unobstructed lengths"
+        )
     if res['top_sightlines']:
         lines.append("   longest 3D sightlines:")
         for sl in res['top_sightlines'][:3]:
+            prefix = '>=' if sl.get('capped') else ''
+            suffix = ' [capped]' if sl.get('capped') else ''
             lines.append(
-                f"     {sl['length_3d']}u 3D ({sl['length_2d']}u 2D, dz={sl['dz']:+d}u, {sl['elev_deg']} deg): "
+                f"     {prefix}{sl['length_3d']}u 3D ({sl['length_2d']}u 2D, dz={sl['dz']:+d}u, {sl['elev_deg']} deg){suffix}: "
                 f"{tuple(sl['start'])} -> {tuple(sl['end'])}"
             )
     if res['killboxes']:
@@ -1498,6 +1524,8 @@ def main(argv=None):
                     help=f'Maximum floor Z-slices for heatmaps (default: {DEFAULT_MAX_SLICES})')
     ap.add_argument('--overlook-range', type=float, default=DEFAULT_OVERLOOK_RANGE,
                     help=f'Horizontal range for overlook checks in units (default: {int(DEFAULT_OVERLOOK_RANGE)})')
+    ap.add_argument('--overlook-dz', type=float, default=DEFAULT_OVERLOOK_DZ,
+                    help=f'Minimum vertical elevation delta for overlook checks in units (default: {int(DEFAULT_OVERLOOK_DZ)})')
     ap.add_argument('--max-sightline', type=float, default=DEFAULT_MAX_SIGHTLINE,
                     help=f'Maximum 3D sightline distance in units (default: {int(DEFAULT_MAX_SIGHTLINE)})')
     ap.add_argument('--max-disengage', type=float, default=DEFAULT_MAX_DISENGAGE,
@@ -1513,6 +1541,7 @@ def main(argv=None):
 
     common = dict(
         overlook_range=args.overlook_range,
+        overlook_dz=args.overlook_dz,
         max_sightline=args.max_sightline,
         max_disengage=args.max_disengage,
         shelter_area_k=args.shelter_area_k,

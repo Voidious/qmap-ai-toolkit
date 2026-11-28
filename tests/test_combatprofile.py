@@ -590,6 +590,53 @@ class TestCombatProfile(unittest.TestCase):
         cp.draw_diff(r_flat, r_balc, diff, str(out_png))
         self.assertGreater(out_png.stat().st_size, 5000)
 
+    def test_max_sightline_capping_overlook_dz_cli_and_sampled_representatives(self):
+        bsp_path = self.dir / 'balcony_opts.bsp'
+        _write_synthetic_arena_bsp(bsp_path, with_balcony=True, cover_box=(256.0, 128.0, 0.0, 288.0, 384.0, 208.0))
+
+        # 1. --max-sightline caps long unobstructed lines rather than silently dropping them
+        capped_res = cp.combat_profile(str(bsp_path), max_sightline=300.0, ref='duel')
+        self.assertEqual(capped_res['metrics']['sightline_3d_max'], 300)
+        self.assertTrue(capped_res['sightline_capped'])
+        self.assertGreater(capped_res['sightline_capped_cells'], 0)
+        self.assertTrue(any(sl['capped'] for sl in capped_res['top_sightlines']))
+        report_txt = cp.format_report(capped_res)
+        self.assertIn('sightline cap hit (300u)', report_txt)
+        self.assertIn('[capped]', report_txt)
+
+        # 2. --overlook-dz CLI flag controls vertical overlook threshold (balcony is 128u high)
+        out_json = self.dir / 'ovdz.json'
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cp.main([str(bsp_path), '--overlook-dz', '200', '--json', str(out_json)])
+        self.assertEqual(rc, 0)
+        ovdz_payload = json.loads(out_json.read_text(encoding='utf-8'))
+        self.assertEqual(ovdz_payload['settings']['overlook_dz'], 200.0)
+        self.assertEqual(ovdz_payload['metrics']['overlooked_share'], 0.0)
+        self.assertEqual(ovdz_payload['metrics']['overlook_share'], 0.0)
+
+        # 3. Sampled-representative path (sample_cap < reachable_cells) tracks exact all-pairs closely
+        exact_res = cp.combat_profile(str(bsp_path), sample_cap=1400, ref='duel')
+        sampled_res = cp.combat_profile(str(bsp_path), sample_cap=120, ref='duel')
+        self.assertEqual(exact_res['sample_grid'], 16)
+        self.assertGreater(sampled_res['sample_grid'], 16)
+        self.assertLessEqual(sampled_res['observer_samples'], 120)
+        self.assertAlmostEqual(
+            sampled_res['metrics']['exposure_p90'],
+            exact_res['metrics']['exposure_p90'],
+            delta=0.06,
+        )
+        self.assertAlmostEqual(
+            sampled_res['metrics']['sightline_3d_p90'],
+            exact_res['metrics']['sightline_3d_p90'],
+            delta=64,
+        )
+        self.assertAlmostEqual(
+            sampled_res['metrics']['disengage_p50_s'],
+            exact_res['metrics']['disengage_p50_s'],
+            delta=0.15,
+        )
+
     def test_cli_single_diff_json_and_errors(self):
         b1 = self.dir / 'cli_b1.bsp'
         b2 = self.dir / 'cli_b2.bsp'
