@@ -678,6 +678,8 @@ REFERENCE_DUEL = {
     'overlooked_by_area_k_p90':   (89.3,  177.5, 240.0, 'down', '90th-pct high-ground area shooting down (k sq u)'),
     'overlook_net_p05':           (-0.129, -0.072, -0.180, 'up', '5th-pct overlook asymmetry (kill-box tail)'),
     'overlook_net_p95':           (0.099, 0.134, 0.200, 'down', '95th-pct overlook asymmetry (perch tail)'),
+    'killbox_share':              (0.061, 0.211, 0.300, 'down', 'floor share in kill boxes (high overlook + slow disengage)'),
+    'perch_share':                (0.040, 0.074, 0.140, 'down', 'floor share on uncountered perches'),
     'disengage_p50_s':            (0.37,  0.50,  0.70,  'down', 'median disengage time to cover (s)'),
     'disengage_p90_s':            (0.87,  1.25,  1.70,  'down', '90th-pct disengage time to cover (s)'),
     'disengage_overlooked_p90_s': (0.82,  1.15,  1.55,  'down', '90th-pct disengage from overlooked floor (s)'),
@@ -691,6 +693,8 @@ REFERENCE_LARGE = {
     'overlooked_by_area_k_p90':   (65.0,  187.6, 250.0, 'down', '90th-pct high-ground area shooting down (k sq u)'),
     'overlook_net_p05':           (-0.103, -0.022, -0.160, 'up', '5th-pct overlook asymmetry (kill-box tail)'),
     'overlook_net_p95':           (0.027, 0.147, 0.220, 'down', '95th-pct overlook asymmetry (perch tail)'),
+    'killbox_share':              (0.026, 0.281, 0.380, 'down', 'floor share in kill boxes (high overlook + slow disengage)'),
+    'perch_share':                (0.014, 0.098, 0.160, 'down', 'floor share on uncountered perches'),
     'disengage_p50_s':            (0.38,  0.47,  0.68,  'down', 'median disengage time to cover (s)'),
     'disengage_p90_s':            (0.92,  1.38,  1.85,  'down', '90th-pct disengage time to cover (s)'),
     'disengage_overlooked_p90_s': (0.73,  1.32,  1.75,  'down', '90th-pct disengage from overlooked floor (s)'),
@@ -706,6 +710,14 @@ REFERENCE_ALL = {
         REFERENCE_DUEL[k][4],
     )
     for k in REFERENCE_DUEL
+}
+
+# Worst single-hotspot ceilings across each classic reference pool so healthy classics do not
+# trigger false spatial kill-box or perch warnings while layouts exceeding classic ceilings do.
+HOTSPOT_CEILINGS = {
+    'duel': dict(kb_overlooked_k=250.0, kb_area_k=235.0, pc_overlooks_k=390.0, pc_overlooks_share=0.290),
+    'large': dict(kb_overlooked_k=255.0, kb_area_k=460.0, pc_overlooks_k=665.0, pc_overlooks_share=0.260),
+    'all': dict(kb_overlooked_k=255.0, kb_area_k=460.0, pc_overlooks_k=665.0, pc_overlooks_share=0.290),
 }
 
 
@@ -1005,9 +1017,12 @@ def combat_profile(path, name=None, *,
                 extreme_bound=ext,
                 message=f"{k}={metrics[k]} ({v} vs {ref} ref {lo}..{hi}): {desc}",
             ))
+    hs_ceil = HOTSPOT_CEILINGS[ref]
     if killboxes:
         kb = killboxes[0]
-        if kb['max_overlooked_by_area_k'] >= 160.0 or kb['max_disengage_s'] >= 1.2:
+        if (verdicts['killbox_share'] in ('HIGH', 'EXTREME')
+                or kb['max_overlooked_by_area_k'] > hs_ceil['kb_overlooked_k']
+                or kb['area_k'] > hs_ceil['kb_area_k']):
             warnings.append(dict(
                 severity='high',
                 metric='killbox',
@@ -1019,7 +1034,9 @@ def combat_profile(path, name=None, *,
             ))
     if perches:
         pc = perches[0]
-        if pc['max_overlooks_area_k'] >= 300.0 or pc['max_overlooks'] >= 0.25:
+        if (verdicts['perch_share'] in ('HIGH', 'EXTREME')
+                or pc['max_overlooks_area_k'] > hs_ceil['pc_overlooks_k']
+                or pc['max_overlooks'] > hs_ceil['pc_overlooks_share']):
             warnings.append(dict(
                 severity='high',
                 metric='oppressive-perch',

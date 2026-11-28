@@ -67,6 +67,32 @@ class TestCombatReferenceDataset(unittest.TestCase):
             self.assertGreaterEqual(m['overlook_net_p95'], 0.0)
             self.assertGreater(m['disengage_p90_s'], 0.0)
 
+    @unittest.skipUnless(HAS_NUMBA, 'numba required to import combatprofile reference tables')
+    def test_reference_tables_match_combat_refs_json_min_max(self):
+        p = REPO_ROOT / 'gallery' / 'profiles' / 'combat_refs.json'
+        rows = json.loads(p.read_text(encoding='utf-8'))
+        for pool, table in (('duel', cp.REFERENCE_DUEL), ('large', cp.REFERENCE_LARGE)):
+            pool_rows = [r for r in rows if r['pool'] == pool]
+            for metric, spec in table.items():
+                lo, hi = spec[0], spec[1]
+                vals = [r['metrics'][metric] for r in pool_rows]
+                self.assertEqual(lo, min(vals), f'{pool} {metric} healthy_lo mismatch vs combat_refs.json')
+                self.assertEqual(hi, max(vals), f'{pool} {metric} healthy_hi mismatch vs combat_refs.json')
+            # Every classic in the pool must classify 'ok' against its own pool (zero HIGH/EXTREME)
+            for row in pool_rows:
+                for metric, spec in table.items():
+                    self.assertEqual(
+                        cp.classify_metric(row['metrics'][metric], spec),
+                        'ok',
+                        f"{row['map']} failed {pool} ref on {metric}={row['metrics'][metric]} vs {spec[:2]}",
+                    )
+
+        for metric, spec in cp.REFERENCE_ALL.items():
+            d_spec = cp.REFERENCE_DUEL[metric]
+            l_spec = cp.REFERENCE_LARGE[metric]
+            self.assertEqual(spec[0], min(d_spec[0], l_spec[0]), f'all {metric} lo')
+            self.assertEqual(spec[1], max(d_spec[1], l_spec[1]), f'all {metric} hi')
+
 
 def _write_synthetic_arena_bsp(path, *, with_balcony=True, cover_box=None, cover_as_func_wall=False,
                                balcony_spawn=True, teleporter=None, push_pad=None):
