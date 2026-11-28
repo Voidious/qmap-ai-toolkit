@@ -53,6 +53,8 @@ qmap/                   shared tools - reuse or extend as needed
                         passages, blind pockets) + verticality & travel-distance profile (--targets)
   ctfprofile.py         compiled BSP29 CTF route-independence diagnostics: walk (hook-off) & grapple
                         (hook-on) flag routes, LOS-separated lanes, single-vantage chokes, flag exits
+  combatprofile.py, COMBATPROFILE.md   compiled BSP29 3D sightlines, overlook asymmetry (kill boxes &
+                        perches), disengage / time-to-cover heatmaps, classic bands, and --diff mode
   itemprofile.py, itemcheck.py, ITEMS.md   BSP29 item-economy diagnostics (inventories, directed
                         routes, RL/LG/resource trios, hypothetical --move) and MVDSV edict verification
   section.py, iso.py    side-on slices and isometric cutaways of a map from its JSON
@@ -568,9 +570,13 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   and **hook on** (grapple swings/climbs), counts visually independent (LOS-separated) midfield
   routes, tests whether a single standing defender can watch every crossing, and reports flag-room
   exits and flag sightlines (see section 3, *CTF layout & route structure*).
-* **Sightlines** (`sightlines.py`): a clear line the length of a route is usually a problem.
-  On Circuit the first blockout had a line down the whole north arc; staggered rooms and offset
-  lanes cut the longest to ~2,100 units within one half.
+* **Sightlines** (`sightlines.py` on JSON, `combatprofile.py` on compiled BSP): a clear line the
+  length of a route is usually a problem. On Circuit the first blockout had a line down the whole
+  north arc; staggered rooms and offset lanes cut the longest to ~2,100 units within one half.
+  Use `python3 qmap/combatprofile.py map.bsp --ref duel|large --png map.combat.png` for true 3D
+  sightlines across diagonals and elevations, per-cell overlook asymmetry (kill boxes vs.
+  oppressive perches), and disengage time-to-cover heatmaps (plus `--diff b1.bsp b2.bsp` between
+  layout builds). See [3D combat exposure](qmap/COMBATPROFILE.md).
 * **Pacing** (`contact.py`, CA): compare the spawn spread against a map the group likes.
 * **Visual-pass collision audit** (`collide_cmp.py old.map new.map`): the old "zero collision
   change" rule protected three real things — keeping the playtested layout intact, preventing
