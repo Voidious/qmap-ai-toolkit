@@ -109,7 +109,8 @@ can be cold under shortest-path demand without being undesirable design.
 PNGs show separate world-aligned 128-unit Z slices with a shared route-share
 scale (up to 32 slices). Diffs use identical settings and resolved modes, common
 world XY and floor height rounded to 4 units. Matched cells show signed raw
-route-share shifts; added floor is green and removed floor gray. Before/after
+route-share shifts; added floor uses green hollow rings and removed floor small
+gray crosses. Both remain visible at the same XY when floor Z changes. Before/after
 use a common color scale and extent. Endpoint changes are reported explicitly:
 different demand, unresolved mappings or sampled physical pairs are not a
 geometry-only experiment; ID renaming alone does not change demand. Floor shifts across the

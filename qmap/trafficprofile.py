@@ -397,9 +397,10 @@ def draw(report, destination, before=None, difference=None):
             changed = [item for item in difference['changes'] if math.floor((item['point'][2] + 1) / 128) == band]
             dots = axis.scatter([item['point'][0] for item in changed], [item['point'][1] for item in changed],
                                 c=[item['delta'] for item in changed], cmap='coolwarm', norm=Normalize(-limit, limit), s=7, marker='s')
-            for name, color, marker in (('added_points', 'green', '+'), ('removed_points', 'gray', 'x')):
+            for name in ('added_points', 'removed_points'):
                 coords = np.array([point for point in difference[name] if math.floor((point[2] + 1) / 128) == band]).reshape(-1, 3)
-                axis.scatter(coords[:, 0], coords[:, 1], color=color, marker=marker, s=12, label=name.replace('_points', ' floor'))
+                style = dict(marker='o', facecolors='none', edgecolors='green', s=28, linewidths=1, zorder=4) if name == 'added_points' else dict(marker='x', color='gray', s=8, zorder=5)
+                axis.scatter(coords[:, 0], coords[:, 1], **style, label=name.replace('_points', ' floor'))
             axis.set_title('After minus before; matched floor only')
             axis.legend(fontsize=7)
             figure.colorbar(dots, ax=axis, label='route-share shift')

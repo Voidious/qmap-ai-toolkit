@@ -10,6 +10,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -271,6 +272,29 @@ class TestTraffic(unittest.TestCase):
             self.assertEqual(report['coverage']['reachable_cells'], 0)
             self.assertEqual(report['dead_wings'], [])
             json.dumps(report, allow_nan=False)
+
+    def test_z_shifted_floor_keeps_both_added_and_removed_markers_visible(self):
+        from matplotlib.axes import Axes
+
+        before = dict(map='before', mode='ca', cells=dict(points=[[8, 8, 0]], reachable=[True], route_share=[0.25]))
+        after = dict(before, map='after', cells=dict(before['cells'], points=[[8, 8, 4]]))
+        difference = dict(changes=[], added_points=[[8, 8, 4]], removed_points=[[8, 8, 0]])
+        scatter = Axes.scatter
+        calls = {}
+
+        def record_scatter(axis, *coordinates, **style):
+            if style.get('label') in ('added floor', 'removed floor'):
+                calls[style['label']] = (coordinates, style)
+            return scatter(axis, *coordinates, **style)
+
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(Axes, 'scatter', new=record_scatter):
+            traffic.draw(after, Path(temporary) / 'shift.png', before=before, difference=difference)
+        added, removed = calls['added floor'], calls['removed floor']
+        np.testing.assert_array_equal(added[0], removed[0])
+        self.assertEqual(added[1]['marker'], 'o')
+        self.assertEqual(added[1]['facecolors'], 'none')
+        self.assertEqual(removed[1]['marker'], 'x')
+        self.assertGreater(added[1]['s'], removed[1]['s'])
 
 
 @unittest.skipUnless(HAS_NUMBA, 'numba required for demo/traffic integration')
