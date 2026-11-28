@@ -42,6 +42,8 @@ qmap/                   shared tools - reuse or extend as needed
   sightlines.py         longest straight sightline per floor level
   contact.py            Clan Arena pacing proxy (compare against a map the group likes)
   collide_cmp.py        audit visual-pass collision diffs (player + hull-0 voxel compare)
+  texcheck.py, TEXCHECK.md   texture course/seam/portal alignment, WAD/content/sky hazards,
+                        and compiled standable-floor lightmap lint
   render.py, view_sheet.py, RENDERING.md   BSP previews with RGB lightmaps, ezQuake calibration,
                         camera checks, and shared-camera before/after sheets
   texgen.py, texgen_runic.py, texgen_cistern.py   procedural texture helpers, palette quantising
@@ -461,7 +463,7 @@ Measure our new maps the same way once the group has played them.
   to its own rect), `oculus` (ceiling becomes sky; texture only), `strip_ramp` /
   `strip_ramp_pos` (light strips that follow stairs), `label` (plan text).
 * **Themes**: every carved space has a theme. The first carve of a theme sets its main floor
-  (`ZONE_FLOOR`) and light-strip height (`STRIPE_Z`, default floor + 128). `textures()` maps
+  (`ZONE_FLOOR`) and light-strip height (`STRIPE_Z`, default floor + 144). `textures()` maps
   (kind, theme, band) to texture names — replace it in the visual pass.
 * **Faces are textured from the space they face**, not from the brush: a wall's texture comes
   from the room on that side. That keeps bands continuous round corners and lets one solid wall
@@ -614,6 +616,11 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 * **Brightness**: `views.py` prints an overall safe-camera mean for each build to stdout;
   per-view means appear on tile captions and in `--report` JSON. Unsafe cameras are excluded.
   Compare with the group's maps using the same explicit render settings.
+* **Texture/visual lint**: `python3 qmap/texcheck.py map.map --bsp map.bsp --report lint.json`
+  checks local wall-course/U seams, 64u `*` portal centers, WAD textures, illusionary liquid/sky
+  contents, sky overlays, and compiled pitch-black standable floor samples.
+  `TEXCHECK=1 bash build.sh` adds advisory lint to the template build. Use `--strict` for exit 1 on findings;
+  review `NOT CHECKED` coverage and intentional seams. See [texture lint](qmap/TEXCHECK.md).
 * **Player-hull check** (`vprofile.py map.bsp --check`, run by `build.sh`, v3.1): connectivity,
   one-way traps, **narrow passages** (`--min-passage`, default `64` effective width = `32` units
   to spare on axial walls, reporting `(x, y, z)` and the two opposing solids), **blind pockets**,
@@ -650,8 +657,9 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
   result: the light changes it again (Pompeian red read as muddy brown under lamplight).
 * **Size textures to the object**, **anchor them to the object** on both axes: boxes and columns
   from their own corner and top (a column built from several brushes uses the whole column's
-  corner); plates and medallions from their own rect (`inlay`, `stand`); walls from the band
-  below. **Floor patterns: centre them on the room** (`FLOOR_OFFSET`) — a pattern starting at one
+  corner); plates and medallions from their own rect (`inlay`, `stand`); wall stone from the
+  room's common course origin (`ZONE_FLOOR + 32`), above and below strips.
+  **Floor patterns: centre them on the room** (`FLOOR_OFFSET`) — a pattern starting at one
   wall leaves a stray band along the other, and a pattern cut across a platform reads as an
   error; give platforms their own fitted texture.
 * **Light strips that change level** must meet the strip in the room above and below at every
@@ -777,7 +785,8 @@ Treat `template/` and `qmap/` as an evolving workshop, not a frozen specificatio
 17. Three maps in a row with the same skeleton — see section 3.
 18. **Wall stone misaligned beside stairs** (Strata): walls were anchored to the strip, and the
     strip climbs with the stairs, so the stone slid up the wall step by step. Anchor wall stone to
-    the room's nominal strip (`STRIPE_Z + 16`); only the strip itself climbs.
+    one room-floor course origin (`ZONE_FLOOR + 32`); only the strip itself climbs. The default
+    strip top (`floor + 160`) agrees with that origin modulo 128; custom strips must not reset it.
 19. A ramp whose foot runs into a wall (the template's own demo): the stair-feet check catches
     ramps too. Leave 32 of clear floor in front of the low end.
 20. **Camera pitch in `render.py`: positive looks DOWN**, as in Quake. A preview that "looks too

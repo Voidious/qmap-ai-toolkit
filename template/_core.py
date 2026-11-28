@@ -166,7 +166,7 @@ SPLIT_Z = {}        # theme -> z below which walls take the 'wall_lo' stone (str
 SUN = {'_sunlight': '160', '_sun_mangle': '35 -62 0', '_sunlight2': '40'}   # worldspawn sky light
 STEP_KICK = set()   # themes whose kickplate steps up and down beside stairs (usually: none - it looks bad)
 ZONE_FLOOR = {}     # theme -> its main floor z (wall textures are anchored to it); set by carve()
-STRIPE_Z = {}       # theme -> z of its light strip; default floor + 128; 10**6 = no strip
+STRIPE_Z = {}       # theme -> z of its light strip; default floor + 144; 10**6 = no strip
 NOCAP = set()       # (i, j, ceiling z): openings whose low ceiling gets no cornice (arcades)
 NOARCH = set()      # (i, j, bottom z): overhangs whose bottom edge gets no architrave lintel
 
@@ -175,11 +175,11 @@ def carve(r, z0, z1, th, sky=False, sym=True, door=False, nocap=False, noarch=Fa
     """Hollow out a room: air from floor z0 to ceiling z1 over rect r, theme th.
     door=True: a passage (framed, takes the colour of the rooms around it, no bands of its own).
     The first carve of a theme sets its main floor (ZONE_FLOOR) and light-strip height (strip=,
-    default floor + 128; strip=10**6 for none)."""
+    default floor + 144; strip=10**6 for none)."""
     if not door:
         zone(th)
         ZONE_FLOOR.setdefault(th, z0)
-        STRIPE_Z.setdefault(th, z0 + 128 if strip is None else strip)
+        STRIPE_Z.setdefault(th, z0 + 144 if strip is None else strip)
     for rr in _both(r, sym):
         if nocap:
             NOCAP.update((i, j, z1) for i, j in cells(rr))

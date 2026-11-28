@@ -17,3 +17,6 @@ python3 $QMAP/check.py $N.json
 # v3: player-hull check (connectivity and traps on the real collision) + how vertical is it, each
 # measure against the range of five classic QW maps (VPROFILE=0 skips both)
 [ "${VPROFILE:-1}" = "0" ] || python3 $QMAP/vprofile.py $N.bsp --check --targets
+if [ "${TEXCHECK:-0}" = "1" ]; then
+    python3 "$QMAP/texcheck.py" "$N.map" --bsp "$N.bsp" --report "$N.texcheck.json"
+fi
