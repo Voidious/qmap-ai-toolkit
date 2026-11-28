@@ -144,10 +144,10 @@ surrounding file and keep diffs clean and scoped.
 
 | File | Responsibility |
 | --- | --- |
-| `_core.py` | Per-map settings (`NAME`, `TITLE`, `SYM`, bounds, light scale), 16-unit multi-floor column grid, building primitives (`carve`, `fill`, `stairs`, `terrace`, `pyramid`, `ramp`, `prism`, `chamfer`, `diag_wall`, `teleporter`, `jumppad`, `liquid`, `panel`, `inlay`, `oculus`, `strip_ramp`, `split_halves`), and texture mapping. |
-| `_layout.py` | Demo room layout, stairs/ramps, lamps, and spawns (replaced per map). |
+| `_core.py` | Per-map settings (`NAME`, `TITLE`, `SYM`, bounds, light scale), 16-unit multi-floor column grid, building primitives (`carve`, `fill`, `stairs`, `terrace`, `pyramid`, `ramp`, `diag_ramp`, `prism`, `chamfer`, `diag_wall`, `sloped_ceil`, `gable_ceil`, `barrel_vault`, `arch_door`, `truss`, `buttress`, `curved_wall`, `rotunda`, `cylinder`, `teleporter`, `jumppad`, `liquid`, `panel`, `inlay`, `oculus`, `strip_ramp`, `split_halves`), lamp-aware ceiling helpers, and texture mapping. |
+| `_layout.py` | Demo room layout exercising axial and non-box primitives across all symmetry modes (replaced per map). |
 | `_itemh.py`, `_items.py` | Pickup placement helper and item list. |
-| `_out.py` | `.map` + `.json` writer: per-face texturing, wall bands, Valve 220 axes on prisms, sloped ramp bands, and 16-unit floor minlight skins. |
+| `_out.py` | `.map` + `.json` writer: per-face texturing, wall bands, Valve 220 axes on prisms/curved walls/rotundas/cylinders, sloped/vaulted ceilings, pendant lamps, arch trims, trusses, buttresses, axial & diagonal ramps, and 16-unit floor minlight skins. |
 | `texgen_blockout.py` | Procedural zone-coloured blockout textures with 32/64/128-unit height marks. |
 | `build.sh` | Concatenates `_core.._out` -> `gen_map.py` -> `qbsp` -> `vis` -> `light` -> `check.py` -> `vprofile.py --check --targets` (plus optional `TEXCHECK=1` `texcheck.py` lint). |
 | `plan.py`, `views.py` | Top-down multi-level floor plan and software-rendered preview sheet with ezQuake brightness readouts. |
@@ -189,6 +189,11 @@ surrounding file and keep diffs clean and scoped.
 
 Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
 
+- `tests/test_primitives.py` -- non-box architectural primitives (`sloped_ceil`, `gable_ceil`,
+  `barrel_vault`, pendant lamp placement, `arch_door`, `truss`, `buttress`, `curved_wall`,
+  `rotunda`, `cylinder` continuous Valve 220 UV wrap, `diag_ramp`), v4.1 collision policy,
+  grouped prism separation & diagonal-ramp foot checks, and full `template/` demo validation
+  across `SYM='none'|'rotate'|'mirror'`.
 - `tests/test_texcheck.py` -- texture transforms, course/seam/portal phase, WAD/source parsing,
   sky overlap, dark compiled floors/player clearance, CLI contracts, and template anchor consistency.
 - `tests/test_render.py` -- synthetic BSP29/.lit parsing, RGB normalization and lightmap

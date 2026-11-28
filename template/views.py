@@ -10,9 +10,9 @@ sys.path.insert(0, os.environ.get('QMAP_CORE') or os.path.join(os.path.dirname(o
 from view_sheet import main as sheet_main, make_sheet  # noqa: E402
 
 CAMS = [('hall from the south-west corner', (-300, -300, 60), 45, 0),
-        ('hall: plinth and the doorway north', (0, -330, 60), 90, -4),
-        ('east wing: gallery steps and the perch', (560, -280, 60), 40, 6),
-        ('low room: ramp to the ledge, octagonal pillar', (330, 920, -36), 184, 4)]
+        ('east wing: gable, trusses, buttress & diagonal ramp', (560, -240, 80), 32, -8),
+        ('low room: barrel vault, ramp & circular column', (330, 900, -24), 184, -4),
+        ('south rotunda: curved walls, baffle & arched entry', (-140, -640, 72), -24, 4)]
 
 
 def main(bsp, out, **options):

@@ -145,8 +145,37 @@ def rot(r):
     return (-x1, -y1, -x0, -y0) if SYM == 'rotate' else (-x1, y0, -x0, y1)
 
 
+def _side_rot(side):
+    """Symmetric copy of a cardinal side ('-x', '+x', '-y', '+y') using current SYM."""
+    return ({'-x': '+x', '+x': '-x', '-y': '+y', '+y': '-y'} if SYM == 'rotate' else
+            {'-x': '+x', '+x': '-x', '-y': '-y', '+y': '+y'})[side]
+
+
 SIDE_ROT = ({'-x': '+x', '+x': '-x', '-y': '+y', '+y': '-y'} if SYM == 'rotate' else
             {'-x': '+x', '+x': '-x', '-y': '-y', '+y': '+y'})
+
+
+def _sym_axis_sign(axis, sg):
+    """Symmetric copy of a signed axis direction (axis, sg in {-1, +1})."""
+    flip = SYM == 'rotate' or axis == 'x'
+    return -sg if flip else sg
+
+
+def _fill_air(i, j, z0, z1, mat):
+    """Replace only AIR intervals in cols[i][j] within [z0, z1] with stand-in `mat`,
+    preserving existing solid so floors/ceilings never leak to the void."""
+    if z1 <= z0:
+        return
+    col, z = cols[i][j], z0
+    for a, b, _m in sorted(col):
+        if b <= z or a >= z1:
+            continue
+        if a > z:
+            col.append([z, a, mat])
+        z = max(z, b)
+    if z < z1:
+        col.append([z, z1, mat])
+    col.sort()
 
 
 def symmetric(sym=True):
@@ -258,12 +287,74 @@ def label(x, y, text, z=0):
     labels.append((x, y, text, z))
 
 
+SLOPED_CEILS = []  # (rect, axis, sg, z_lo, z_hi, top_z, tex, v_base)
+PENDANT_LAMPS = [] # (x, y, z_mount, z_stem_top): non-solid pendant lamps hung beneath sloped roofs
+TRUSSES = []       # (rect, axis, z_bot, z_top, beam_h, knee, tie, tex, solid)
+BUTTRESSES = []    # (rect, side, z0, z1, top_depth, taper, tex, solid)
+ARCH_TRIMS = []    # (rect, axis, z_spring, z_crown, segs, depth, width, tex)
+DIAG_RAMPS = []    # (x0, y0, x1, y1, width, z0, z1, base, thick)
+PRISM_META = []    # parallel to PRISMS: dict(group, wrap_u, fit_u, u_period, edge_uvs)
+_GROUP_SEQ = 0
+
+
+def _next_group():
+    global _GROUP_SEQ
+    _GROUP_SEQ += 1
+    return _GROUP_SEQ
+
+
+def ceil_height_at(x, y, ceil_z, half=16):
+    """Minimum ceiling underside height over [x-half, x+half] x [y-half, y+half]
+    for any sloped/vaulted ceiling whose top meets ceil_z."""
+    z_best = float(ceil_z)
+    for rr, axis, sg, z_lo, z_hi, top_z, _tex, _vb in SLOPED_CEILS:
+        if not (z_lo < ceil_z <= top_z + 1e-3):
+            continue
+        if (rr[2] <= x - half + 1e-6 or rr[0] >= x + half - 1e-6 or
+                rr[3] <= y - half + 1e-6 or rr[1] >= y + half - 1e-6):
+            continue
+        u0, u1 = (rr[0], rr[2]) if axis == 'x' else (rr[1], rr[3])
+        run = u1 - u0
+        if run <= 1e-6:
+            continue
+        c = x if axis == 'x' else y
+        ov0 = max(u0, c - half)
+        ov1 = min(u1, c + half)
+        if sg > 0:
+            z_min = z_lo + (z_hi - z_lo) * (ov0 - u0) / run
+        else:
+            z_min = z_lo + (z_hi - z_lo) * (u1 - ov1) / run
+        if z_min < z_best:
+            z_best = z_min
+    return z_best
+
+
+def _truss_hits(px, py, z_lo, z_hi, half=16):
+    """True when a lamp box/light volume overlaps any overhead truss."""
+    for tr, _axis, zb, zt, bh, knee, _tie, _tex, _solid in TRUSSES:
+        tz0 = zb - max(0, knee)
+        tz1 = max(zt, zb + bh)
+        if (tr[0] < px + half and tr[2] > px - half and
+                tr[1] < py + half and tr[3] > py - half and
+                tz0 < z_hi and tz1 > z_lo):
+            return True
+    return False
+
+
 def lamp(x, y, ceil, value=380, sym=True):
-    """Ceiling lamp: a lamp-box fixture flush with the ceiling at z = ceil, light 40 below it."""
+    """Ceiling lamp: flush fixture at z = ceil on flat ceilings, or a non-solid pendant fixture
+    hung safely below sloped/vaulted roofs so lamps never clip into angled ceilings."""
     pts = [(x, y)] + ([sym_pt(x, y)] if symmetric(sym) else [])
     for px, py in pts:
-        fill((px - 16, py - 16, px + 16, py + 16), ceil - 8, ceil, 'lamp', sym=False)
-        lights.append((px, py, ceil - 40, round(value * LIGHT_SCALE)))
+        z_box = ceil_height_at(px, py, ceil, half=16)
+        if z_box < ceil - 1e-3:
+            z_mount = int(math.floor(z_box))
+            z_ctr = int(math.ceil(ceil_height_at(px, py, ceil, half=0)))
+            PENDANT_LAMPS.append((px, py, z_mount, max(z_mount, z_ctr)))
+            lights.append((px, py, z_mount - 40, round(value * LIGHT_SCALE)))
+        else:
+            fill((px - 16, py - 16, px + 16, py + 16), ceil - 8, ceil, 'lamp', sym=False)
+            lights.append((px, py, ceil - 40, round(value * LIGHT_SCALE)))
 
 
 def room_lamps(r, ceil, step=256, value=380, sym=True):
@@ -285,19 +376,33 @@ def room_lamps(r, ceil, step=256, value=380, sym=True):
 
 def _lamp_spot(r, x, y, ceil, reach=160):
     """Nearest spot to (x, y) inside r where a ceiling lamp's box and its light are both in air
-    (call room_lamps after the room's pillars and baffles). None if nothing within reach."""
+    (call room_lamps after the room's pillars, baffles, sloped ceilings, and trusses).
+    None if nothing within reach."""
     def clear(px, py):
         if not (r[0] + 16 <= px <= r[2] - 16 and r[1] + 16 <= py <= r[3] - 16):
+            return False
+        z_eff = ceil_height_at(px, py, ceil, half=16)
+        z_mount = int(math.floor(z_eff)) if z_eff < ceil - 1e-3 else ceil
+        if _truss_hits(px, py, z_mount - 48, z_mount, half=16):
             return False
         for qx in (px - 16, px):
             for qy in (py - 16, py):
                 i, j = (qx - XMIN) // C, (qy - YMIN) // C
-                if any(a < ceil and b > ceil - 48 for a, b, m in cols[i][j]):
-                    return False
                 # Require an actual non-sky solid ceiling right at z == ceil (rejects both flush
                 # and recessed sky oculi / taller openings).
                 if not any(a == ceil and m != 'sky' for a, b, m in cols[i][j]):
                     return False
+                # No solid (except sloped-ceiling stand-in above z_mount) in [z_mount - 48, z_mount]
+                for a, b, m in cols[i][j]:
+                    if m == 'ceil_slope' and a >= z_mount - 1:
+                        continue
+                    if a < z_mount and b > z_mount - 48:
+                        return False
+                # Beneath sloped roofs, keep lamps at least 96u above the floor underneath
+                if z_mount < ceil:
+                    fl_below = [b for a, b, m in cols[i][j] if b <= z_mount - 48]
+                    if not fl_below or z_mount - max(fl_below) < 96:
+                        return False
         return True
     for d in range(0, reach + 1, 16):
         ring = sorted({(x + dx, y + dy) for dx in range(-d, d + 1, 16) for dy in (-d, d)} |
@@ -368,7 +473,7 @@ def terrace(r, h, side, z0=0, sym=True):
     """Broad wall-to-wall steps down from the edge `side` of a platform r of height h to floor z0
     (walk up from anywhere along that edge)."""
     if symmetric(sym):
-        terrace(rot(r), h, SIDE_ROT[side], z0, sym=False)
+        terrace(rot(r), h, _side_rot(side), z0, sym=False)
     for cc in range(1, (h - z0) // 16):
         s = 16 * cc
         rr = {'-x': (r[0] - s, r[1], r[0] - s + 16, r[3]), '+x': (r[2] + s - 16, r[1], r[2] + s, r[3]),
@@ -384,7 +489,7 @@ def pyramid(r, h, sides, z0=0, sym=True):
     """Broad steps down from a raised block on several sides; corners wrap, so each level
     is one continuous L-shaped step (walk up from anywhere along those sides)."""
     if symmetric(sym):
-        pyramid(rot(r), h, tuple(SIDE_ROT[s] for s in sides), z0, sym=False)
+        pyramid(rot(r), h, tuple(_side_rot(s) for s in sides), z0, sym=False)
     n = (h - z0) // 16
     x0, y0, x1, y1 = r
     ext = 16 * (n - 1)
@@ -598,25 +703,35 @@ def _inside(pts, x, y, eps=0.01):
     return True
 
 
-def prism(points, z0, z1, kind=None, sym=True):
-    """Solid vertical prism on a convex footprint (points counter-clockwise, seen from above): a
-    diagonal wall, a chamfered corner, an octagonal pillar, a wedge. kind None: each face is banded
-    like the room it looks into (kickplate, strip, cornice), with its texture running along the angled
-    face (Valve 220 axes, so nothing stretches); other kinds ('pillar', ...) take that kind's textures.
-    The grid gets a stand-in for the checks: in every cell the prism overlaps, the air in [z0, z1]
-    becomes mat 'diag' (solid to the checks, never written - the prism brush covers it; no lamp or
-    band lands on a face hidden inside the prism). Named kinds keep their mat on cells wholly inside.
-    Solid already in the cell stays, so a prism may start below the floor (z0 = BOT) safely.
-    Call it AFTER the carves of the space it stands in: a later carve hollows its stand-in again."""
-    pts = [tuple(p) for p in points]
+def _add_prism(pts, z0, z1, kind=None, sym=True, meta=None):
+    """Internal prism helper storing exact 4-tuple in PRISMS and parallel metadata in PRISM_META."""
+    pts = [tuple(p) for p in pts]
     area = sum(pts[k][0] * pts[(k + 1) % len(pts)][1] - pts[(k + 1) % len(pts)][0] * pts[k][1] for k in range(len(pts)))
     assert area > 0, f'prism {pts}: points must be counter-clockwise'
-    copies = [pts]
+    m0 = dict(meta or {})
+    copies = [(pts, m0)]
     if symmetric(sym):
         q = [sym_pt(x, y) for x, y in pts]
-        copies.append(q if SYM == 'rotate' else q[::-1])
-    for P in copies:
+        m1 = dict(m0)
+        if m1.get('group') is not None:
+            m1['group'] = _next_group()
+        if SYM == 'rotate':
+            copies.append((q, m1))
+        else:
+            # Mirror reverses polygon vertex order to keep CCW winding; remap per-edge UV specs if any.
+            q_rev = q[::-1]
+            if m1.get('edge_uvs'):
+                n_ = len(pts)
+                remapped = {}
+                for k_orig, uv in m1['edge_uvs'].items():
+                    # Original edge k_orig: pts[k] -> pts[(k+1)%n] becomes q_rev[(n-2-k)%n] -> q_rev[(n-1-k)%n]
+                    k_new = (n_ - 2 - k_orig) % n_
+                    remapped[k_new] = uv
+                m1['edge_uvs'] = remapped
+            copies.append((q_rev, m1))
+    for P, mp in copies:
         PRISMS.append((P, z0, z1, kind))
+        PRISM_META.append(mp)
         xs, ys = [p[0] for p in P], [p[1] for p in P]
         for i in range(max(0, int((min(xs) - XMIN) // C)), min(NX, int((max(xs) - XMIN) // C) + 1)):
             for j in range(max(0, int((min(ys) - YMIN) // C)), min(NY, int((max(ys) - YMIN) // C) + 1)):
@@ -631,16 +746,23 @@ def prism(points, z0, z1, kind=None, sym=True):
                 # only the AIR in [z0, z1] becomes the stand-in: solid already there (the floor under
                 # a prism that starts below it) stays and is written, or a cell only partly under the
                 # prism would leave a hole down to the void
-                col, z = cols[i][j], z0
-                for a, b, _m in sorted(col):
-                    if b <= z or a >= z1:
-                        continue
-                    if a > z:
-                        col.append([z, a, m])
-                    z = max(z, b)
-                if z < z1:
-                    col.append([z, z1, m])
-                col.sort()
+                _fill_air(i, j, z0, z1, m)
+
+
+def prism(points, z0, z1, kind=None, sym=True, wrap_u=False, fit_u=False, u_period=None):
+    """Solid vertical prism on a convex footprint (points counter-clockwise, seen from above): a
+    diagonal wall, a chamfered corner, an octagonal pillar, a wedge. kind None: each face is banded
+    like the room it looks into (kickplate, strip, cornice), with its texture running along the angled
+    face (Valve 220 axes, so nothing stretches); other kinds ('pillar', ...) take that kind's textures.
+    wrap_u=True wraps U continuously around consecutive faces instead of resetting at each vertex;
+    fit_u=True gently scales U so a closed perimeter lands on an integer multiple of u_period.
+    The grid gets a stand-in for the checks: in every cell the prism overlaps, the air in [z0, z1]
+    becomes mat 'diag' (solid to the checks, never written - the prism brush covers it; no lamp or
+    band lands on a face hidden inside the prism). Named kinds keep their mat on cells wholly inside.
+    Solid already in the cell stays, so a prism may start below the floor (z0 = BOT) safely.
+    Call it AFTER the carves of the space it stands in: a later carve hollows its stand-in again."""
+    meta = {'wrap_u': wrap_u, 'fit_u': fit_u, 'u_period': u_period} if (wrap_u or fit_u) else {}
+    _add_prism(points, z0, z1, kind=kind, sym=sym, meta=meta)
 
 
 def chamfer(r, corner, size, z0, z1, sym=True):
@@ -662,3 +784,563 @@ def diag_wall(x0, y0, x1, y1, thick, z0, z1, sym=True):
     nx, ny = -(y1 - y0) / L * thick / 2, (x1 - x0) / L * thick / 2
     quad = [(x0 - nx, y0 - ny), (x1 - nx, y1 - ny), (x1 + nx, y1 + ny), (x0 + nx, y0 + ny)]
     prism([(round(a, 2), round(b, 2)) for a, b in quad], z0, z1, None, sym)
+
+
+# =========================================================================
+# NON-BOX ARCHITECTURE: sloped/vaulted ceilings, arches/trusses/buttresses,
+# curved walls/rotundas/cylinders, diagonal ramps
+# =========================================================================
+def _add_sloped_ceil_one(rr, axis, sg, z_lo, z_hi, top_z, tex, v_base):
+    """Register one ceiling wedge (no sym copy) and populate its conservative 'ceil_slope' grid stand-in."""
+    x0, y0, x1, y1 = rr
+    run = (x1 - x0) if axis == 'x' else (y1 - y0)
+    assert run > 0.01 and top_z > z_lo + 0.01 and z_hi >= z_lo - 1e-6 and top_z >= z_hi - 1e-6, (
+        f'sloped_ceil {rr}: invalid bounds z_lo={z_lo}, z_hi={z_hi}, top_z={top_z}'
+    )
+    SLOPED_CEILS.append((rr, axis, sg, z_lo, z_hi, top_z, tex, v_base))
+    u0, u1 = (x0, x1) if axis == 'x' else (y0, y1)
+    i0 = max(0, int(math.floor((x0 - XMIN) / C)))
+    i1 = min(NX, int(math.ceil((x1 - XMIN) / C)))
+    j0 = max(0, int(math.floor((y0 - YMIN) / C)))
+    j1 = min(NY, int(math.ceil((y1 - YMIN) / C)))
+    for i in range(i0, i1):
+        cx0, cx1 = XMIN + i * C, XMIN + (i + 1) * C
+        if cx1 <= x0 + 1e-6 or cx0 >= x1 - 1e-6:
+            continue
+        for j in range(j0, j1):
+            cy0, cy1 = YMIN + j * C, YMIN + (j + 1) * C
+            if cy1 <= y0 + 1e-6 or cy0 >= y1 - 1e-6:
+                continue
+            ov0 = max(u0, cx0 if axis == 'x' else cy0)
+            ov1 = min(u1, cx1 if axis == 'x' else cy1)
+            if ov1 <= ov0 + 1e-6:
+                continue
+            if sg > 0:
+                z_min = z_lo + (z_hi - z_lo) * (ov0 - u0) / run
+            else:
+                z_min = z_lo + (z_hi - z_lo) * (u1 - ov1) / run
+            z_bot_cell = int(math.floor(z_min))
+            z_top_cell = int(math.ceil(top_z))
+            if z_bot_cell < z_top_cell:
+                _fill_air(i, j, z_bot_cell, z_top_cell, 'ceil_slope')
+
+
+def sloped_ceil(r, axis, z_lo, z_hi, rev=False, top_z=None, tex=None, sym=True):
+    """Sloped ceiling wedge or slanted overhang over rect r: underside rises linearly from z_lo
+    to z_hi along +axis ('x' or 'y'; rev=True: along -axis), solid up to top_z (default z_hi).
+    Carve the room up to top_z first so the grid shell seals the void leak-free. Call before
+    room_lamps() so ceiling lamps hang cleanly beneath the slope without clipping."""
+    tz = z_hi if top_z is None else top_z
+    sg = -1 if rev else 1
+    _add_sloped_ceil_one(r, axis, sg, z_lo, z_hi, tz, tex, 0.0)
+    if symmetric(sym):
+        _add_sloped_ceil_one(rot(r), axis, _sym_axis_sign(axis, sg), z_lo, z_hi, tz, tex, 0.0)
+
+
+def gable_ceil(r, axis, z_eave, z_ridge, ridge=None, top_z=None, tex=None, sym=True):
+    """Pitched gable ceiling over rect r: slopes rise across `axis` ('x' or 'y') from z_eave at
+    both side walls to z_ridge at `ridge` (default midpoint of r along axis). Carve the room up
+    to top_z (default z_ridge) first, and call before room_lamps()."""
+    x0, y0, x1, y1 = r
+    u0, u1 = (x0, x1) if axis == 'x' else (y0, y1)
+    mid = (u0 + u1) / 2 if ridge is None else ridge
+    assert u0 < mid < u1, f'gable_ceil {r}: ridge {mid} must lie strictly inside ({u0}, {u1})'
+    tz = z_ridge if top_z is None else top_z
+    if axis == 'x':
+        r_lo, r_hi = (x0, y0, mid, y1), (mid, y0, x1, y1)
+    else:
+        r_lo, r_hi = (x0, y0, x1, mid), (x0, mid, x1, y1)
+    sloped_ceil(r_lo, axis, z_eave, z_ridge, rev=False, top_z=tz, tex=tex, sym=sym)
+    sloped_ceil(r_hi, axis, z_eave, z_ridge, rev=True, top_z=tz, tex=tex, sym=sym)
+
+
+def _emit_barrel_vault_one(rr, axis, z_spring, z_crown, segs, top_z, tex):
+    x0, y0, x1, y1 = rr
+    u0, u1 = (x0, x1) if axis == 'x' else (y0, y1)
+    mid = (u0 + u1) / 2.0
+    half = (u1 - u0) / 2.0
+    h_arch = z_crown - z_spring
+    pts = []
+    for k in range(segs + 1):
+        ang = math.pi * (1.0 - k / segs)
+        uk = u0 if k == 0 else (u1 if k == segs else round(mid + half * math.cos(ang), 2))
+        zk = z_spring if k in (0, segs) else round(z_spring + h_arch * math.sin(ang), 2)
+        pts.append((uk, zk))
+    arc = 0.0
+    for k in range(segs):
+        ua, za = pts[k]
+        ub, zb = pts[k + 1]
+        seg_r = (ua, y0, ub, y1) if axis == 'x' else (x0, ua, x1, ub)
+        L = math.hypot(ub - ua, zb - za)
+        if zb >= za:
+            _add_sloped_ceil_one(seg_r, axis, 1, za, zb, top_z, tex, arc)
+        else:
+            # Descending facet: slope rises along -axis from zb (at ub) to za (at ua);
+            # _out.py runs V continuously along +axis starting at v_base = arc at ua.
+            _add_sloped_ceil_one(seg_r, axis, -1, zb, za, top_z, tex, arc)
+        arc += L
+
+
+def barrel_vault(r, axis, z_spring, z_crown, segs=6, top_z=None, tex=None, sym=True):
+    """Segmented arched barrel vault over rect r spanning across `axis` ('x' or 'y'), springing
+    from z_spring at both walls up to z_crown at the centre (segs >= 2 flat facets with continuous
+    Valve 220 UV wrapping across the arch). Carve the room up to top_z (default z_crown) first."""
+    assert segs >= 2 and z_crown > z_spring, f'barrel_vault {r}: need segs >= 2 and z_crown > z_spring'
+    tz = z_crown if top_z is None else top_z
+    _emit_barrel_vault_one(r, axis, z_spring, z_crown, segs, tz, tex)
+    if symmetric(sym):
+        _emit_barrel_vault_one(rot(r), axis, z_spring, z_crown, segs, tz, tex)
+
+
+def arch_door(r, axis, z0, z1, th, arch_h=None, segs=6, trim=False, tex=None, sym=True):
+    """Arched doorway over rect r from floor z0 to crown z1, arch spanning across `axis` ('x' or
+    'y'; walk-through direction is perpendicular to axis). Carves the opening (door=True) and
+    fills the upper spandrels with solid convex vault wedges, keeping jamb spring height >= z0 + 56
+    so players never snag. trim=True adds thin non-solid (func_detail_illusionary) arch ring trim
+    on both doorway faces (v4.1 bounded decorative collision policy)."""
+    span = (r[2] - r[0]) if axis == 'x' else (r[3] - r[1])
+    if arch_h is None:
+        arch_h = min(span // 2, max(16, (z1 - z0) - 80))
+    z_spring = z1 - arch_h
+    assert arch_h > 0 and z_spring >= z0 + 56, (
+        f'arch_door {r}: spring height {z_spring} < z0 + 56 ({z0 + 56}); raise z1 or lower arch_h'
+    )
+    carve(r, z0, z1, th, sym=sym, door=True, nocap=True, noarch=True)
+    barrel_vault(r, axis, z_spring, z1, segs=segs, top_z=z1, tex=tex, sym=sym)
+    if trim:
+        for rr in _both(r, sym):
+            ARCH_TRIMS.append((rr, axis, z_spring, z1, segs, 4, 10, EDGE_TEX))
+            # Keep wall lamps clear of the arch trim mouths
+            if axis == 'x':
+                pipes.append((rr[0] - 12, rr[1] - 4, z_spring, rr[2] + 12, rr[3] + 4, z1 + 12))
+            else:
+                pipes.append((rr[0] - 4, rr[1] - 12, z_spring, rr[2] + 4, rr[3] + 12, z1 + 12))
+
+
+def _floor_below_rect(rr, z_ref):
+    """Highest solid floor below z_ref across rect rr (used for v4.1 overhead solidity policy)."""
+    x0, y0, x1, y1 = rr
+    i0 = max(0, int(math.floor((x0 - XMIN) / C)))
+    i1 = min(NX, int(math.ceil((x1 - XMIN) / C)))
+    j0 = max(0, int(math.floor((y0 - YMIN) / C)))
+    j1 = min(NY, int(math.ceil((y1 - YMIN) / C)))
+    best = BOT
+    for i in range(i0, i1):
+        for j in range(j0, j1):
+            for _a, b, _m in cols[i][j]:
+                if b < z_ref and b > best:
+                    best = b
+    return best
+
+
+def truss(r, axis, z_bot, z_top=None, beam_h=16, knee=0, tie=True, tex=None, solid=None, sym=True):
+    """Overhead ceiling beam or pitched king-post roof truss spanning across `axis` ('x' or 'y')
+    over rect r (narrow side = beam thickness). When z_top > z_bot + beam_h, adds pitched rafters
+    meeting at the apex (plus a king post when space allows); knee > 0 adds diagonal wall knee
+    braces. solid=None follows the v4.1 bounded decorative policy: solid (worldspawn) when lowest
+    underside is >= 96u above floor underneath, non-solid (func_detail_illusionary) otherwise."""
+    zt = (z_bot + beam_h) if z_top is None else z_top
+    assert zt >= z_bot + beam_h and beam_h >= 4 and knee >= 0, (
+        f'truss {r}: need z_top >= z_bot + beam_h ({z_bot + beam_h}), beam_h >= 4, knee >= 0'
+    )
+    for rr in _both(r, sym):
+        if solid is None:
+            fl = _floor_below_rect(rr, z_bot)
+            is_solid = (z_bot - knee) >= fl + 96
+        else:
+            is_solid = bool(solid)
+        TRUSSES.append((rr, axis, z_bot, zt, beam_h, knee, tie, tex, is_solid))
+        pipes.append((rr[0], rr[1], z_bot - knee, rr[2], rr[3], zt))
+        if is_solid:
+            x0, y0, x1, y1 = rr
+            i0 = max(0, int(math.floor((x0 - XMIN) / C)))
+            i1 = min(NX, int(math.ceil((x1 - XMIN) / C)))
+            j0 = max(0, int(math.floor((y0 - YMIN) / C)))
+            j1 = min(NY, int(math.ceil((y1 - YMIN) / C)))
+            for i in range(i0, i1):
+                for j in range(j0, j1):
+                    _fill_air(i, j, int(z_bot), int(z_bot + beam_h), 'ceil_slope')
+
+
+def buttress(r, side, z0, z1, top_depth=0, taper='top', tex=None, solid=True, sym=True):
+    """Wall-mounted sloped buttress (taper='top', wide at bottom z0 tapering to top_depth at z1)
+    or overhead cantilevered corbel (taper='bottom', wide at top z1 tapering to top_depth at z0)
+    projecting inward from wall `side` ('-x', '+x', '-y', '+y') over rect r.
+    Set solid=False along tight strafe corridors to emit as func_detail_illusionary (v4.1 policy)."""
+    assert side in ('-x', '+x', '-y', '+y') and taper in ('top', 'bottom') and z1 > z0
+    depth = (r[2] - r[0]) if side in ('-x', '+x') else (r[3] - r[1])
+    assert 0 <= top_depth < depth, f'buttress {r}: top_depth {top_depth} must be in [0, {depth})'
+    copies = [(r, side)]
+    if symmetric(sym):
+        copies.append((rot(r), _side_rot(side)))
+    for rr, sd in copies:
+        BUTTRESSES.append((rr, sd, z0, z1, top_depth, taper, tex, bool(solid)))
+        pipes.append((rr[0], rr[1], z0, rr[2], rr[3], z1))
+        if solid:
+            x0, y0, x1, y1 = rr
+            axis = 'x' if sd in ('-x', '+x') else 'y'
+            sg = 1 if sd in ('-x', '-y') else -1
+            wall_u = x0 if sd == '-x' else x1 if sd == '+x' else y0 if sd == '-y' else y1
+            d_bot = depth if taper == 'top' else top_depth
+            d_top = top_depth if taper == 'top' else depth
+            dd = d_bot - d_top
+            i0 = max(0, int(math.floor((x0 - XMIN) / C)))
+            i1 = min(NX, int(math.ceil((x1 - XMIN) / C)))
+            j0 = max(0, int(math.floor((y0 - YMIN) / C)))
+            j1 = min(NY, int(math.ceil((y1 - YMIN) / C)))
+            fl = _floor_below_rect(rr, z0 + 1)
+            mat = 'ceil_slope' if z0 >= fl + 56 else 'diag'
+            for i in range(i0, i1):
+                cx0, cx1 = XMIN + i * C, XMIN + (i + 1) * C
+                if cx1 <= x0 + 1e-6 or cx0 >= x1 - 1e-6:
+                    continue
+                for j in range(j0, j1):
+                    cy0, cy1 = YMIN + j * C, YMIN + (j + 1) * C
+                    if cy1 <= y0 + 1e-6 or cy0 >= y1 - 1e-6:
+                        continue
+                    # Conservative height interval of the sloped wedge inside this cell
+                    c_near = ((cx0 - wall_u) if sg > 0 else (wall_u - cx1)) if axis == 'x' else (
+                        (cy0 - wall_u) if sg > 0 else (wall_u - cy1))
+                    c_near = max(0.0, c_near)
+                    if c_near >= depth - 1e-6:
+                        continue
+                    if taper == 'top':
+                        # Solid from z0 up to z where d(z) = c_near
+                        t_hi = 1.0 if c_near <= d_top else (d_bot - c_near) / dd
+                        za, zb = int(z0), int(math.ceil(z0 + (z1 - z0) * min(1.0, max(0.0, t_hi))))
+                    else:
+                        t_lo = 0.0 if c_near <= d_bot else (c_near - d_bot) / (-dd)
+                        za, zb = int(math.floor(z0 + (z1 - z0) * min(1.0, max(0.0, t_lo)))), int(z1)
+                    if zb > za:
+                        _fill_air(i, j, za, zb, mat)
+
+
+def cylinder(cx, cy, radius, z0, z1, sides=12, kind='pillar', angle0=None, parts=None,
+             fit_u=True, u_period=None, sym=True):
+    """Multi-sided circular column at (cx, cy) with radius `radius` and `sides` facets (default 12),
+    with continuous Valve 220 UV wrapping around the circumference. When kind == 'pillar' and
+    PILLAR_PARTS is enabled and z1 - z0 >= 96, splits into 32u base / shaft / 32u capital unless
+    parts=False."""
+    assert sides >= 3 and radius > 0 and z1 > z0, f'cylinder: invalid sides={sides}, radius={radius}, z=({z0},{z1})'
+    a0 = (180.0 / sides) if angle0 is None else angle0
+    pts = [
+        (round(cx + radius * math.cos(math.radians(a0 + 360.0 * k / sides)), 2),
+         round(cy + radius * math.sin(math.radians(a0 + 360.0 * k / sides)), 2))
+        for k in range(sides)
+    ]
+    use_parts = (kind == 'pillar' and PILLAR_PARTS and z1 - z0 >= 96) if parts is None else bool(parts)
+    per = u_period if u_period is not None else (64 if kind in ('pillar', 'pbase', 'pcap') else 128)
+    if use_parts and z1 - z0 >= 96:
+        segs = [(z0, z0 + 32, 'pbase'), (z0 + 32, z1 - 32, 'pillar'), (z1 - 32, z1, 'pcap')]
+    else:
+        segs = [(z0, z1, kind)]
+    for za, zb, k_ in segs:
+        prism(pts, za, zb, kind=k_, sym=sym, wrap_u=True, fit_u=fit_u, u_period=per)
+
+
+def _emit_curved_wall_one(cx, cy, r_in, r_out, a0, a1, z0, z1, segs, kind, fit_u, u_period):
+    gid = _next_group()
+    in_pts, out_pts = [], []
+    for k in range(segs + 1):
+        ang = math.radians(a0 + (a1 - a0) * k / segs)
+        ca, sa = math.cos(ang), math.sin(ang)
+        in_pts.append((round(cx + r_in * ca, 2), round(cy + r_in * sa, 2)))
+        out_pts.append((round(cx + r_out * ca, 2), round(cy + r_out * sa, 2)))
+    in_lens = [math.hypot(in_pts[k + 1][0] - in_pts[k][0], in_pts[k + 1][1] - in_pts[k][1]) for k in range(segs)]
+    out_lens = [math.hypot(out_pts[k + 1][0] - out_pts[k][0], out_pts[k + 1][1] - out_pts[k][1]) for k in range(segs)]
+    p_in, p_out = sum(in_lens), sum(out_lens)
+    su_in = (p_in / (max(1, round(p_in / u_period)) * u_period)) if fit_u and u_period else 1.0
+    su_out = (p_out / (max(1, round(p_out / u_period)) * u_period)) if fit_u and u_period else 1.0
+    s_in, s_out = 0.0, 0.0
+    for k in range(segs):
+        quad = [in_pts[k], out_pts[k], out_pts[k + 1], in_pts[k + 1]]
+        # Edge 1: out_pts[k] -> out_pts[k+1] (CCW, outer arc)
+        # Edge 3: in_pts[k+1] -> in_pts[k] (CW along quad, inner arc)
+        edge_uvs = {
+            1: (s_out, su_out),
+            3: (p_in - (s_in + in_lens[k]), su_in),
+        }
+        _add_prism(quad, z0, z1, kind=kind, sym=False, meta={'group': gid, 'edge_uvs': edge_uvs})
+        s_in += in_lens[k]
+        s_out += out_lens[k]
+
+
+def curved_wall(cx, cy, r_in, r_out, a0, a1, z0, z1, segs=8, kind=None, fit_u=False, u_period=128, sym=True):
+    """Segmented curved wall arc centred at (cx, cy) with inner/outer radii r_in < r_out,
+    sweeping counter-clockwise from a0 to a1 degrees, height z0..z1, with continuous Valve 220
+    UV wrapping around both inner and outer arcs. Call after carve() of the room it sits in."""
+    assert 0 < r_in < r_out and a1 > a0 and segs >= 1 and (a1 - a0) / segs < 150, (
+        f'curved_wall: invalid r=({r_in},{r_out}), angles=({a0},{a1}), segs={segs}'
+    )
+    _emit_curved_wall_one(cx, cy, r_in, r_out, a0, a1, z0, z1, segs, kind, fit_u, u_period)
+    if symmetric(sym):
+        scx, scy = sym_pt(cx, cy)
+        if SYM == 'rotate':
+            _emit_curved_wall_one(scx, scy, r_in, r_out, a0 + 180.0, a1 + 180.0, z0, z1, segs, kind, fit_u, u_period)
+        else:
+            _emit_curved_wall_one(scx, scy, r_in, r_out, 180.0 - a1, 180.0 - a0, z0, z1, segs, kind, fit_u, u_period)
+
+
+def _poly_area(pts):
+    return 0.5 * sum(pts[k][0] * pts[(k + 1) % len(pts)][1] - pts[(k + 1) % len(pts)][0] * pts[k][1]
+                     for k in range(len(pts)))
+
+
+def _clip_poly_hp(poly, ax, ay, nx, ny, eps=1e-6):
+    """Keep the half-plane (p - a) . n <= 0 of a convex CCW polygon."""
+    if len(poly) < 3:
+        return []
+    out = []
+    s = poly[-1]
+    ds = (s[0] - ax) * nx + (s[1] - ay) * ny
+    for e in poly:
+        de = (e[0] - ax) * nx + (e[1] - ay) * ny
+        if de <= eps:
+            if ds > eps:
+                t = ds / (ds - de)
+                out.append((s[0] + t * (e[0] - s[0]), s[1] + t * (e[1] - s[1])))
+            out.append(e)
+        elif ds <= eps:
+            t = ds / (ds - de)
+            out.append((s[0] + t * (e[0] - s[0]), s[1] + t * (e[1] - s[1])))
+        s, ds = e, de
+    # Deduplicate near-identical consecutive vertices
+    clean = []
+    for p in out:
+        if not clean or math.hypot(p[0] - clean[-1][0], p[1] - clean[-1][1]) > 1e-3:
+            clean.append(p)
+    if len(clean) >= 2 and math.hypot(clean[0][0] - clean[-1][0], clean[0][1] - clean[-1][1]) <= 1e-3:
+        clean.pop()
+    return clean if len(clean) >= 3 and _poly_area(clean) > 1.0 else []
+
+
+def _ray_box_hit(cx, cy, dx, dy, x0, y0, x1, y1):
+    """Intersection of ray (cx, cy) + t*(dx, dy) (t > 0) with box [x0, x1] x [y0, y1] -> (x, y, side_t)."""
+    ts = []
+    if dx > 1e-9:
+        ts.append((x1 - cx) / dx)
+    elif dx < -1e-9:
+        ts.append((x0 - cx) / dx)
+    if dy > 1e-9:
+        ts.append((y1 - cy) / dy)
+    elif dy < -1e-9:
+        ts.append((y0 - cy) / dy)
+    t = min(v for v in ts if v > 0)
+    hx, hy = cx + t * dx, cy + t * dy
+    hx = min(max(hx, x0), x1)
+    hy = min(max(hy, y0), y1)
+    return (round(hx, 2), round(hy, 2))
+
+
+def _box_perim_param(x, y, x0, y0, x1, y1):
+    """CCW perimeter parameter around box [x0, x1] x [y0, y1], starting at (x1, y0) going +y."""
+    W, H = x1 - x0, y1 - y0
+    eps = 0.05
+    if abs(x - x1) <= eps and y > y0 + eps:
+        return y - y0
+    if abs(y - y1) <= eps and x < x1 - eps:
+        return H + (x1 - x)
+    if abs(x - x0) <= eps and y < y1 - eps:
+        return H + W + (y1 - y)
+    if abs(y - y0) <= eps and x > x0 + eps:
+        return 2 * H + W + (x - x0)
+    # Corners
+    if abs(x - x1) <= eps and abs(y - y0) <= eps:
+        return 0.0
+    if abs(x - x1) <= eps and abs(y - y1) <= eps:
+        return H
+    if abs(x - x0) <= eps and abs(y - y1) <= eps:
+        return H + W
+    return 2 * H + W
+
+
+def _opening_angle(spec):
+    return {'+x': 0.0, '+y': 90.0, '-x': 180.0, '-y': 270.0}[spec] if isinstance(spec, str) else float(spec)
+
+
+def _emit_rotunda_one(cx, cy, radius, z0, z1, th, sides, angle0, openings, sky, strip, fit_u, u_period):
+    x0 = int(math.floor((cx - radius) / C)) * C
+    x1 = int(math.ceil((cx + radius) / C)) * C
+    y0 = int(math.floor((cy - radius) / C)) * C
+    y1 = int(math.ceil((cy + radius) / C)) * C
+    r_box = (x0, y0, x1, y1)
+    carve(r_box, z0, z1, th, sky=sky, sym=False, strip=strip)
+    a0 = (180.0 / sides) if angle0 is None else angle0
+    v_pts = []
+    w_pts = []
+    for k in range(sides):
+        ang = math.radians(a0 + 360.0 * k / sides)
+        ca, sa = math.cos(ang), math.sin(ang)
+        v_pts.append((round(cx + radius * ca, 2), round(cy + radius * sa, 2)))
+        w_pts.append(_ray_box_hit(cx, cy, ca, sa, x0, y0, x1, y1))
+    lens = [math.hypot(v_pts[(k + 1) % sides][0] - v_pts[k][0], v_pts[(k + 1) % sides][1] - v_pts[k][1])
+            for k in range(sides)]
+    perim = sum(lens)
+    su = (perim / (max(1, round(perim / u_period)) * u_period)) if fit_u and u_period else 1.0
+    W, H = x1 - x0, y1 - y0
+    P_box = 2 * (W + H)
+    corners = [((x1, y1), H), ((x0, y1), H + W), ((x0, y0), 2 * H + W), ((x1, y0), 0.0)]
+    norm_ops = []
+    for op in openings:
+        if len(op) == 3:
+            ang_spec, width, z_top = op
+            z_lo_op = z0
+        else:
+            ang_spec, width, z_lo_op, z_top = op
+        norm_ops.append((_opening_angle(ang_spec), float(width), z_lo_op, z_top))
+    gid = _next_group()
+    s_cur = 0.0
+    for k in range(sides):
+        kn = (k + 1) % sides
+        vk, vkn = v_pts[k], v_pts[kn]
+        wk, wkn = w_pts[k], w_pts[kn]
+        pk = _box_perim_param(wk[0], wk[1], x0, y0, x1, y1)
+        pkn = _box_perim_param(wkn[0], wkn[1], x0, y0, x1, y1)
+        span_p = (pkn - pk) % P_box
+        between = []
+        for c_pt, cp in corners:
+            dp = (cp - pk) % P_box
+            if 0.05 < dp < span_p - 0.05:
+                between.append((dp, c_pt))
+        between.sort()
+        raw_poly = [vk, wk] + [c_pt for _, c_pt in between] + [wkn, vkn]
+        poly = []
+        for p in raw_poly:
+            if not poly or math.hypot(p[0] - poly[-1][0], p[1] - poly[-1][1]) > 1e-3:
+                poly.append(p)
+        if len(poly) >= 2 and math.hypot(poly[0][0] - poly[-1][0], poly[0][1] - poly[-1][1]) <= 1e-3:
+            poly.pop()
+        if len(poly) < 3 or _poly_area(poly) <= 1.0:
+            s_cur += lens[k]
+            continue
+        # Inner wall line: vkn -> vk with continuous UV offset from vkn
+        Lk = lens[k]
+        ux, uy = (vk[0] - vkn[0]) / Lk, (vk[1] - vkn[1]) / Lk
+        u_at_vkn = perim - (s_cur + Lk)
+        pieces = [(poly, z0, z1)]
+        for ang_deg, width, z_lo_op, z_top_op in norm_ops:
+            rad = math.radians(ang_deg)
+            dx, dy = math.cos(rad), math.sin(rad)
+            px, py = -dy, dx
+            hw = width / 2.0
+            next_pieces = []
+            for pp, za, zb in pieces:
+                if zb <= z_lo_op or za >= z_top_op:
+                    next_pieces.append((pp, za, zb))
+                    continue
+                back = _clip_poly_hp(pp, cx, cy, dx, dy)
+                front = _clip_poly_hp(pp, cx, cy, -dx, -dy)
+                if back:
+                    next_pieces.append((back, za, zb))
+                if front:
+                    left = _clip_poly_hp(front, cx - px * hw, cy - py * hw, px, py)
+                    right = _clip_poly_hp(front, cx + px * hw, cy + py * hw, -px, -py)
+                    mid = _clip_poly_hp(
+                        _clip_poly_hp(front, cx - px * hw, cy - py * hw, -px, -py),
+                        cx + px * hw, cy + py * hw, px, py,
+                    )
+                    if left:
+                        next_pieces.append((left, za, zb))
+                    if right:
+                        next_pieces.append((right, za, zb))
+                    if mid:
+                        if za < z_lo_op:
+                            next_pieces.append((mid, za, min(zb, z_lo_op)))
+                        if zb > z_top_op:
+                            next_pieces.append((mid, max(za, z_top_op), zb))
+            pieces = next_pieces
+        for pp, za, zb in pieces:
+            if zb <= za + 0.01:
+                continue
+            pp_r = [(round(a, 2), round(b, 2)) for a, b in pp]
+            # Attach continuous inner-wall UV to any edge collinear with vkn -> vk
+            edge_uvs = {}
+            n_ = len(pp_r)
+            for ek in range(n_):
+                ea, eb = pp_r[ek], pp_r[(ek + 1) % n_]
+                eL = math.hypot(eb[0] - ea[0], eb[1] - ea[1])
+                if eL < 1e-3:
+                    continue
+                edx, edy = (eb[0] - ea[0]) / eL, (eb[1] - ea[1]) / eL
+                if edx * ux + edy * uy > 0.999:
+                    # Signed perpendicular distance from ea to line vkn -> vk
+                    perp_d = abs((ea[0] - vkn[0]) * (-uy) + (ea[1] - vkn[1]) * ux)
+                    if perp_d < 0.2:
+                        t_along = (ea[0] - vkn[0]) * ux + (ea[1] - vkn[1]) * uy
+                        edge_uvs[ek] = (u_at_vkn + t_along, su)
+            _add_prism(pp_r, za, zb, kind=None, sym=False, meta={'group': gid, 'edge_uvs': edge_uvs})
+        s_cur += Lk
+    return r_box
+
+
+def rotunda(cx, cy, radius, z0, z1, th, sides=12, angle0=None, openings=(), sky=False, strip=None,
+            fit_u=True, u_period=128, sym=True):
+    """Leak-safe circular / multi-sided room centred at (cx, cy) with inner radius `radius`, floor
+    z0, ceiling z1, theme th, and `sides` faceted walls with continuous Valve 220 UV wrapping.
+    Carves the enclosing 16-grid box and tiles the outer spandrels with exact disjoint convex
+    perimeter wedges so nothing leaks or creates hollow cavities behind the curved wall.
+    `openings`: iterable of (side_or_angle, width, z_top) or (side_or_angle, width, z_lo, z_top)
+    doorway cuts through the curved wall (e.g. ('+y', 128, 160)); returns the carved bounding box."""
+    assert sides >= 4 and radius >= 32 and z1 > z0
+    r_box = _emit_rotunda_one(cx, cy, radius, z0, z1, th, sides, angle0, openings, sky, strip, fit_u, u_period)
+    if symmetric(sym):
+        scx, scy = sym_pt(cx, cy)
+        s_ops = []
+        for op in openings:
+            a_ = op[0]
+            sa_ = _side_rot(a_) if isinstance(a_, str) else sym_ang(float(a_))
+            s_ops.append((sa_, *op[1:]))
+        sa0 = None if angle0 is None else (
+            (angle0 + 180.0) % 360.0 if SYM == 'rotate' else (180.0 - angle0) % 360.0
+        )
+        _emit_rotunda_one(scx, scy, radius, z0, z1, th, sides, sa0, s_ops, sky, strip, fit_u, u_period)
+    return r_box
+
+
+def diag_ramp(x0, y0, x1, y1, width, z0, z1, base=None, thick=None, sym=True):
+    """Diagonal / non-axial ramp rising linearly from low centre (x0, y0, z0) to high centre
+    (x1, y1, z1) with perpendicular width `width`. Walkable up to 45 degrees (0 < rise <= run);
+    15-35 degrees plays best. Solid down to `base` (default z0), or a sloped elevated slab of
+    vertical thickness `thick` so players can pass underneath the high end. Writes a stepped grid
+    stand-in ('ramp') for checks and a Valve 220 walking brush in the floor-minlight skin."""
+    dx, dy = x1 - x0, y1 - y0
+    run = math.hypot(dx, dy)
+    rise = z1 - z0
+    assert width >= 32 and 0 < rise <= run + 1e-6, (
+        f'diag_ramp ({x0},{y0})->({x1},{y1}): rise {rise} over run {run:.1f} invalid or width {width} < 32'
+    )
+    copies = [(x0, y0, x1, y1)]
+    if symmetric(sym):
+        sx0, sy0 = sym_pt(x0, y0)
+        sx1, sy1 = sym_pt(x1, y1)
+        copies.append((sx0, sy0, sx1, sy1))
+    for ax0, ay0, ax1, ay1 in copies:
+        DIAG_RAMPS.append((ax0, ay0, ax1, ay1, width, z0, z1, base, thick))
+        ddx, ddy = ax1 - ax0, ay1 - ay0
+        L = math.hypot(ddx, ddy)
+        fx, fy = ddx / L, ddy / L
+        lx, ly = -fy, fx
+        hw = width / 2.0
+        P = [
+            (ax0 - lx * hw, ay0 - ly * hw),
+            (ax1 - lx * hw, ay1 - ly * hw),
+            (ax1 + lx * hw, ay1 + ly * hw),
+            (ax0 + lx * hw, ay0 + ly * hw),
+        ]
+        xs, ys = [p[0] for p in P], [p[1] for p in P]
+        z_base = z0 if base is None else base
+        i0 = max(0, int(math.floor((min(xs) - XMIN) / C)))
+        i1 = min(NX, int(math.ceil((max(xs) - XMIN) / C)))
+        j0 = max(0, int(math.floor((min(ys) - YMIN) / C)))
+        j1 = min(NY, int(math.ceil((max(ys) - YMIN) / C)))
+        for i in range(i0, i1):
+            cx_ = XMIN + i * C + C / 2.0
+            for j in range(j0, j1):
+                cy_ = YMIN + j * C + C / 2.0
+                if not _inside(P, cx_, cy_):
+                    continue
+                t = max(0.0, min(L, (cx_ - ax0) * fx + (cy_ - ay0) * fy))
+                h = int(round(z0 + rise * t / L))
+                zlo_c = max(z_base, h - thick) if thick is not None else z_base
+                if h > zlo_c:
+                    _fill_air(i, j, int(zlo_c), int(h), 'ramp')

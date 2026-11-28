@@ -141,7 +141,7 @@ def detail_pieces():
         in_ramp = any(r[0] <= cx_ <= r[2] and r[1] <= cy_ <= r[3] and f == rz0
                       for r, _, _, rz0, _, _ in RAMPS)
         if fm == 'ramp' or in_ramp:
-            return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(p, q, c) in NOCAP, foot=None,
+            return dict(f=f, c=c, th=th, sz=10 ** 6, nocap=(cm in ('bridge', 'ceil_slope') or (p, q, c) in NOCAP), foot=None,
                         door=door_only(p, q, f), tz=TRIM_Z.get(th), ramp=True)
         if fm == 'bridge':
             foot = None
@@ -155,7 +155,7 @@ def detail_pieces():
             sunk = [z0 for z0, z1, th2, dr in rooms.get((p, q), []) if not dr and f < z0 <= f + 32]
             if foot is not None and sunk:
                 foot = max(sunk) + 32  # sunken channel: the kickplate stays level with the room's
-        return dict(f=f, c=c, th=th, sz=strip_z(th, f, p, q), nocap=(cm == 'bridge' or (p, q, c) in NOCAP), foot=foot,
+        return dict(f=f, c=c, th=th, sz=strip_z(th, f, p, q), nocap=(cm in ('bridge', 'ceil_slope') or (p, q, c) in NOCAP), foot=foot,
                     door=door_only(p, q, f), tz=TRIM_Z.get(th))
 
     def proxy(i, j, d, n, a, b):
@@ -195,8 +195,8 @@ def detail_pieces():
     for i in range(NX):
         for j in range(NY):
             for a, b, m in cols[i][j]:
-                if m in ('ramp', 'diag'):
-                    continue                              # v3 stand-ins: the ramp / prism brush is written instead
+                if m in ('ramp', 'diag', 'ceil_slope'):
+                    continue                              # stand-ins: ramp / prism / sloped-ceil brush is written instead
                 own = {(f, c): room_theme(i, j, f, zmap) for f, c in air[i][j]}
                 ztop = next((t for (f, c), t in own.items() if f == b), None)
                 zbot = next((t for (f, c), t in own.items() if c == a), None)
@@ -470,12 +470,25 @@ def detail_pieces():
                      [sface(n_, (p_[0], p_[1], 0), EDGE_TEX, 0, 0) for n_, p_ in ends]
                 EXTRA['detail'].append('{\n' + '\n'.join(fs) + '\n}')
 
-    for P, z0, z1, kind in PRISMS:
+    for p_idx, (P, z0, z1, kind) in enumerate(PRISMS):
         k_ = len(P)
+        meta = PRISM_META[p_idx] if 'PRISM_META' in globals() and p_idx < len(PRISM_META) else {}
+        wrap_u = bool(meta.get('wrap_u'))
+        fit_u = bool(meta.get('fit_u'))
+        u_per = meta.get('u_period')
+        edge_uvs = meta.get('edge_uvs') or {}
+        edge_lens = [math.hypot(P[(k + 1) % k_][0] - P[k][0], P[(k + 1) % k_][1] - P[k][1]) for k in range(k_)]
+        perim = sum(edge_lens)
+        if wrap_u and fit_u:
+            per_t = u_per if u_per is not None else (64 if kind in ('pillar', 'pbase', 'pcap') else 128)
+            wrap_su = perim / (max(1, round(perim / per_t)) * per_t)
+        else:
+            wrap_su = 1.0
         faces_ = []
+        s_acc = 0.0
         for k in range(k_):
             (ax, ay), (bx, by) = P[k], P[(k + 1) % k_]
-            L = math.hypot(bx - ax, by - ay)
+            L = edge_lens[k]
             n_ = ((by - ay) / L, -(bx - ax) / L, 0)
             mx_, my_ = (ax + bx) / 2, (ay + by) / 2
             # March outward in 8-unit steps past the prism's own 'diag' stand-in cells, stopping
@@ -491,20 +504,24 @@ def detail_pieces():
                     break
                 if not any(m2 == 'diag' and a2 < z1 and b2 > z0 for a2, b2, m2 in cols[pi_][pj_]):
                     break
-            faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni))
+            uv_spec = edge_uvs.get(k) if k in edge_uvs else ((s_acc, wrap_su) if wrap_u else None)
+            faces_.append(((ax, ay), n_, ((bx - ax) / L, (by - ay) / L, 0), ni, uv_spec))
+            s_acc += L
         cuts = {z0, z1}
-        for _, _, _, ni in faces_:
+        for _, _, _, ni, _ in faces_:
             if ni and kind is None:
                 cuts |= {z for z in band_cuts(ni) if z0 < z < z1}
         cuts = sorted(cuts)
         cx, cy = sum(p_[0] for p_ in P) / k_, sum(p_[1] for p_ in P) / k_
         tht = (air_info(cx, cy, z1, z1 + 64) or {'th': zmap[int((cx - XMIN) // C)][int((cy - YMIN) // C)] or 'room'})['th']
         thb = (air_info(cx, cy, z0 - 64, z0) or {'th': tht})['th']
+        top_tex = textures(kind, tht, None)[0] if kind is not None else textures('wall', tht, 'wall')[0]
+        bot_tex = textures(kind, thb, None)[1] if kind is not None else textures('wall', thb, 'wall')[1]
         for za, zb in zip(cuts, cuts[1:]):
             mid = (za + zb) / 2
-            fs = [sface((0, 0, -1), (P[0][0], P[0][1], za), textures('wall', thb, 'wall')[1], 0, 0),
-                  sface((0, 0, 1), (P[0][0], P[0][1], zb), textures('wall', tht, 'wall')[0], 0, 0)]
-            for (ax, ay), n_, U, ni in faces_:
+            fs = [sface((0, 0, -1), (P[0][0], P[0][1], za), bot_tex, 0, 0),
+                  sface((0, 0, 1), (P[0][0], P[0][1], zb), top_tex, 0, 0)]
+            for (ax, ay), n_, U, ni, uv_spec in faces_:
                 if kind is not None:
                     tex, voff = textures(kind, (ni or {'th': tht})['th'], None)[2], z1 % 128
                 elif ni is None or not (ni['f'] <= mid < ni['c']):
@@ -514,8 +531,273 @@ def detail_pieces():
                     role, anc = band_role(ni, mid)
                     per = WALL_PERIOD.get(zone(ni['th']), 128) if role in ('wall', 'wall_lo') else PERIOD[role]
                     tex, voff = textures('wall', ni['th'], role)[2], anc % per
-                fs.append(vface(n_, (ax, ay, za), tex, U, -(ax * U[0] + ay * U[1]) % 64, (0, 0, -1), voff, 1, 1))
-            EXTRA['world'].append('{\n' + '\n'.join(fs) + '\n}')
+                if uv_spec is not None:
+                    u_start, su = uv_spec
+                    uoff = (u_start - (ax * U[0] + ay * U[1])) / su
+                    fs.append(vface(n_, (ax, ay, za), tex, U, uoff, (0, 0, -1), voff, su, 1))
+                elif kind is None and (abs(U[0]) > 0.999 or abs(U[1]) > 0.999):
+                    fs.append(sface(n_, (ax, ay, za), tex, 0, voff))
+                else:
+                    fs.append(vface(n_, (ax, ay, za), tex, U, -(ax * U[0] + ay * U[1]) % 64, (0, 0, -1), voff, 1, 1))
+            EXTRA['skin' if kind in ('pillar', 'pbase', 'pcap', 'crate') else 'world'].append('{\n' + '\n'.join(fs) + '\n}')
+
+    # ---- non-box architecture: sloped/vaulted ceilings, pendant lamps, arch trims, trusses,
+    #      buttresses, and diagonal ramps ----
+    def _probe_theme(px, py, zlo, zhi, fallback):
+        ai = air_info(px, py, zlo, zhi)
+        if ai:
+            return ai['th']
+        pi, pj = min(max(int((px - XMIN) // C), 0), NX - 1), min(max(int((py - YMIN) // C), 0), NY - 1)
+        return zmap[pi][pj] or fallback
+
+    def _wall_side(n_, p_, px, py, zlo, zhi, fallback, force_tex=None):
+        th_f = _probe_theme(px, py, zlo, zhi, fallback)
+        if force_tex is not None:
+            return sface(n_, p_, force_tex, 0, wall_anchor(th_f) % WALL_PERIOD.get(zone(th_f), 128))
+        wt = textures('wall', th_f, 'wall')[2]
+        wa = wall_anchor(th_f) % WALL_PERIOD.get(zone(th_f), 128)
+        return sface(n_, p_, wt, 0, wa)
+
+    for rr, axis, sg, z_lo, z_hi, top_z, tex, v_base in (SLOPED_CEILS if 'SLOPED_CEILS' in globals() else []):
+        x0, y0, x1, y1 = rr
+        mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        th = _probe_theme(mx, my, z_lo - 64, z_lo, 'room')
+        ceil_tex = tex or textures('wall', th, 'wall')[1]
+        is_sky = ceil_tex.lower().startswith('sky')
+        side_force = ceil_tex if is_sky else None
+        h = (1, 0, 0) if axis == 'x' else (0, 1, 0)
+        run = (x1 - x0) if axis == 'x' else (y1 - y0)
+        rise = z_hi - z_lo
+        lo_c = (x0 if sg > 0 else x1) if axis == 'x' else (y0 if sg > 0 else y1)
+        hi_c = (x1 if sg > 0 else x0) if axis == 'x' else (y1 if sg > 0 else y0)
+        lo_p = (lo_c, y0, z_lo) if axis == 'x' else (x0, lo_c, z_lo)
+        hi_p = (hi_c, y0, z_hi) if axis == 'x' else (x0, hi_c, z_hi)
+        u0_p = (x0, y0, z_lo if sg > 0 else z_hi) if axis == 'x' else (x0, y0, z_lo if sg > 0 else z_hi)
+        fs = [sface((0, 0, 1), (x0, y0, top_z), ceil_tex, 0, 0)]
+        if rise <= 0.01:
+            T = (0, 1, 0) if axis == 'x' else (1, 0, 0)
+            S = (h[0], h[1], 0.0)
+            voff = v_base - (u0_p[0] * S[0] + u0_p[1] * S[1])
+            fs.append(vface((0, 0, -1), (x0, y0, z_lo), ceil_tex, T, 0, S, voff, 1, 1))
+            fs.append(_wall_side((-h[0], -h[1], 0), (x0, y0, z_lo), x0 - h[0] * 8, y0 - h[1] * 8, z_lo, top_z, th, side_force))
+            fs.append(_wall_side((h[0], h[1], 0), (x1, y1, z_lo), x1 + h[0] * 8, y1 + h[1] * 8, z_lo, top_z, th, side_force))
+        else:
+            bot_n = (sg * rise * h[0], sg * rise * h[1], -run)
+            L = math.hypot(run, rise)
+            T = (0, 1, 0) if axis == 'x' else (1, 0, 0)
+            S = (h[0] * run / L, h[1] * run / L, sg * rise / L)
+            voff = v_base - (u0_p[0] * S[0] + u0_p[1] * S[1] + u0_p[2] * S[2])
+            fs.append(vface(bot_n, lo_p, ceil_tex, T, 0, S, voff, 1, 1))
+            lo_mid = (lo_c - sg * 8, my) if axis == 'x' else (mx, lo_c - sg * 8)
+            fs.append(_wall_side((-sg * h[0], -sg * h[1], 0), lo_p, lo_mid[0], lo_mid[1], z_lo, top_z, th, side_force))
+            if top_z > z_hi + 0.01:
+                hi_mid = (hi_c + sg * 8, my) if axis == 'x' else (mx, hi_c + sg * 8)
+                fs.append(_wall_side((sg * h[0], sg * h[1], 0), hi_p, hi_mid[0], hi_mid[1], z_hi, top_z, th, side_force))
+        if axis == 'x':
+            fs.append(_wall_side((0, -1, 0), (x0, y0, z_lo), mx, y0 - 8, z_lo, top_z, th, side_force))
+            fs.append(_wall_side((0, 1, 0), (x0, y1, z_lo), mx, y1 + 8, z_lo, top_z, th, side_force))
+        else:
+            fs.append(_wall_side((-1, 0, 0), (x0, y0, z_lo), x0 - 8, my, z_lo, top_z, th, side_force))
+            fs.append(_wall_side((1, 0, 0), (x1, y0, z_lo), x1 + 8, my, z_lo, top_z, th, side_force))
+        EXTRA['world'].append('{\n' + '\n'.join(fs) + '\n}')
+
+    for px, py, z_mount, z_stem_top in (PENDANT_LAMPS if 'PENDANT_LAMPS' in globals() else []):
+        ltop, lbot, lside = textures('lamp', 'room', None)
+        x1_, y1_, z1_ = px - 16, py - 16, z_mount - 8
+        x2_, y2_, z2_ = px + 16, py + 16, z_mount
+        fs = [
+            sface((-1, 0, 0), (x1_, y1_, z1_), lside, 0, 0),
+            sface((1, 0, 0), (x2_, y1_, z1_), lside, 0, 0),
+            sface((0, -1, 0), (x1_, y1_, z1_), lside, 0, 0),
+            sface((0, 1, 0), (x1_, y2_, z1_), lside, 0, 0),
+            sface((0, 0, -1), (x1_, y1_, z1_), lbot, -x1_, y2_),
+            sface((0, 0, 1), (x1_, y1_, z2_), ltop, -x1_, y2_),
+        ]
+        EXTRA['detail'].append('{\n' + '\n'.join(fs) + '\n}')
+        if z_stem_top > z_mount:
+            st_z2 = z_stem_top + 4
+            sfs = [
+                sface((-1, 0, 0), (px - 4, py - 4, z_mount), lside, 0, 0),
+                sface((1, 0, 0), (px + 4, py - 4, z_mount), lside, 0, 0),
+                sface((0, -1, 0), (px - 4, py - 4, z_mount), lside, 0, 0),
+                sface((0, 1, 0), (px - 4, py + 4, z_mount), lside, 0, 0),
+                sface((0, 0, -1), (px - 4, py - 4, z_mount), lside, 0, 0),
+                sface((0, 0, 1), (px - 4, py - 4, st_z2), lside, 0, 0),
+            ]
+            EXTRA['detail'].append('{\n' + '\n'.join(sfs) + '\n}')
+
+    for rr, axis, z_spring, z_crown, segs, depth, width, ttex in (ARCH_TRIMS if 'ARCH_TRIMS' in globals() else []):
+        x0, y0, x1, y1 = rr
+        u0, u1 = (x0, x1) if axis == 'x' else (y0, y1)
+        v0, v1 = (y0, y1) if axis == 'x' else (x0, x1)
+        mid = (u0 + u1) / 2.0
+        half = (u1 - u0) / 2.0
+        h_arch = z_crown - z_spring
+        in_pts = []
+        for k in range(segs + 1):
+            ang = math.pi * (1.0 - k / segs)
+            in_pts.append((mid + half * math.cos(ang), z_spring + h_arch * math.sin(ang)))
+        h_ax = (1, 0, 0) if axis == 'x' else (0, 1, 0)
+        p_ax = (0, 1, 0) if axis == 'x' else (1, 0, 0)
+        for va, vb in ((v0 - depth, v0), (v1, v1 + depth)):
+            for k in range(segs):
+                ua, za = in_pts[k]
+                ub, zb = in_pts[k + 1]
+                du, dz = ub - ua, zb - za
+                L = math.hypot(du, dz)
+                if L < 1e-3:
+                    continue
+                # Inward normal of arch curve points downward/toward centre; outward goes into spandrel
+                in_u, in_z = dz / L, -du / L
+                out_u, out_z = -in_u, -in_z
+                pt_in = (ua, va, za) if axis == 'x' else (va, ua, za)
+                pt_out = (ua + out_u * width, va, za + out_z * width) if axis == 'x' else (va, ua + out_u * width, za + out_z * width)
+                pt_a = (ua, va, za) if axis == 'x' else (va, ua, za)
+                pt_b = (ub, va, zb) if axis == 'x' else (va, ub, zb)
+                pt_va = (ua, va, za) if axis == 'x' else (va, ua, za)
+                pt_vb = (ua, vb, za) if axis == 'x' else (vb, ua, za)
+                U_seg = (h_ax[0] * du / L, h_ax[1] * du / L, dz / L)
+                fs = [
+                    vface((h_ax[0] * in_u, h_ax[1] * in_u, in_z), pt_in, ttex, U_seg, 0, p_ax, 0, 1, 1),
+                    vface((h_ax[0] * out_u, h_ax[1] * out_u, out_z), pt_out, ttex, U_seg, 0, p_ax, 0, 1, 1),
+                    sface((-h_ax[0] * du / L, -h_ax[1] * du / L, -dz / L), pt_a, ttex, 0, 0),
+                    sface((h_ax[0] * du / L, h_ax[1] * du / L, dz / L), pt_b, ttex, 0, 0),
+                    sface((-p_ax[0], -p_ax[1], 0), pt_va, ttex, 0, 0),
+                    sface((p_ax[0], p_ax[1], 0), pt_vb, ttex, 0, 0),
+                ]
+                EXTRA['detail'].append('{\n' + '\n'.join(fs) + '\n}')
+
+    def _emit_beam(bucket, axis, ua, za, ub, zb, v0, v1, bh, ttex, cap_lo=None, cap_hi=None,
+                   omit_lo=False, omit_hi=False):
+        """Emit a convex beam/rafter spanning u in [ua, ub], v in [v0, v1], vertical height bh."""
+        du, dz = ub - ua, zb - za
+        if du <= 0.01 or bh <= 0.01 or v1 <= v0 + 0.01:
+            return
+        L = math.hypot(du, dz)
+        h = (1, 0, 0) if axis == 'x' else (0, 1, 0)
+        p_ax = (0, 1, 0) if axis == 'x' else (1, 0, 0)
+        pt_bot = (ua, v0, za) if axis == 'x' else (v0, ua, za)
+        pt_top = (ua, v0, za + bh) if axis == 'x' else (v0, ua, za + bh)
+        pt_ua = (ua, v0, za) if axis == 'x' else (v0, ua, za)
+        pt_ub = (ub, v0, zb) if axis == 'x' else (v0, ub, zb)
+        pt_v0 = (ua, v0, za) if axis == 'x' else (v0, ua, za)
+        pt_v1 = (ua, v1, za) if axis == 'x' else (v1, ua, za)
+        U_b = (h[0] * du / L, h[1] * du / L, dz / L)
+        bot_n = (dz * h[0], dz * h[1], -du)
+        top_n = (-dz * h[0], -dz * h[1], du)
+        fs = [
+            vface(bot_n, pt_bot, ttex, U_b, 0, p_ax, 0, 1, 1),
+            vface(top_n, pt_top, ttex, U_b, 0, p_ax, 0, 1, 1),
+            sface((-p_ax[0], -p_ax[1], 0), pt_v0, ttex, 0, 0),
+            sface((p_ax[0], p_ax[1], 0), pt_v1, ttex, 0, 0),
+        ]
+        if not omit_lo:
+            fs.append(sface((-h[0], -h[1], 0), pt_ua, ttex, 0, 0))
+        if not omit_hi:
+            fs.append(sface((h[0], h[1], 0), pt_ub, ttex, 0, 0))
+        if cap_lo is not None:
+            fs.append(sface((0, 0, -1), (ua, v0, cap_lo) if axis == 'x' else (v0, ua, cap_lo), ttex, 0, 0))
+        if cap_hi is not None:
+            fs.append(sface((0, 0, 1), (ua, v0, cap_hi) if axis == 'x' else (v0, ua, cap_hi), ttex, 0, 0))
+        EXTRA[bucket].append('{\n' + '\n'.join(fs) + '\n}')
+
+    for rr, axis, z_bot, z_top, beam_h, knee, tie, tex, solid in (TRUSSES if 'TRUSSES' in globals() else []):
+        x0, y0, x1, y1 = rr
+        u0, u1 = (x0, x1) if axis == 'x' else (y0, y1)
+        v0, v1 = (y0, y1) if axis == 'x' else (x0, x1)
+        u_mid = (u0 + u1) / 2.0
+        ttex = tex or EDGE_TEX
+        bucket = 'world' if solid else 'detail'
+        if tie:
+            _emit_beam(bucket, axis, u0, z_bot, u1, z_bot, v0, v1, beam_h, ttex)
+        if z_top > z_bot + beam_h + 0.01:
+            _emit_beam(bucket, axis, u0, z_bot, u_mid, z_top - beam_h, v0, v1, beam_h, ttex)
+            _emit_beam(bucket, axis, u_mid, z_top - beam_h, u1, z_bot, v0, v1, beam_h, ttex)
+            if tie and z_top - z_bot >= beam_h * 2 + 16:
+                kw = beam_h / 2.0
+                _emit_beam(bucket, axis, u_mid - kw, z_bot + beam_h, u_mid + kw, z_bot + beam_h, v0, v1,
+                           z_top - z_bot - beam_h * 2, ttex)
+        if knee > 0:
+            _emit_beam(bucket, axis, u0, z_bot - knee, u0 + knee, z_bot, v0, v1, beam_h, ttex,
+                       cap_hi=z_bot, omit_hi=True)
+            _emit_beam(bucket, axis, u1 - knee, z_bot, u1, z_bot - knee, v0, v1, beam_h, ttex,
+                       cap_hi=z_bot, omit_lo=True)
+
+    for rr, side, z0, z1, top_depth, taper, tex, solid in (BUTTRESSES if 'BUTTRESSES' in globals() else []):
+        x0, y0, x1, y1 = rr
+        mx, my = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+        axis = 'x' if side in ('-x', '+x') else 'y'
+        h = (1, 0, 0) if axis == 'x' else (0, 1, 0)
+        sg = 1 if side in ('-x', '-y') else -1
+        depth = (x1 - x0) if axis == 'x' else (y1 - y0)
+        wall_u = x0 if side == '-x' else x1 if side == '+x' else y0 if side == '-y' else y1
+        d_bot = depth if taper == 'top' else top_depth
+        d_top = top_depth if taper == 'top' else depth
+        dd = d_bot - d_top
+        dz = z1 - z0
+        th = _probe_theme(mx + sg * h[0] * depth, my + sg * h[1] * depth, z0, z1, 'room')
+        btex = tex or textures('wall', th, 'wall')[2]
+        anc = wall_anchor(th) % WALL_PERIOD.get(zone(th), 128)
+        front_n = (sg * dz * h[0], sg * dz * h[1], dd)
+        L = math.hypot(dd, dz)
+        U_f = (0, 1, 0) if axis == 'x' else (1, 0, 0)
+        V_f = (sg * dd * h[0] / L, sg * dd * h[1] / L, -dz / L)
+        front_p = (wall_u + sg * d_bot, y0, z0) if axis == 'x' else (x0, wall_u + sg * d_bot, z0)
+        back_p = (wall_u, y0, z0) if axis == 'x' else (x0, wall_u, z0)
+        voff_f = (anc - (front_p[0] * V_f[0] + front_p[1] * V_f[1] + front_p[2] * V_f[2])) % 128
+        fs = [
+            vface(front_n, front_p, btex, U_f, 0, V_f, voff_f, 1, 1),
+            sface((-sg * h[0], -sg * h[1], 0), back_p, btex, 0, anc),
+        ]
+        if d_bot > 0.01:
+            fs.append(sface((0, 0, -1), back_p, btex, 0, 0))
+        if d_top > 0.01:
+            fs.append(sface((0, 0, 1), (back_p[0], back_p[1], z1), btex, 0, 0))
+        if axis == 'x':
+            fs.append(sface((0, -1, 0), (x0, y0, z0), btex, 0, anc))
+            fs.append(sface((0, 1, 0), (x0, y1, z0), btex, 0, anc))
+        else:
+            fs.append(sface((-1, 0, 0), (x0, y0, z0), btex, 0, anc))
+            fs.append(sface((1, 0, 0), (x1, y0, z0), btex, 0, anc))
+        EXTRA['world' if solid else 'detail'].append('{\n' + '\n'.join(fs) + '\n}')
+
+    for ax0, ay0, ax1, ay1, width, z0, z1, base, thick in (DIAG_RAMPS if 'DIAG_RAMPS' in globals() else []):
+        dx, dy = ax1 - ax0, ay1 - ay0
+        run = math.hypot(dx, dy)
+        rise = z1 - z0
+        fx, fy = dx / run, dy / run
+        lx, ly = -fy, fx
+        hw = width / 2.0
+        mx, my = (ax0 + ax1) / 2.0, (ay0 + ay1) / 2.0
+        th = _probe_theme(mx, my, z0, z1 + 64, 'room')
+        flr = textures('wall', th, 'wall')[0]
+        side = textures('ledge', th, None)[2]
+        side_anc = wall_anchor(th) % WALL_PERIOD.get(zone(th), 128)
+        L = math.hypot(run, rise)
+        top_n = (-rise * fx, -rise * fy, run)
+        U_top = (fx * run / L, fy * run / L, rise / L)
+        V_top = (lx, ly, 0.0)
+        z_base = z0 if base is None else base
+        p_r = (ax0 - lx * hw, ay0 - ly * hw, z0)
+        p_l = (ax0 + lx * hw, ay0 + ly * hw, z0)
+        fs = [
+            vface(top_n, (ax0, ay0, z0), flr, U_top, -(ax0 * U_top[0] + ay0 * U_top[1] + z0 * U_top[2]),
+                  V_top, -(ax0 * lx + ay0 * ly), 1, 1),
+            vface((fx, fy, 0), (ax1, ay1, z0), side, (lx, ly, 0), -(ax1 * lx + ay1 * ly) % 64, (0, 0, -1), side_anc, 1, 1),
+            vface((-lx, -ly, 0), p_r, side, (fx, fy, 0), -(p_r[0] * fx + p_r[1] * fy) % 64, (0, 0, -1), side_anc, 1, 1),
+            vface((lx, ly, 0), p_l, side, (-fx, -fy, 0), (p_l[0] * fx + p_l[1] * fy) % 64, (0, 0, -1), side_anc, 1, 1),
+        ]
+        if thick is not None:
+            fs.append(vface((-top_n[0], -top_n[1], -top_n[2]), (ax0, ay0, z0 - thick), flr,
+                            U_top, 0, V_top, 0, 1, 1))
+            fs.append(vface((-fx, -fy, 0), (ax0, ay0, z0), side, (-lx, -ly, 0), 0, (0, 0, -1), side_anc, 1, 1))
+            if base is not None:
+                fs.append(sface((0, 0, -1), (ax0, ay0, z_base), flr, 0, 0))
+        else:
+            fs.append(sface((0, 0, -1), (ax0, ay0, z_base), flr, 0, 0))
+            if z_base < z0 - 0.01:
+                fs.append(vface((-fx, -fy, 0), (ax0, ay0, z0), side, (-lx, -ly, 0), 0, (0, 0, -1), side_anc, 1, 1))
+        EXTRA['skin'].append('{\n' + '\n'.join(fs) + '\n}')
 
 
 def _merge(cs, facemap):
@@ -839,10 +1121,17 @@ def write_map(path):
 
 
 def dump(path):
+    pgroups = [PRISM_META[k].get('group') if 'PRISM_META' in globals() and k < len(PRISM_META) else None
+               for k in range(len(PRISMS))]
     json.dump({'C': C, 'XMIN': XMIN, 'YMIN': YMIN, 'NX': NX, 'NY': NY, 'BOT': BOT, 'TOP': TOP,
                'cols': [[[[a, b, m] for a, b, m in cols[i][j]] for j in range(NY)] for i in range(NX)],
                'theme': theme, 'feet': stair_feet, 'spawns': spawns, 'team_spawns': team_spawns, 'perches': perches, 'items': items, 'lights': lights, 'labels': labels,
                'teleports': teleports, 'liquids': liquids, 'decals': decals, 'ramps': RAMPS, 'prisms': PRISMS,
+               'prism_groups': pgroups,
+               'sloped_ceils': SLOPED_CEILS if 'SLOPED_CEILS' in globals() else [],
+               'trusses': TRUSSES if 'TRUSSES' in globals() else [],
+               'buttresses': BUTTRESSES if 'BUTTRESSES' in globals() else [],
+               'diag_ramps': DIAG_RAMPS if 'DIAG_RAMPS' in globals() else [],
                'pushes': [(r, z, dx, dy, dz, 90) for r, z, dx, dy, dz, s, a in pushes]}, open(path, 'w'))
 
 
