@@ -169,16 +169,17 @@ The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorl
 
 ### Profiling Your Favourite Maps (`.bsp`)
 
-[`qmap/vprofile.py`](qmap/vprofile.py), [`qmap/ctfprofile.py`](qmap/ctfprofile.py), and [`qmap/itemprofile.py`](qmap/itemprofile.py) all work directly on any compiled Quake 1 / QuakeWorld **BSP29** file — you don't need `.map` source. Point your agent at your local copies of the maps your group loves (or hates):
+[`qmap/vprofile.py`](qmap/vprofile.py), [`qmap/ctfprofile.py`](qmap/ctfprofile.py), [`qmap/combatprofile.py`](qmap/combatprofile.py), [`qmap/itemprofile.py`](qmap/itemprofile.py), and [`qmap/trafficprofile.py`](qmap/trafficprofile.py) all work directly on any compiled Quake 1 / QuakeWorld **BSP29** file — you don't need `.map` source. Point your agent at your local copies of the maps your group loves (or hates):
 
 - **Verticality & travel sizing (`vprofile.py`)** — Measure `travel_median`, `travel_p90`, effective levels, overlooks, route height change, and angled walls on your reference pool to calibrate sizing and verticality targets for your mode (supports both `--ref duel` and `--ref large`).
 - **CTF route independence & hook/walk travel (`ctfprofile.py`)** — Measure bidirectional flag-to-flag time with hook off (walk/jump/tele/pad/swim) and hook on (grapple swings/climbs), count visually independent (LOS-separated) midfield routes, flag single-vantage center chokes, and check flag-room exits and sightlines (classic Threewave benchmarks in `gallery/profiles/ctf_refs.json`).
+- **3D combat exposure, overlook asymmetry & disengage (`combatprofile.py`)** — Measure exact 3D hull-0 sightlines across all azimuths/elevations, spot uncountered kill boxes vs. oppressive perches, and compute time-to-cover disengage calibrated to 15 classic QW maps (`gallery/profiles/combat_refs.json`), with floor-sliced PNG heatmaps and `--diff` build comparisons (see [`qmap/COMBATPROFILE.md`](qmap/COMBATPROFILE.md)).
 - **Item economy (`itemprofile.py`)** — Inspect embedded inventories, directed RL/LG/armor/MH route matrices, and pickup layouts across your favourite TDM/FFA maps, or test hypothetical moves on your own builds with `--move` (see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md)).
-- **Topology traffic (`trafficprofile.py`)** — Inspect mode-specific route concentration, predicted dead wings and overloaded-choke candidates with floor-sliced figures and build diffs. Compare against alive MVD occupancy using `demos/traffic.py`; the [measured validation](gallery/traffic/VALIDATION.md) shows weak/mixed predictive agreement, not a reliable balance gate (see [`qmap/TRAFFICPROFILE.md`](qmap/TRAFFICPROFILE.md)).
+- **Topology traffic (`trafficprofile.py`)** — Inspect mode-specific route concentration, predicted dead wings and overloaded-choke candidates with floor-sliced figures and build diffs. Compare against alive MVD occupancy using [`demos/traffic.py`](demos/traffic.py); the [measured validation](gallery/traffic/VALIDATION.md) shows weak/mixed predictive agreement, not a reliable balance gate (see [`qmap/TRAFFICPROFILE.md`](qmap/TRAFFICPROFILE.md)).
 
 ### Analyzing Your Group's Match Demos (`.mvd`)
 
-The [`demos/`](demos) folder provides a minimal QuakeWorld MVD parser ([`demos/mvd.py`](demos/mvd.py)) plus working analyzers for Clan Arena ([`demos/ca_run.py`](demos/ca_run.py)), CTF ([`demos/ctf_run.py`](demos/ctf_run.py)), and in-play movement verticality ([`demos/vert.py`](demos/vert.py)):
+The [`demos/`](demos) folder provides a minimal QuakeWorld MVD parser ([`demos/mvd.py`](demos/mvd.py)) plus working analyzers for Clan Arena ([`demos/ca_run.py`](demos/ca_run.py)), CTF ([`demos/ctf_run.py`](demos/ctf_run.py)), in-play movement verticality ([`demos/vert.py`](demos/vert.py)), and alive player-time occupancy vs. topology traffic ([`demos/traffic.py`](demos/traffic.py)):
 
 - **What you get**: top-down heatmaps of player positions, kill lines by weapon, round lengths, time to first contact, 1vX endgame share, flag-carry paths, carrier pace and capture conversion, death zones, and in-play floor height change per 1,000 units (`floor_change_per_1000` and `airborne` share).
 - **Best way to use them**: `ca_run.py` and `ctf_run.py` are **reference scripts** written around the original group's KTX demo filenames and directory layout rather than turn-key CLIs (and `mvd.py` expects standard short/8 coordinates). Drop a folder of your group's `.mvd` recordings into your workspace and ask your AI agent to run or adapt the scripts for your filenames, server mod, and questions — both on classic maps before designing and on your own custom maps after playtest nights.
@@ -203,11 +204,11 @@ qmap-ai-toolkit/
 ├── VERSION           Single source of truth for the toolkit version (SemVer)
 ├── CHANGES.md        Release history
 ├── template/         Clean starting point for a new map (builds as-is into a small demo map)
-├── qmap/             Shared checks, spatial/verticality/item analytics, renderer, texture & WAD tools
+├── qmap/             Shared checks, verticality/combat/traffic/item analytics, renderer, texture lint & WAD tools
 ├── examples/         Four finished maps that rebuild byte-identical from source
-├── gallery/          Plans, preview renders, height & CTF benchmarks, and item-placement reference study
-├── demos/            QuakeWorld MVD demo parser and match / movement-verticality analysis
-└── tests/            Self-contained regression test suite (stdlib + NumPy, no qbsp required)
+├── gallery/          Plans, preview renders, height/CTF/combat benchmarks, item study, and traffic validation
+├── demos/            QuakeWorld MVD demo parser and match / verticality / occupancy analysis
+└── tests/            Self-contained regression test suite (stdlib + NumPy + Pillow; full suite adds Numba/SciPy/Matplotlib)
 ```
 
 ### `template/` — Clean Starting Point for Each Map
@@ -221,8 +222,8 @@ A plain-Python map generator split into small composable files that `build.sh` c
 | `_itemh.py`, `_items.py` | Item placement helper and pickup list |
 | `_out.py` | `.map` + `.json` writer with room-facing per-face texturing, wall bands (kickplate / wall / fullbright light strip / cornice / overhang architrave), Valve 220 texture axes on prisms, sloped ramp bands, and 16-unit floor minlight skins |
 | `texgen_blockout.py` | Eight colour-coded blockout zone textures with 32/64/128-unit height and grid marks so layouts are judged purely as layouts |
-| `build.sh` | End-to-end pipeline: generator → `qbsp` → `vis` → `light` → `check.py` → `vprofile.py --check --targets` |
-| `plan.py`, `views.py` | Auto-level top-down floor plan and software-rendered preview sheet with ezQuake-calibrated brightness readouts |
+| `build.sh` | End-to-end pipeline: generator → `qbsp` → `vis` → `light` → `check.py` → `vprofile.py --check --targets` (plus optional `TEXCHECK=1` texture lint) |
+| `plan.py`, `views.py` | Auto-level top-down floor plan and software-rendered preview sheet (RGB `.lit`, ezQuake calibration, camera safety, `--before`/`--previous` comparisons) |
 
 Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation about origin), and `'mirror'` (mirror across `x = 0`, keeping north = north for both teams).
 
@@ -261,8 +262,8 @@ Each folder rebuilds **byte-identical** `.map` source from this repository — u
 
 ### `gallery/` & `demos/`
 
-- **`gallery/`** — Top-down plans and preview contact sheets for all nine maps (`ca_agora`, `ca_vigil`, `ca_crucible`, `relay`, `ca_cistern`, `ctf_bastion`, `ca_lyceum`, `ctf_circuit`, `ctf_strata`) documented in [`gallery/GALLERY.md`](gallery/GALLERY.md), plus the compact/large verticality and classic CTF benchmarks (`gallery/profiles/`) and five-classic item-placement survey (`gallery/items/`).
-- **`demos/`** — Minimal QuakeWorld MVD reader (`mvd.py`), Clan Arena (`ca_run.py`) and CTF (`ctf_run.py`) analysis scripts, and `vert.py` for measuring in-play floor height change per 1,000 units travelled and airborne share.
+- **`gallery/`** — Top-down plans and preview contact sheets for all nine maps (`ca_agora`, `ca_vigil`, `ca_crucible`, `relay`, `ca_cistern`, `ctf_bastion`, `ca_lyceum`, `ctf_circuit`, `ctf_strata`) documented in [`gallery/GALLERY.md`](gallery/GALLERY.md), plus the compact/large verticality, classic CTF, and 15-classic combat benchmarks (`gallery/profiles/`), five-classic item-placement survey (`gallery/items/`), and MVD traffic-correlation validation (`gallery/traffic/`).
+- **`demos/`** — Minimal QuakeWorld MVD reader (`mvd.py`), Clan Arena (`ca_run.py`) and CTF (`ctf_run.py`) analysis scripts, `vert.py` for measuring in-play floor height change per 1,000 units travelled and airborne share, and `traffic.py` for comparing topology traffic predictions against alive in-play player-seconds.
 
 ---
 
@@ -288,7 +289,7 @@ Each folder rebuilds **byte-identical** `.map` source from this repository — u
 
 Normally your AI agent runs these commands directly using [`GUIDE.md`](GUIDE.md). If you'd like to verify your own environment, run the regression suite, or build the template demo by hand:
 
-**Run the regression tests** (Python 3 + NumPy only — no `ericw-tools` required):
+**Run the regression tests** (Python 3 + NumPy + Pillow; install Numba, SciPy, and Matplotlib to run the full suite without skips — no `ericw-tools` required):
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -317,7 +318,7 @@ See [`GUIDE.md` Section 1](GUIDE.md#1-whats-in-the-box) and [Section 13](GUIDE.m
 Starting with **`4.0.0`**, `qmap-ai-toolkit` follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`, git tags `vMAJOR.MINOR.PATCH`):
 
 - **[`VERSION`](VERSION)** at the repository root is the single source of truth for the toolkit version.
-- Documentation headers (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`) and `template/` file banners intentionally omit hardcoded release numbers so they never drift out of sync.
+- Documentation headers (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`, `qmap/COMBATPROFILE.md`, `qmap/TRAFFICPROFILE.md`) and `template/` file banners intentionally omit hardcoded release numbers so they never drift out of sync.
 - Historical releases `v1` through `v3.7` remain as originally tagged; see **[`CHANGES.md`](CHANGES.md)** for the complete changelog.
 
 ---

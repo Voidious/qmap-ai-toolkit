@@ -123,3 +123,8 @@ hook (`1.0 / 1.16 / 1.50×` walk, `1.0 / 1.14 / 1.43×` hook). Full-scale playab
 (`1.1–1.5×` speedup; uncalibrated `650 u/s` pull + `0.35 s` latch model), and real multi-level
 verticality (`eff_levels 4.7–6.0`, `route_vert 127–207`). See [`GUIDE.md` Section 3](../GUIDE.md#3-design-fresh-takes-on-classics)
 (*CTF layout & route structure*).
+
+### Classic combat & traffic references (`profiles/combat_refs.json`, `traffic/`)
+
+- **3D combat exposure, overlook asymmetry & disengage (`profiles/combat_refs.json`)**: calibrated across all 15 classic QuakeWorld reference maps (the 5 compact duel classics and 10 larger classics above) via `qmap/combatprofile.py`; see [`qmap/COMBATPROFILE.md`](../qmap/COMBATPROFILE.md) for healthy/extreme reference bands and hotspot ceilings.
+- **Topology traffic vs. human MVD occupancy (`traffic/`)**: aggregate rank-correlation study across 38 checked recordings (40 candidates) on `dm6`, `ztndm3`, `ca_agora`, and `ctf1` in [`traffic/VALIDATION.md`](traffic/VALIDATION.md) and [`traffic/reference.json`](traffic/reference.json).

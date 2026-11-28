@@ -16,7 +16,7 @@ scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 
 - **Unit tests**: Python 3 stdlib + `numpy` + `pillow` (renderer tests). `collide_cmp.py`
   needs only stdlib + `numpy`. No `ericw-tools` or external `.bsp` files are required for tests.
-- **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `trafficprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
+- **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `combatprofile.py`, `trafficprofile.py`, `itemprofile.py`, `texcheck.py`, `render.py`, `view_sheet.py`, `section.py`,
   `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
   `scipy`, `matplotlib`, `numba`.
   - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py` / `qmap/trafficprofile.py`, which import it) requires
@@ -45,7 +45,7 @@ python3 -m unittest discover -s tests -v
 
 A change isn't done until the full `tests/` suite passes. Check the test output for skipped
 `numba` tests whenever your change touches `qmap/vprofile.py`, `qmap/ctfprofile.py`,
-`qmap/combatprofile.py`, or `qmap/itemprofile.py`.
+`qmap/combatprofile.py`, `qmap/trafficprofile.py`, or `qmap/itemprofile.py`.
 
 When changing `template/` or the compilation/check pipeline (`qmap/check.py`, `qmap/vprofile.py`,
 `qmap/makewad.py`, `qmap/render.py`), also run an end-to-end `template/` smoke build if `ERICW`
@@ -112,8 +112,8 @@ surrounding file and keep diffs clean and scoped.
 - **Zero third-party or id Software assets**: never commit third-party or id Software `.bsp`
   files, `.wad` files, textures, or map sources. All textures are synthesized procedurally from
   code and quantized to `qmap/quake_palette.lmp` (LibreQuake, BSD-3-Clause; keep
-  `qmap/quake_palette.LICENSE.txt`). Reference benchmarks in `gallery/profiles/` and
-  `gallery/items/` store aggregate measurement JSON/tables only -- never redistribute reference
+  `qmap/quake_palette.LICENSE.txt`). Reference benchmarks in `gallery/profiles/`,
+  `gallery/items/`, and `gallery/traffic/` store aggregate measurement JSON/tables only -- never redistribute reference
   BSPs.
 - **Keep `examples/` reproducible**: `examples/ca_lyceum`, `examples/ctf_circuit`,
   `examples/ctf_strata`, and `examples/ctf_bastion` are frozen reference snapshots that rebuild
@@ -137,7 +137,7 @@ surrounding file and keep diffs clean and scoped.
 | `GUIDE.md` | End-to-end map-making field guide (process, design, verticality, sizing, item economy, gotchas). |
 | `VERSION` | Single source of truth for toolkit SemVer (`MAJOR.MINOR.PATCH`). |
 | `CHANGES.md` | Release changelog (top heading must match `VERSION`). |
-| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality, CTF & combat benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`, `profiles/combat_refs.json`), and item-placement study (`items/`). |
+| `gallery/` | Plans and renders for the nine gallery maps (`GALLERY.md`), verticality, CTF & combat benchmarks (`profiles/profiles.json`, `profiles/large_refs.json`, `profiles/ctf_refs.json`, `profiles/combat_refs.json`), item-placement study (`items/`), and traffic MVD validation (`traffic/`). |
 | `examples/` | Four frozen, reproducible reference maps (`ca_lyceum`, `ctf_circuit`, `ctf_strata`, `ctf_bastion`). |
 
 ### `template/` -- starting point for each new map
@@ -149,7 +149,7 @@ surrounding file and keep diffs clean and scoped.
 | `_itemh.py`, `_items.py` | Pickup placement helper and item list. |
 | `_out.py` | `.map` + `.json` writer: per-face texturing, wall bands, Valve 220 axes on prisms, sloped ramp bands, and 16-unit floor minlight skins. |
 | `texgen_blockout.py` | Procedural zone-coloured blockout textures with 32/64/128-unit height marks. |
-| `build.sh` | Concatenates `_core.._out` -> `gen_map.py` -> `qbsp` -> `vis` -> `light` -> `check.py` -> `vprofile.py --check --targets`. |
+| `build.sh` | Concatenates `_core.._out` -> `gen_map.py` -> `qbsp` -> `vis` -> `light` -> `check.py` -> `vprofile.py --check --targets` (plus optional `TEXCHECK=1` `texcheck.py` lint). |
 | `plan.py`, `views.py` | Top-down multi-level floor plan and software-rendered preview sheet with ezQuake brightness readouts. |
 
 ### `qmap/` -- shared verification, analytics, rendering & texture tools
@@ -191,10 +191,8 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
 
 - `tests/test_texcheck.py` -- texture transforms, course/seam/portal phase, WAD/source parsing,
   sky overlap, dark compiled floors/player clearance, CLI contracts, and template anchor consistency.
-
 - `tests/test_render.py` -- synthetic BSP29/.lit parsing, RGB normalization and lightmap
   response, liquid UVs, fullbrights, camera solidity/near-plane intersections, and paired sheets.
-
 - `tests/test_checks.py` -- `check.py` (prism separation, blind pockets, `exec()` globals
   compatibility, docstring coverage), `gallery/profiles/large_refs.json` invariants, and
   `numba`-gated `vprofile.py` checks (synthetic clipnode passage width, real-hull blind pockets,
