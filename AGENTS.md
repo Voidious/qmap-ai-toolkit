@@ -16,15 +16,17 @@ scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 
 - **Unit tests**: Python 3 stdlib + `numpy` + `pillow` (renderer tests). `collide_cmp.py`
   needs only stdlib + `numpy`. No `ericw-tools` or external `.bsp` files are required for tests.
-- **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
+- **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `trafficprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
   `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
   `scipy`, `matplotlib`, `numba`.
-  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py`, which import it) requires
+  - `qmap/vprofile.py` (and `qmap/ctfprofile.py` / `qmap/combatprofile.py` / `qmap/itemprofile.py` / `qmap/trafficprofile.py`, which import it) requires
     `numba`. Without `numba`, the `TestVprofilePassageWidth` tests in `tests/test_checks.py`,
     `TestCtfRouteIndependence` tests in `tests/test_ctfprofile.py`, and
-    `TestCombatProfile` tests in `tests/test_combatprofile.py` are skipped rather than failing.
+    `TestCombatProfile` tests in `tests/test_combatprofile.py` and traffic tests in
+    `tests/test_trafficprofile.py` are skipped rather than failing. Traffic analysis also
+    needs SciPy, and PNG tests require Matplotlib (the full toolkit environment).
     Run in a Python environment with `numba` installed whenever you touch `vprofile.py`,
-    `ctfprofile.py`, `combatprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
+    `ctfprofile.py`, `combatprofile.py`, `trafficprofile.py`, `itemprofile.py`, or `gallery/profiles/`.
 - **Map compilation** (only needed to smoke-test `template/build.sh` or rebuild `examples/`):
   [`ericw-tools`](https://github.com/ericwa/ericw-tools) built from source with `ERICW` pointing
   to the build directory containing `qbsp/qbsp`, `vis/vis`, and `light/light`, plus `bash`. On
@@ -81,7 +83,7 @@ surrounding file and keep diffs clean and scoped.
   - Root `VERSION` holds 3-part SemVer (`MAJOR.MINOR.PATCH`, trailing newline required).
   - The top heading in `CHANGES.md` must match `VERSION` (`# v<VERSION> ...`). Keep ticket IDs
     out of `CHANGES.md` bullets.
-  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`, `qmap/COMBATPROFILE.md`)
+  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`, `qmap/TEXCHECK.md`, `qmap/COMBATPROFILE.md`, `qmap/TRAFFICPROFILE.md`)
     and `template/` file banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
     hardcode release numbers or the old name `qmap-toolkit`. `tests/test_version.py` enforces
     all of these plus valid relative links/anchors in `README.md`.
@@ -158,6 +160,7 @@ surrounding file and keep diffs clean and scoped.
 | `vprofile.py` | Compiled BSP29 player-hull check (`--check`: traps, narrow passages `--min-passage`, blind pockets, unreachable items), verticality benchmark (`--targets --ref duel\|large`), and travel-distance sizing (`numba` required). |
 | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag routes, LOS-separated midfield lanes, single-vantage choke detection, flag exits/sightlines, and two-panel PNG plots (`numba` required). |
 | `combatprofile.py`, `COMBATPROFILE.md` | Compiled BSP29 3D exposure, overlook asymmetry (kill boxes & oppressive perches), and disengage / time-to-cover analyzer calibrated against 15 classic QW maps, with floor-sliced PNG heatmaps and `--diff` mode (`numba` required). |
+| `trafficprofile.py`, `TRAFFICPROFILE.md` | Directed demand-weighted shortest-path betweenness, predicted dead wings and overloaded-choke candidates, floor-sliced PNGs and build diffs; human-demo correlation evidence in `gallery/traffic/`. |
 | `collide_cmp.py` | Dual-hull (`solid` player hull + hull-0 `proj`/`sky`/`water`/`slime`/`lava`) voxel comparator auditing visual-pass collision diffs (proving zero change on texture-only builds or verifying only declared decorative edits). |
 | `texcheck.py`, `TEXCHECK.md` | Source/BSP texture alignment and visual hazards: courses, seams, portals, WADs, illusionary contents, sky overlaps, and dark standable floors; opt-in `TEXCHECK=1` build integration. |
 | `pick_spawns.py`, `pick_spawns_sym.py` | Spawn solvers maximizing spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror`). |
@@ -179,6 +182,7 @@ surrounding file and keep diffs clean and scoped.
 | --- | --- |
 | `mvd.py` | Minimal QuakeWorld `.mvd` reader (standard short/8 coordinates, player positions, frags, flag prints). |
 | `vert.py` | In-play movement verticality (`floor_change_per_1000`, `airborne` share) from parsed demos. |
+| `traffic.py` | Alive player-time occupancy, complete play windows, bounded floor projection and per-demo/pooled rank comparison with topology traffic. |
 | `ca_run.py`, `ctf_run.py` | Reference Clan Arena and CTF match analysis scripts (written around KTX demo naming; meant to be adapted per group). |
 
 ## Tests
@@ -202,6 +206,9 @@ Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
   `--overlook-dz`, sampled-representative bucketing, overlook asymmetry kill box vs. perch,
   regional overlooker disengage & unoverlooked shelter, floor slicing, diff noise floors &
   added/removed floor overlays, JSON/PNG CLI outputs).
+- `tests/test_trafficprofile.py` -- tied shortest-path multiplicity, directed missing demand,
+  log-count overflow, mode families/base exits, connected floor regions, source-safe JSON/PNG
+  diffs, no-demand coverage, and synthetic MVD windows/occupancy/correlation/CLI behavior.
 - `tests/test_ctfprofile.py` -- `gallery/profiles/ctf_refs.json` schema & classic-only invariant,
   plus `numba`-gated `ctfprofile.py` checks (single open center vs. walled side tunnels, off-route
   vantage-grid chokes and route-1 pre-filtering, geodesic U-shape progress, flag exits, walk-time
