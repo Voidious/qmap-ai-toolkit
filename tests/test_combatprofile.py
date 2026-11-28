@@ -20,6 +20,7 @@ if str(QMAP_DIR) not in sys.path:
     sys.path.insert(0, str(QMAP_DIR))
 
 HAS_NUMBA = importlib.util.find_spec('numba') is not None
+HAS_MATPLOTLIB = importlib.util.find_spec('matplotlib') is not None
 if HAS_NUMBA:
     import numpy as np  # noqa: E402
     import combatprofile as cp  # noqa: E402
@@ -390,13 +391,14 @@ class TestCombatProfile(unittest.TestCase):
         self.assertLess(diff['deltas']['exposure_p90']['delta'], 0.0)
         self.assertIn('combat diff: arena_b1 -> arena_b2', cp.format_diff_report(diff))
 
-        # Verify both single-map and diff PNG heatmaps render cleanly
-        single_png = self.dir / 'arena_b2.combat.png'
-        diff_png = self.dir / 'arena_diff.png'
-        cp.draw(b2, str(single_png))
-        cp.draw_diff(b1, b2, diff, str(diff_png))
-        self.assertGreater(single_png.stat().st_size, 5000)
-        self.assertGreater(diff_png.stat().st_size, 5000)
+        # Verify both single-map and diff PNG heatmaps render cleanly when matplotlib is available
+        if HAS_MATPLOTLIB:
+            single_png = self.dir / 'arena_b2.combat.png'
+            diff_png = self.dir / 'arena_diff.png'
+            cp.draw(b2, str(single_png))
+            cp.draw_diff(b1, b2, diff, str(diff_png))
+            self.assertGreater(single_png.stat().st_size, 5000)
+            self.assertGreater(diff_png.stat().st_size, 5000)
 
     def test_corridor_corner_credits_active_watcher_los_break(self):
         # Symmetric 128u-wide L-corridor (two equal wings separated by a solid 384x384 block):
@@ -408,10 +410,11 @@ class TestCombatProfile(unittest.TestCase):
         self.assertLess(res['metrics']['disengage_p50_s'], 1.2)
         self.assertLess(res['metrics']['disengage_uncovered_share'], 0.25)
 
-        # Single-slice flat map still renders cleanly
-        png_path = self.dir / 'l_corridor.png'
-        cp.draw(res, str(png_path))
-        self.assertGreater(png_path.stat().st_size, 5000)
+        # Single-slice flat map still renders cleanly when matplotlib is available
+        if HAS_MATPLOTLIB:
+            png_path = self.dir / 'l_corridor.png'
+            cp.draw(res, str(png_path))
+            self.assertGreater(png_path.stat().st_size, 5000)
 
     def test_disengage_requires_regional_overlook_cover_and_unoverlooked_shelter(self):
         # 1. Single-point overlooker LOS break behind a narrow obstacle must NOT count as cover
@@ -631,9 +634,10 @@ class TestCombatProfile(unittest.TestCase):
         r_flat = cp.combat_profile(str(flat_bsp), ref='duel')
         r_balc = cp.combat_profile(str(balc_bsp), ref='duel')
         diff = cp.compare_profiles(r_flat, r_balc, ref='duel')
-        out_png = self.dir / 'added_removed_diff.png'
-        cp.draw_diff(r_flat, r_balc, diff, str(out_png))
-        self.assertGreater(out_png.stat().st_size, 5000)
+        if HAS_MATPLOTLIB:
+            out_png = self.dir / 'added_removed_diff.png'
+            cp.draw_diff(r_flat, r_balc, diff, str(out_png))
+            self.assertGreater(out_png.stat().st_size, 5000)
 
     def test_max_sightline_capping_overlook_dz_cli_and_sampled_representatives(self):
         bsp_path = self.dir / 'balcony_opts.bsp'
@@ -697,27 +701,35 @@ class TestCombatProfile(unittest.TestCase):
 
         out_json = self.dir / 'single.json'
         out_png = self.dir / 'single.png'
+        single_args = [str(b1), '--ref', 'duel', '--json', str(out_json)]
+        if HAS_MATPLOTLIB:
+            single_args += ['--png', str(out_png)]
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = cp.main([str(b1), '--ref', 'duel', '--json', str(out_json), '--png', str(out_png)])
+            rc = cp.main(single_args)
         self.assertEqual(rc, 0)
         self.assertIn('combat profile of cli_b1', buf.getvalue())
         payload = json.loads(out_json.read_text(encoding='utf-8'))
         self.assertEqual(payload['map'], 'cli_b1')
         self.assertIn('metrics', payload)
-        self.assertGreater(out_png.stat().st_size, 5000)
+        if HAS_MATPLOTLIB:
+            self.assertGreater(out_png.stat().st_size, 5000)
 
         diff_json = self.dir / 'diff.json'
         diff_png = self.dir / 'diff.png'
+        diff_args = ['--diff', str(b1), str(b2), '--ref', 'all', '--json', str(diff_json)]
+        if HAS_MATPLOTLIB:
+            diff_args += ['--png', str(diff_png)]
         buf = io.StringIO()
         with redirect_stdout(buf):
-            rc = cp.main(['--diff', str(b1), str(b2), '--ref', 'all', '--json', str(diff_json), '--png', str(diff_png)])
+            rc = cp.main(diff_args)
         self.assertEqual(rc, 0)
         self.assertIn('combat diff: cli_b1 -> cli_b2', buf.getvalue())
         diff_payload = json.loads(diff_json.read_text(encoding='utf-8'))
         self.assertEqual(diff_payload['before_map'], 'cli_b1')
         self.assertEqual(diff_payload['after_map'], 'cli_b2')
-        self.assertGreater(diff_png.stat().st_size, 5000)
+        if HAS_MATPLOTLIB:
+            self.assertGreater(diff_png.stat().st_size, 5000)
 
         # Missing input exits 2 cleanly
         err = io.StringIO()
