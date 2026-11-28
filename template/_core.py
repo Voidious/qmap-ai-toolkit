@@ -718,24 +718,12 @@ def _add_prism(pts, z0, z1, kind=None, sym=True, meta=None):
     m0 = dict(meta or {})
     copies = [(pts, m0)]
     if symmetric(sym):
+        assert not m0.get('edge_uvs'), 'edge_uvs callers must emit symmetric copies explicitly'
         q = [sym_pt(x, y) for x, y in pts]
         m1 = dict(m0)
         if m1.get('group') is not None:
             m1['group'] = _next_group()
-        if SYM == 'rotate':
-            copies.append((q, m1))
-        else:
-            # Mirror reverses polygon vertex order to keep CCW winding; remap per-edge UV specs if any.
-            q_rev = q[::-1]
-            if m1.get('edge_uvs'):
-                n_ = len(pts)
-                remapped = {}
-                for k_orig, uv in m1['edge_uvs'].items():
-                    # Original edge k_orig: pts[k] -> pts[(k+1)%n] becomes q_rev[(n-2-k)%n] -> q_rev[(n-1-k)%n]
-                    k_new = (n_ - 2 - k_orig) % n_
-                    remapped[k_new] = uv
-                m1['edge_uvs'] = remapped
-            copies.append((q_rev, m1))
+        copies.append((q if SYM == 'rotate' else q[::-1], m1))
     for P, mp in copies:
         PRISMS.append((P, z0, z1, kind))
         PRISM_META.append(mp)
