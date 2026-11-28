@@ -21,6 +21,7 @@ it does not label all floor dead or claim the map passed. JSON includes every
 floor cell, endpoint projection, sampled pair, unreachable route and warning.
 Output paths cannot overwrite input BSPs/demos, and PNG/JSON paths must differ.
 Both CLIs create missing parent directories for their JSON and PNG outputs.
+Demo input validation completes before output parent directories are created.
 
 ## Movement and demand
 

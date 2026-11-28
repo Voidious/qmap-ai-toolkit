@@ -423,6 +423,25 @@ class TestDemoTraffic(unittest.TestCase):
             self.assertEqual(caught.exception.code, 2)
 
 
+    def test_rejected_demo_runs_do_not_create_output_parents(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            bsp, demo = directory / 'arena.bsp', directory / 'incomplete.mvd'
+            _write_synthetic_arena_bsp(bsp, with_balcony=False)
+            demo.write_bytes(struct.pack('<BBi', 100, 6, 0))
+            for name, options, reason in (('teams', ['--teams', 'red,,blue'], 'teams must be'),
+                                          ('windows', [], 'no complete match/round windows')):
+                with self.subTest(reason=name):
+                    parent = directory / name
+                    output, image = parent / 'json' / 'validation.json', parent / 'png' / 'validation.png'
+                    error = io.StringIO()
+                    with redirect_stderr(error), self.assertRaises(SystemExit) as caught:
+                        demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--json', str(output),
+                                           '--png', str(image)] + options)
+                    self.assertEqual(caught.exception.code, 2)
+                    self.assertIn(reason, error.getvalue())
+                    self.assertFalse(parent.exists())
+
     def test_case_insensitive_and_custom_teams_have_explicit_filter_coverage(self):
         report = dict(mode='tdm', cells=dict(points=[[8, 8, 0]], reachable=[True]))
         players = {0: dict(name='first', team=' Red '), 1: dict(name='second', team='BLUE'),
