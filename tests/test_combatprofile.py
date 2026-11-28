@@ -453,6 +453,27 @@ class TestCombatProfile(unittest.TestCase):
         self.assertAlmostEqual(float(d_dist2[0]), 32.0)
         self.assertEqual(int(d_reason2[0]), 5)
 
+        # 3. Shelter by climbing: when start node 0 is overlooked, climbing level with the shooters
+        #    (dom_obs[1] = -1, exposure <= shelter_area) while still seen by the overlooking ledge
+        #    must NOT count as shelter; node 2 breaks >= 50% of the overlooker region -> valid cover.
+        rep_w_cl = np.full(4, 30.0, np.float64)  # 4 * 30 * 256 = 30720 (< 64k shelter_area)
+        exposure_cl = np.array([30720.0, 50000.0, 50000.0], np.float64)
+        overlooked_cl = np.array([30720.0, 0.0, 0.0], np.float64)
+        dom_cl = np.array([0, -1, -1], np.int64)
+        pts_z_cl = np.array([0.0, 96.0, 96.0], np.float64)
+        sees_cl = np.array([
+            [1, 1, 1, 1],
+            [1, 1, 1, 1],  # climbed within 32u of ledge -> dom_obs=-1, but all 4 shooters still see it
+            [0, 0, 1, 1],  # broke LOS from 50% of overlooker region (2 of 4)
+        ], np.uint8)
+        d_dist3, d_reason3 = cp._compute_disengage(
+            indptr, indices, weights, exposure_cl, overlooked_cl, dom_cl,
+            sees_cl, rep_w_cl, np.ascontiguousarray(rep_pts[:, 2]), pts_z_cl,
+            reg_indptr, reg_indices, 64.0, 64000.0, 1536.0,
+        )
+        self.assertAlmostEqual(float(d_dist3[0]), 32.0)
+        self.assertEqual(int(d_reason3[0]), 5)
+
     def test_func_wall_submodel_blocks_hull0_sightlines(self):
         world_cover = self.dir / 'world_cover.bsp'
         fw_cover = self.dir / 'func_wall_cover.bsp'

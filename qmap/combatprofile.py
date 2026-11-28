@@ -374,6 +374,8 @@ def _compute_disengage(indptr, indices, weights, exposure_area, overlooked_by_ar
 
             if u != s:
                 broke = False
+                rem_dom_checked = False
+                rem_dom_ok = False
                 if (dom >= 0 and nd > 0
                         and overlooked_by_area[u] <= 0.5 * ov_s
                         and (exposure_area[u] <= ea * 1.15
@@ -383,10 +385,22 @@ def _compute_disengage(indptr, indices, weights, exposure_area, overlooked_by_ar
                         j = dom_idx[k]
                         if cell_sees[u, j] != 0:
                             rem_dom += rep_w[j]
-                    if rem_dom <= 0.5 * dom_w_tot:
+                    rem_dom_checked = True
+                    rem_dom_ok = (rem_dom <= 0.5 * dom_w_tot)
+                    if rem_dom_ok:
                         broke = True
                 cut = (ea > 0.0) and (exposure_area[u] <= exp_cut)
                 sheltered = (dom_obs[u] < 0) and (exposure_area[u] <= shelter_area)
+                if sheltered and dom >= 0 and nd > 0:
+                    if not rem_dom_checked:
+                        rem_dom = 0.0
+                        for k in range(nd):
+                            j = dom_idx[k]
+                            if cell_sees[u, j] != 0:
+                                rem_dom += rep_w[j]
+                        rem_dom_ok = (rem_dom <= 0.5 * dom_w_tot)
+                    if not rem_dom_ok:
+                        sheltered = False
                 if (not (broke or cut or sheltered)
                         and ea > 0.0
                         and exposure_area[u] <= ea * 1.15
@@ -695,8 +709,8 @@ REFERENCE_DUEL = {
     'killbox_share':              (0.061, 0.211, 0.300, 'down', 'floor share in kill boxes (high overlook + slow disengage)'),
     'perch_share':                (0.040, 0.074, 0.140, 'down', 'floor share on uncountered perches'),
     'disengage_p50_s':            (0.37,  0.50,  0.70,  'down', 'median disengage time to cover (s)'),
-    'disengage_p90_s':            (0.87,  1.25,  1.70,  'down', '90th-pct disengage time to cover (s)'),
-    'disengage_overlooked_p90_s': (0.82,  1.15,  1.55,  'down', '90th-pct disengage from overlooked floor (s)'),
+    'disengage_p90_s':            (0.89,  1.25,  1.70,  'down', '90th-pct disengage time to cover (s)'),
+    'disengage_overlooked_p90_s': (0.84,  1.16,  1.55,  'down', '90th-pct disengage from overlooked floor (s)'),
 }
 
 # Ten larger QW classics (skull, bravado, spinev2, ultrav, schloss, cmt4, dm3, e2m2tdm, cmt3, e1m2).
@@ -711,7 +725,7 @@ REFERENCE_LARGE = {
     'perch_share':                (0.014, 0.098, 0.160, 'down', 'floor share on uncountered perches'),
     'disengage_p50_s':            (0.38,  0.47,  0.68,  'down', 'median disengage time to cover (s)'),
     'disengage_p90_s':            (0.92,  1.38,  1.85,  'down', '90th-pct disengage time to cover (s)'),
-    'disengage_overlooked_p90_s': (0.73,  1.32,  1.75,  'down', '90th-pct disengage from overlooked floor (s)'),
+    'disengage_overlooked_p90_s': (0.73,  1.34,  1.75,  'down', '90th-pct disengage from overlooked floor (s)'),
 }
 
 REFERENCE_ALL = {

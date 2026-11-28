@@ -74,7 +74,7 @@
    "disengage_max_s": 4.51,
    "disengage_exposed_p50_s": 0.48,
    "disengage_exposed_p90_s": 1.16,
-   "disengage_overlooked_p90_s": 1.15,
+   "disengage_overlooked_p90_s": 1.16,
    "disengage_sheltered_share": 0.012,
    "disengage_uncovered_share": 0.0
   }
@@ -187,14 +187,14 @@
    "overlook_net_area_k_p95": 158.7,
    "killbox_share": 0.181,
    "perch_share": 0.049,
-   "disengage_p50_u": 139,
-   "disengage_p90_u": 279,
-   "disengage_p50_s": 0.43,
-   "disengage_p90_s": 0.87,
+   "disengage_p50_u": 141,
+   "disengage_p90_u": 284,
+   "disengage_p50_s": 0.44,
+   "disengage_p90_s": 0.89,
    "disengage_max_s": 3.1,
    "disengage_exposed_p50_s": 0.45,
-   "disengage_exposed_p90_s": 0.88,
-   "disengage_overlooked_p90_s": 0.82,
+   "disengage_exposed_p90_s": 0.89,
+   "disengage_overlooked_p90_s": 0.84,
    "disengage_sheltered_share": 0.027,
    "disengage_uncovered_share": 0.0
   }
@@ -508,13 +508,13 @@
    "killbox_share": 0.036,
    "perch_share": 0.035,
    "disengage_p50_u": 129,
-   "disengage_p90_u": 437,
+   "disengage_p90_u": 442,
    "disengage_p50_s": 0.4,
-   "disengage_p90_s": 1.36,
-   "disengage_max_s": 3.12,
+   "disengage_p90_s": 1.38,
+   "disengage_max_s": 3.49,
    "disengage_exposed_p50_s": 0.41,
-   "disengage_exposed_p90_s": 1.37,
-   "disengage_overlooked_p90_s": 1.32,
+   "disengage_exposed_p90_s": 1.39,
+   "disengage_overlooked_p90_s": 1.34,
    "disengage_sheltered_share": 0.015,
    "disengage_uncovered_share": 0.0
   }

@@ -46,7 +46,7 @@ All metrics are computed on every reachable 16-unit player-hull floor node (`eye
      - **Regional overlooker escape**: break hull-0 LOS from **`>= 50%`** of the dominant overlooker's high-ground region (active overlooking samples within `192u` horizontally and `<= 48u` vertically of the highest-threat vantage) **and** cut total `overlooked_by` area by **`>= 50%`**, without stepping into significantly higher exposure (`<= 1.15×`, or `<= 1.5×` when eliminating all overlookers completely),
      - **Exposure halving**: cut total visible-floor exposure area by **`>= 50%`**,
      - **Active-watcher break**: break LOS from **`>= 50%`** of the floor currently watching the starting cell without stepping into significantly higher total exposure (`<= 1.15×`) or newly overlooked ground (so turning a 90° corridor corner counts as real cover while open shooting galleries stay exposed), or
-     - **Sheltered cover**: reach un-overlooked floor (`dom_obs < 0`) with visible area `<= 64k` sq units (`--shelter-area-k`, roughly a `256×256` enclosed room, capped at 15% of map area on tiny synthetic maps).
+     - **Sheltered cover**: reach un-overlooked floor (`dom_obs < 0`) with visible area `<= 64k` sq units (`--shelter-area-k`, roughly a `256×256` enclosed room, capped at 15% of map area on tiny synthetic maps); when starting overlooked, reaching shelter also requires breaking LOS from `>= 50%` of the starting dominant overlooker region so climbing level with shooters in full view does not count as cover.
    - Cells that start un-overlooked and already see `<= shelter_area` count as already in cover (`0.0s`).
 
 ## Choosing `--ref` and Classic Reference Bands
@@ -70,8 +70,8 @@ Measured across all 15 classic QuakeWorld reference maps in `gallery/profiles/co
 | `killbox_share` (share) | `0.061..0.211` | `> 0.300` | `0.026..0.281` | `> 0.380` |
 | `perch_share` (share) | `0.040..0.074` | `> 0.140` | `0.014..0.098` | `> 0.160` |
 | `disengage_p50_s` (s) | `0.37..0.50` | `> 0.70` | `0.38..0.47` | `> 0.68` |
-| `disengage_p90_s` (s) | `0.87..1.25` | `> 1.70` | `0.92..1.38` | `> 1.85` |
-| `disengage_overlooked_p90_s` (s) | `0.82..1.15` | `> 1.55` | `0.73..1.32` | `> 1.75` |
+| `disengage_p90_s` (s) | `0.89..1.25` | `> 1.70` | `0.92..1.38` | `> 1.85` |
+| `disengage_overlooked_p90_s` (s) | `0.84..1.16` | `> 1.55` | `0.73..1.34` | `> 1.75` |
 
 ## Heatmaps and Diff Mode
 
