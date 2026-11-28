@@ -145,12 +145,6 @@ def rot(r):
     return (-x1, -y1, -x0, -y0) if SYM == 'rotate' else (-x1, y0, -x0, y1)
 
 
-def _side_rot(side):
-    """Symmetric copy of a cardinal side ('-x', '+x', '-y', '+y') using current SYM."""
-    return ({'-x': '+x', '+x': '-x', '-y': '+y', '+y': '-y'} if SYM == 'rotate' else
-            {'-x': '+x', '+x': '-x', '-y': '-y', '+y': '+y'})[side]
-
-
 SIDE_ROT = ({'-x': '+x', '+x': '-x', '-y': '+y', '+y': '-y'} if SYM == 'rotate' else
             {'-x': '+x', '+x': '-x', '-y': '-y', '+y': '+y'})
 
@@ -480,7 +474,7 @@ def terrace(r, h, side, z0=0, sym=True):
     """Broad wall-to-wall steps down from the edge `side` of a platform r of height h to floor z0
     (walk up from anywhere along that edge)."""
     if symmetric(sym):
-        terrace(rot(r), h, _side_rot(side), z0, sym=False)
+        terrace(rot(r), h, SIDE_ROT[side], z0, sym=False)
     for cc in range(1, (h - z0) // 16):
         s = 16 * cc
         rr = {'-x': (r[0] - s, r[1], r[0] - s + 16, r[3]), '+x': (r[2] + s - 16, r[1], r[2] + s, r[3]),
@@ -496,7 +490,7 @@ def pyramid(r, h, sides, z0=0, sym=True):
     """Broad steps down from a raised block on several sides; corners wrap, so each level
     is one continuous L-shaped step (walk up from anywhere along those sides)."""
     if symmetric(sym):
-        pyramid(rot(r), h, tuple(_side_rot(s) for s in sides), z0, sym=False)
+        pyramid(rot(r), h, tuple(SIDE_ROT[s] for s in sides), z0, sym=False)
     n = (h - z0) // 16
     x0, y0, x1, y1 = r
     ext = 16 * (n - 1)
@@ -967,7 +961,7 @@ def buttress(r, side, z0, z1, top_depth=0, taper='top', tex=None, solid=True, sy
     assert 0 <= top_depth < depth, f'buttress {r}: top_depth {top_depth} must be in [0, {depth})'
     copies = [(r, side)]
     if symmetric(sym):
-        copies.append((rot(r), _side_rot(side)))
+        copies.append((rot(r), SIDE_ROT[side]))
     for rr, sd in copies:
         BUTTRESSES.append((rr, sd, z0, z1, top_depth, taper, tex, bool(solid)))
         pipes.append((rr[0], rr[1], z0, rr[2], rr[3], z1))
@@ -1283,7 +1277,7 @@ def rotunda(cx, cy, radius, z0, z1, th, sides=12, angle0=None, openings=(), sky=
         s_ops = []
         for op in openings:
             a_ = op[0]
-            sa_ = _side_rot(a_) if isinstance(a_, str) else sym_ang(float(a_))
+            sa_ = SIDE_ROT[a_] if isinstance(a_, str) else sym_ang(float(a_))
             s_ops.append((sa_, *op[1:]))
         sa0 = None if angle0 is None else (
             (angle0 + 180.0) % 360.0 if SYM == 'rotate' else (180.0 - angle0) % 360.0
