@@ -362,6 +362,8 @@ def compare(before, after):
 
 
 def draw(report, destination, before=None, difference=None):
+    if before is not None and difference is None:
+        difference = compare(before, report)
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt

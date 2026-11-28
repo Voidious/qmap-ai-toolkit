@@ -109,6 +109,8 @@ use a common color scale and extent. Endpoint changes are reported explicitly:
 different demand, unresolved mappings or sampled physical pairs are not a
 geometry-only experiment; ID renaming alone does not change demand. Floor shifts across the
 4-unit quantization boundary appear as added/removed, not forced matches.
+Python callers may use `draw(after, destination, before=before)`; it computes
+the comparison when `difference` is omitted, with the same compatibility checks.
 
 ## Human MVD comparison
 

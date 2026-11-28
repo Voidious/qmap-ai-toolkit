@@ -252,6 +252,17 @@ class TestTraffic(unittest.TestCase):
             with self.assertRaises(ValueError):
                 traffic.traffic_profile(path, seed=-1)
 
+    def test_draw_computes_an_omitted_before_after_comparison(self):
+        report = dict(map='floor', mode='ca', sha256='0' * 64, settings={}, endpoints=[], pairs=[],
+                      cells=dict(points=[[8, 8, 0]], reachable=[True], route_share=[0.25]))
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / 'comparison.png'
+            traffic.draw(report, destination, before=report)
+            self.assertTrue(destination.read_bytes().startswith(b'\x89PNG'))
+            incompatible = dict(report, mode='ctf')
+            with self.assertRaisesRegex(ValueError, 'identical modes'):
+                traffic.draw(report, destination, before=incompatible)
+
     def test_no_floor_bsp_reports_missing_coverage_without_nan_or_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / 'solid.bsp'
