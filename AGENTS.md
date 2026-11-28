@@ -14,8 +14,8 @@ Instructions for coding agents working *in* the `qmap-ai-toolkit` repository.
 There is no `pyproject.toml`, packaging step, or virtual-env lockfile -- tools are plain Python 3
 scripts run directly from the repo (`python3 qmap/<tool>.py ...`).
 
-- **Unit tests & `collide_cmp.py`**: Python 3 stdlib + `numpy` (no `ericw-tools` or `.bsp` files
-  required).
+- **Unit tests**: Python 3 stdlib + `numpy` + `pillow` (renderer tests). `collide_cmp.py`
+  needs only stdlib + `numpy`. No `ericw-tools` or external `.bsp` files are required for tests.
 - **Full toolkit** (`vprofile.py`, `ctfprofile.py`, `itemprofile.py`, `render.py`, `section.py`,
   `iso.py`, `makewad.py`, `texgen*.py`, `plan.py`, `views.py`, `demos/`): `numpy`, `pillow`,
   `scipy`, `matplotlib`, `numba`.
@@ -79,8 +79,8 @@ surrounding file and keep diffs clean and scoped.
   - Root `VERSION` holds 3-part SemVer (`MAJOR.MINOR.PATCH`, trailing newline required).
   - The top heading in `CHANGES.md` must match `VERSION` (`# v<VERSION> ...`). Keep ticket IDs
     out of `CHANGES.md` bullets.
-  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`) and `template/` file
-    banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
+  - Top-level doc headings (`README.md`, `GUIDE.md`, `qmap/ITEMS.md`, `qmap/RENDERING.md`)
+    and `template/` file banners (`_core.py`, `_out.py`, `plan.py`, `texgen_blockout.py`, `views.py`) must not
     hardcode release numbers or the old name `qmap-toolkit`. `tests/test_version.py` enforces
     all of these plus valid relative links/anchors in `README.md`.
 - **CLI exit-code vs stdout conventions**:
@@ -162,7 +162,7 @@ surrounding file and keep diffs clean and scoped.
 | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map. |
 | `itemprofile.py`, `ITEMS.md` | BSP29 pickup inventory, directed RL/LG/armor/MH route matrices, trio diagnostics, and non-destructive `--move` evaluation. |
 | `itemcheck.py` | Offline verification of generated pickup coordinates against a captured MVDSV `edicts` dump. |
-| `render.py` | Software z-buffered BSP29 preview renderer (textures + compiled lightmaps, ezQuake-calibrated brightness). |
+| `render.py`, `view_sheet.py`, `RENDERING.md` | BSP29 previews with companion RGB lightmaps, ezQuake lighting controls, camera checks, and shared-camera before/after sheets. |
 | `section.py`, `iso.py` | Vertical slice diagrams and multi-height isometric cutaways from generator JSON. |
 | `makewad.py` | Packs palette-quantized PNGs (including `_fbr` fullbrights) into a Quake WAD2 using `quake_palette.lmp`. |
 | `fsq.py` | 3x3-tiled serpentine Floyd-Steinberg error-diffusion quantizer over Quake palette subsets. |
@@ -180,6 +180,9 @@ surrounding file and keep diffs clean and scoped.
 ## Tests
 
 Unit and regression tests live in `tests/` using Python's stdlib `unittest`:
+
+- `tests/test_render.py` -- synthetic BSP29/.lit parsing, RGB normalization and lightmap
+  response, liquid UVs, fullbrights, camera solidity/near-plane intersections, and paired sheets.
 
 - `tests/test_checks.py` -- `check.py` (prism separation, blind pockets, `exec()` globals
   compatibility, docstring coverage), `gallery/profiles/large_refs.json` invariants, and

@@ -162,6 +162,9 @@ For TDM and FFA maps, `qmap/itemprofile.py` computes embedded inventories, direc
 
 ## Doing Your Own Map & Demo Analysis
 
+For compiled BSP previews, RGB `.lit` lighting, camera-clearance warnings, and same-camera
+before/after build sheets, see [Rendering and camera comparisons](qmap/RENDERING.md).
+
 The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorld group's 29 MVD demos and five classic reference maps (`aerowalk`, `ztndm3`, `dapak12`, `naked3`, `naked4`). If your group plays different maps, player counts, or mods (like CTF classics, 2v2/4v4 TDM, or FFA), you can run the same analysis on **your own `.bsp` maps and `.mvd` match demos** — both to calibrate design targets before building and to evaluate real playtests afterward.
 
 ### Profiling Your Favourite Maps (`.bsp`)
@@ -236,7 +239,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 | | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map |
 | **Item Economy** | `itemprofile.py` | BSP29 pickup inventory, directed RL/LG/armor/MH route matrices on the player-hull graph, RL/LG/resource trio diagnostics, and non-destructive `--move` what-if evaluation (see [`qmap/ITEMS.md`](qmap/ITEMS.md)) |
 | | `itemcheck.py` | Offline verification of generated pickups against a captured MVDSV `edicts` dump after item settling |
-| **Visualization** | `render.py` | Software z-buffered BSP29 renderer (textures + compiled lightmaps) calibrated to ezQuake brightness |
+| **Visualization** | `render.py`, `view_sheet.py` | BSP29 previews with RGB `.lit` lightmaps, ezQuake lighting controls, camera diagnostics, and shared-camera before/after sheets (see [`qmap/RENDERING.md`](qmap/RENDERING.md)) |
 | | `section.py`, `iso.py` | Vertical slice diagrams and multi-height isometric "dollhouse" cutaways from the generator's JSON |
 | **Textures & WADs** | `fsq.py` | 3×3-tiled serpentine Floyd-Steinberg error-diffusion quantizer over Quake palette subsets (synthesizes cream marble, plaster, and warm wood that nearest-colour quantization cannot hit) |
 | | `makewad.py` | Packs palette-quantized PNGs (with `_fbr` fullbright support) into a Quake WAD2 using `quake_palette.lmp` |
