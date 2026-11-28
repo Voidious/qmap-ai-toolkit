@@ -312,6 +312,7 @@ class TestDemoTraffic(unittest.TestCase):
         self.assertIsNone(demo_traffic.rank_comparison(report, np.ones(16))['spearman_all'])
 
     def test_real_mvd_parser_validation_cli_and_incomplete_recording(self):
+        self.assertEqual(demo_traffic.normalize_teams('tdm', 'ReD, BLUE'), ('blue', 'red'))
         def block(payload, milliseconds=100):
             return struct.pack('<BBi', milliseconds, 6, len(payload)) + payload
 
@@ -343,12 +344,36 @@ class TestDemoTraffic(unittest.TestCase):
             self.assertEqual(skipped['demos'][0]['status'], 'not_checked')
             output = directory / 'validation.json'
             with redirect_stdout(io.StringIO()):
-                self.assertEqual(demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--json', str(output)]), 0)
+                self.assertEqual(demo_traffic.main([str(bsp), str(demo), '--mode', 'ctf', '--teams', 'ReD', '--json', str(output)]), 0)
             self.assertEqual(json.loads(output.read_text())['demos'][0]['status'], 'checked')
+            self.assertEqual(json.loads(output.read_text())['team_filter'], ['red'])
             incomplete.write_bytes(bytes([0, 6, 0]))
             with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
                 demo_traffic.main([str(bsp), str(incomplete), '--mode', 'ctf', '--json', str(output)])
             self.assertEqual(caught.exception.code, 2)
+
+
+    def test_case_insensitive_and_custom_teams_have_explicit_filter_coverage(self):
+        report = dict(mode='tdm', cells=dict(points=[[8, 8, 0]], reachable=[True]))
+        players = {0: dict(name='first', team=' Red '), 1: dict(name='second', team='BLUE'),
+                   2: dict(name='third', team='ClanX')}
+        track = [(time, player, 8, 8, 24, 0) for player in players for time in (0, 0.1)]
+        seconds, coverage = demo_traffic.occupancy(report, track, players, [(0, 1)])
+        self.assertAlmostEqual(seconds.sum(), 0.2)
+        self.assertEqual(coverage['included_players'], 2)
+        self.assertEqual(coverage['excluded_teams'], {'clanx': 1})
+        self.assertIn('excluded by team filter', coverage['warnings'][0])
+        seconds, coverage = demo_traffic.occupancy(report, track, players, [(0, 1)], teams=' ClanX ')
+        self.assertAlmostEqual(seconds.sum(), 0.1)
+        self.assertEqual(coverage['team_filter'], ['clanx'])
+        _, coverage = demo_traffic.occupancy(report, track, players, [(0, 1)], teams='absent')
+        self.assertEqual(coverage['eligible_player_seconds'], 0)
+        self.assertTrue(any('no named tracked' in warning for warning in coverage['warnings']))
+        seconds, coverage = demo_traffic.occupancy(dict(report, mode='ffa'), track, players, [(0, 1)])
+        self.assertAlmostEqual(seconds.sum(), 0.3)
+        self.assertEqual(coverage['excluded_players'], 0)
+        with self.assertRaises(ValueError):
+            demo_traffic.normalize_teams('tdm', 'red,,blue')
 
 
 if __name__ == '__main__':

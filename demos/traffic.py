@@ -59,18 +59,45 @@ def play_windows(prints, duration, mode, start=None, end=None, whole_demo=False)
     return merged, 'parsed CA rounds' if mode == 'ca' else 'parsed match windows'
 
 
-def occupancy(report, track, players, windows, max_gap=0.25):
+def normalize_teams(mode, teams=None):
+    if teams is None:
+        return None if mode == 'ffa' else ('blue', 'red')
+    values = teams.split(',') if isinstance(teams, str) else list(teams)
+    if not values or any(not isinstance(team, str) or not team.strip() for team in values):
+        raise ValueError('teams must be a nonempty list of nonempty names')
+    return tuple(sorted({team.strip().casefold() for team in values}))
+
+
+def occupancy(report, track, players, windows, max_gap=0.25, teams=None):
+    selected_teams = normalize_teams(report['mode'], teams)
     points = np.array(report['cells']['points'], dtype=float).reshape(-1, 3)
     reach = np.flatnonzero(report['cells']['reachable'])
     seconds = np.zeros(len(points))
-    if not len(reach):
-        return seconds, dict(eligible_player_seconds=0, matched_player_seconds=0, matched_fraction=None)
-    tree = cKDTree(points[reach, :2])
     tracks = defaultdict(list)
+    named = set()
     for sample in track:
         player = players.get(sample[1], {})
-        if player.get('name', '').strip() and (report['mode'] == 'ffa' or player.get('team') in ('red', 'blue')):
-            tracks[sample[1]].append(sample)
+        if player.get('name', '').strip():
+            named.add(sample[1])
+            if selected_teams is None or player.get('team', '').strip().casefold() in selected_teams:
+                tracks[sample[1]].append(sample)
+    excluded_teams = defaultdict(int)
+    for player in named - tracks.keys():
+        excluded_teams[players[player].get('team', '').strip().casefold() or '<empty>'] += 1
+    warnings = []
+    if excluded_teams:
+        warnings.append(f'{len(named) - len(tracks)} named tracked players excluded by team filter; use --teams for custom teams')
+    if not tracks:
+        warnings.append('no named tracked players passed the team filter')
+    coverage = dict(eligible_player_seconds=0, matched_player_seconds=0, matched_fraction=None,
+                    team_filter=list(selected_teams) if selected_teams is not None else None,
+                    named_tracked_players=len(named), included_players=len(tracks),
+                    excluded_players=len(named) - len(tracks), excluded_teams=dict(sorted(excluded_teams.items())),
+                    warnings=warnings)
+    if not len(reach):
+        warnings.append('no reachable floor for occupancy projection')
+        return seconds, coverage
+    tree = cKDTree(points[reach, :2])
     eligible, matched = 0.0, 0.0
     for samples in tracks.values():
         data = np.asarray(sorted(samples, key=lambda sample: sample[0]), dtype=float)
@@ -98,8 +125,11 @@ def occupancy(report, track, players, windows, max_gap=0.25):
             chosen = nodes[np.arange(len(best)), best]
             np.add.at(seconds, chosen[accepted], weights[accepted])
             matched += float(weights[accepted].sum())
-    return seconds, dict(eligible_player_seconds=round(eligible, 3), matched_player_seconds=round(matched, 3),
-                         matched_fraction=round(matched / eligible, 4) if eligible else None)
+    coverage.update(eligible_player_seconds=round(eligible, 3), matched_player_seconds=round(matched, 3),
+                    matched_fraction=round(matched / eligible, 4) if eligible else None)
+    if tracks and not eligible:
+        warnings.append('no eligible alive player intervals in the selected play windows')
+    return seconds, coverage
 
 
 def rank_comparison(report, seconds):
@@ -161,7 +191,8 @@ def draw_comparison(report, seconds, destination):
     plt.close(figure)
 
 
-def validate(report, paths, *, start=None, end=None, whole_demo=False, skip_incomplete=False, png=None):
+def validate(report, paths, *, start=None, end=None, whole_demo=False, skip_incomplete=False, png=None, teams=None):
+    selected_teams = normalize_teams(report['mode'], teams)
     total = np.zeros(len(report['cells']['points']))
     records, seen = [], set()
     for path in paths:
@@ -184,7 +215,7 @@ def validate(report, paths, *, start=None, end=None, whole_demo=False, skip_inco
             records.append(dict(demo=Path(path).name, sha256=digest, status='not_checked', reason=str(error),
                                 duration=duration, parser_unknown={str(key): value for key, value in unknown.items()}))
             continue
-        seconds, coverage = occupancy(report, track, players, windows)
+        seconds, coverage = occupancy(report, track, players, windows, teams=selected_teams)
         total += seconds
         records.append(dict(demo=Path(path).name, sha256=digest, duration=duration, status='checked',
                             windows=windows, window_source=source, parser_unknown={str(key): value for key, value in unknown.items()},
@@ -194,6 +225,7 @@ def validate(report, paths, *, start=None, end=None, whole_demo=False, skip_inco
     if png:
         draw_comparison(report, total, png)
     return dict(map=report['map'], bsp_sha256=report['sha256'], mode=report['mode'], demos=records,
+                team_filter=list(selected_teams) if selected_teams is not None else None,
                 prediction_coverage=report['coverage'], settings=report['settings'],
                 checked_demos=sum(record['status'] == 'checked' for record in records),
                 omitted_demos=sum(record['status'] == 'not_checked' for record in records),
@@ -212,6 +244,7 @@ def main(argv=None):
     parser.add_argument('bsp')
     parser.add_argument('demos', nargs='+')
     parser.add_argument('--mode', choices=('ca', 'tdm', 'ffa', 'ctf'), required=True)
+    parser.add_argument('--teams', help='comma-separated case-insensitive teams (default red,blue; FFA all named players)')
     parser.add_argument('--start', type=float)
     parser.add_argument('--end', type=float)
     parser.add_argument('--whole-demo', action='store_true')
@@ -225,13 +258,15 @@ def main(argv=None):
     try:
         report = trafficprofile.traffic_profile(args.bsp, mode=args.mode)
         result = validate(report, args.demos, start=args.start, end=args.end, whole_demo=args.whole_demo,
-                          skip_incomplete=args.skip_incomplete, png=args.png)
+                          skip_incomplete=args.skip_incomplete, png=args.png, teams=args.teams)
         Path(args.json).write_text(json.dumps(result, indent=2, allow_nan=False) + '\n')
         for record in result['demos']:
             if record['status'] == 'not_checked':
                 print(f"{record['demo']}: NOT CHECKED: {record['reason']}")
                 continue
             print(f"{record['demo']}: rho={record['correlation']['spearman_all']}; matched={record['coverage']['matched_fraction']}; {record['window_source']}")
+            for warning in record['coverage']['warnings']:
+                print('NOT ESTABLISHED: ' + warning)
         print(f"Pooled rho={result['pooled']['spearman_all']}; per-demo median={result['per_demo_spearman_median']}")
     except (OSError, ValueError, AssertionError, IndexError, struct.error) as error:
         parser.error(str(error))

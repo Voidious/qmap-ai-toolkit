@@ -129,7 +129,10 @@ matched fractions are reported. Duplicate demo bytes are refused; filename map
 tags, when present, must match the BSP stem. This does not prove the recorded
 build matches the BSP. Final roster team/name state and unknown message-block
 tails remain limitations of the minimal MVD reader. CA/CTF/TDM select named
-red/blue players; other team naming requires adapting that filter.
+red/blue players by default, matching names case-insensitively after trimming
+whitespace. Use `--teams clan1,clan2` for other rosters; FFA includes all named
+players unless a filter is supplied. Coverage reports included/excluded player
+counts and excluded team names, with CLI warnings for exclusions or empty runs.
 
 Spearman rank correlation is tie-aware, over patches with at least four cells,
 including zero-occupancy patches. A visited-only correlation is also reported.
