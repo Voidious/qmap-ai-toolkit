@@ -174,6 +174,7 @@ The targets and pacing numbers in [`GUIDE.md`](GUIDE.md) came from one QuakeWorl
 - **Verticality & travel sizing (`vprofile.py`)** — Measure `travel_median`, `travel_p90`, effective levels, overlooks, route height change, and angled walls on your reference pool to calibrate sizing and verticality targets for your mode (supports both `--ref duel` and `--ref large`).
 - **CTF route independence & hook/walk travel (`ctfprofile.py`)** — Measure bidirectional flag-to-flag time with hook off (walk/jump/tele/pad/swim) and hook on (grapple swings/climbs), count visually independent (LOS-separated) midfield routes, flag single-vantage center chokes, and check flag-room exits and sightlines (classic Threewave benchmarks in `gallery/profiles/ctf_refs.json`).
 - **Item economy (`itemprofile.py`)** — Inspect embedded inventories, directed RL/LG/armor/MH route matrices, and pickup layouts across your favourite TDM/FFA maps, or test hypothetical moves on your own builds with `--move` (see [`qmap/ITEMS.md`](qmap/ITEMS.md) and [`gallery/items/README.md`](gallery/items/README.md)).
+- **Topology traffic (`trafficprofile.py`)** — Inspect mode-specific route concentration, predicted dead wings and overloaded-choke candidates with floor-sliced figures and build diffs. Compare against alive MVD occupancy using `demos/traffic.py`; the [measured validation](gallery/traffic/VALIDATION.md) shows weak/mixed predictive agreement, not a reliable balance gate (see [`qmap/TRAFFICPROFILE.md`](qmap/TRAFFICPROFILE.md)).
 
 ### Analyzing Your Group's Match Demos (`.mvd`)
 
@@ -236,6 +237,7 @@ Symmetry modes in `_core.py`: `'none'` (asymmetric), `'rotate'` (180° rotation 
 | **Spawns, Routes & Pacing** | `pick_spawns.py`, `pick_spawns_sym.py` | Solvers for the largest set of spawns with zero mutual eye-level line of sight (asymmetric or `rotate`/`mirror` symmetric) |
 | | `ctfprofile.py` | Compiled BSP29 CTF route-independence diagnostic: walk (hook-off) and grapple (hook-on) flag times, LOS-separated midfield routes, single-vantage choke detection, flag exits/sightlines, and diagnostic plots |
 | | `combatprofile.py` | Compiled BSP29 3D exposure, overlook asymmetry (kill boxes & oppressive perches), and disengage / time-to-cover analyzer calibrated to 15 classic QW maps, with floor-sliced heatmaps and `--diff` mode (see [`qmap/COMBATPROFILE.md`](qmap/COMBATPROFILE.md)) |
+| | `trafficprofile.py` | Demand-weighted player-hull betweenness, predicted dead wings and overloaded-choke candidates; floor-sliced heatmaps, build diffs and human MVD rank comparison (see [`qmap/TRAFFICPROFILE.md`](qmap/TRAFFICPROFILE.md)) |
 | | `routes.py`, `flagtime.py` | Named walking routes and timings between flags or arbitrary coordinates (carrier pace vs solo hook pace) |
 | | `sightlines.py` | Longest straight eye-level sightlines per floor level along X and Y |
 | | `contact.py` | Clan Arena pacing proxy comparing spawn spread against a reference map |

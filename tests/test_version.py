@@ -39,6 +39,7 @@ class TestVersioning(unittest.TestCase):
             REPO_ROOT / 'qmap' / 'RENDERING.md',
             REPO_ROOT / 'qmap' / 'TEXCHECK.md',
             REPO_ROOT / 'qmap' / 'COMBATPROFILE.md',
+            REPO_ROOT / 'qmap' / 'TRAFFICPROFILE.md',
         ]
         for path in title_files:
             first_line = path.read_text(encoding='utf-8').splitlines()[0]

@@ -414,6 +414,15 @@ mid, yet one central vantage sees both).
   (optimistic for button-locked doors), while `func_plat` lifts are absent (pessimistic for
   lift-dependent climbs).
 
+**Reachable does not mean busy.** `python3 qmap/trafficprofile.py map.bsp --mode ca --png traffic.png`
+flags predicted dead wings and overloaded route hotspots on the player-hull graph. Use `tdm`
+for major-item demand, `ffa` for both spawn and item demand, or `ctf` for flag/base-exit demand;
+`--diff map_b1.bsp map_b2.bsp` shows traffic shifts on matched floor. These are shortest-route
+hypotheses, not judgments about camping space, tactical flanks or map balance. Human MVD
+occupancy agreement is weak/mixed, including near-zero correlation on the tested ztndm3 CA
+recording; inspect and playtest findings rather than treating them as a gate. See
+[traffic definitions and demo comparison](qmap/TRAFFICPROFILE.md).
+
 **Sizing a map: by travel and mode, not by floor area.** Helix (`2,070k` floor) and `skull`
 (`2,031k` floor) both carry more floor than any of the five compact classics (`1,083k–1,600k`) yet
 play at duel/compact travel speed (`797` and `905`): stacked floor adds area, not distance, and
