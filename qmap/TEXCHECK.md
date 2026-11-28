@@ -87,6 +87,8 @@ and GUIDE Gotcha 25. Width and phase refer to the static unwarped projection.
 Sky overlap uses source polygons when available, so a decal that caused qbsp
 to hide the underlying sky face can still be found. `--sky-gap 8` controls the
 maximum distance between the projected polygons; edge-only contact is allowed.
+Source polygons are clipped without expanding their borders, and invisible
+trigger brush entities are excluded from overlap candidates.
 The checker needs surviving sky geometry: if a generator replaced every trace
 of a sky surface with another texture, compiled/source geometry alone cannot
 recover that original intent. See GUIDE Gotchas 14 and 31.

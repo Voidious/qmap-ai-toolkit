@@ -95,7 +95,9 @@ def face_polygon(normal, distance, normals, distances, lower, upper):
     polygon = np.array([center + extent * (horizontal * tangent + height * vertical)
                         for horizontal, height in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
     for clip_normal, clip_distance in zip(normals, distances):
-        polygon = render.clip_polygon(polygon, -clip_normal, -clip_distance - EPSILON)
+        if np.dot(clip_normal, normal) > 1 - EPSILON and abs(clip_distance - distance) < EPSILON:
+            continue
+        polygon = render.clip_polygon(polygon, -clip_normal, -clip_distance)
         if len(polygon) < 3:
             return np.empty((0, 3))
     return polygon
@@ -584,7 +586,8 @@ def audit(path, *, map_path=None, bsp_path=None, wad_paths=None, wall_textures=(
         skipped.append('wall alignment: faces with unknown texture periods')
     findings.extend(alignment_checks(geometry, band_gap, wall_textures))
     findings.extend(portal_checks(geometry, portal_textures))
-    findings.extend(sky_checks(source_faces if source_faces else compiled_faces, sky_gap))
+    sky_faces = [face for face in source_faces if not brushes[face.owner]['classname'].startswith('trigger')]
+    findings.extend(sky_checks(sky_faces if source_faces else compiled_faces, sky_gap))
     return {'input': str(path), 'map': str(map_path) if map_path.is_file() else None,
             'bsp': str(bsp_path) if bsp_path.is_file() else None, 'wads': wads,
             'findings': findings, 'counts': dict(sorted(Counter(item['code'] for item in findings).items())),

@@ -183,6 +183,26 @@ class TestSourceAndWad(unittest.TestCase):
         faces, brushes, _ = texcheck.map_data(self.path)
         self.assertEqual(len(texcheck.source_visibility(faces, brushes)), 10)
 
+    def test_long_touching_sky_borders_do_not_gain_overlap_area(self):
+        sky = brush_block(box_faces(0, 0, 0, 1536, 64, 16, tex='sky1'))
+        ceiling = brush_block(box_faces(0, 64, 0, 1536, 128, 16, tex='stone'))
+        self.write_map(sky + '\n' + ceiling)
+        report = texcheck.audit(self.path)
+        self.assertNotIn('sky-overlap', report['counts'])
+        _, brushes, _ = texcheck.map_data(self.path)
+        for brush in brushes:
+            for face in brush['faces']:
+                self.assertTrue(np.all(face.vertices.min(0) >= brush['lower'] - 1e-8))
+                self.assertTrue(np.all(face.vertices.max(0) <= brush['upper'] + 1e-8))
+
+    def test_sky_checks_exclude_trigger_brushes_but_keep_real_decals(self):
+        sky = brush_block(box_faces(0, 0, 0, 128, 128, 16, tex='sky1'))
+        overlay = brush_block(box_faces(32, 32, -4, 64, 64, 0, tex='stone'))
+        self.write_map(sky, entity_block('trigger_teleport', overlay))
+        self.assertNotIn('sky-overlap', texcheck.audit(self.path)['counts'])
+        self.write_map(sky, entity_block('func_detail_illusionary', overlay))
+        self.assertIn('sky-overlap', texcheck.audit(self.path)['counts'])
+
     def test_missing_explicit_input_and_corrupt_wad_are_errors(self):
         self.write_map(brush_block(box_faces(0, 0, 0, 64, 64, 64, tex='stone')))
         with self.assertRaisesRegex(ValueError, 'explicit input not found'):
